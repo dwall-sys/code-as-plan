@@ -56,7 +56,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Mode Configuration
 
 - [ ] **MODE-01**: set-mode command configures per-phase workflow mode (code-first, plan-first, hybrid)
-- [ ] **MODE-02**: Config schema extended with phase_modes, arc settings, and default_phase_mode
+- [x] **MODE-02**: Config schema extended with phase_modes, arc settings, and default_phase_mode
 - [ ] **MODE-03**: deep-plan command wraps discuss-phase + plan-phase for phases needing upfront reasoning
 
 ### Distribution
@@ -123,7 +123,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXTR-02 | Phase 1 | Pending |
 | ANNOT-01 | Phase 1 | Pending |
 | ANNOT-02 | Phase 1 | Pending |
-| MODE-02 | Phase 1 | Pending |
+| MODE-02 | Phase 1 | Complete |
 | PROT-01 | Phase 2 | Pending |
 | PROT-02 | Phase 2 | Pending |
 | PROT-03 | Phase 2 | Pending |

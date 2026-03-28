@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-28T19:03:36.722Z"
-last_activity: 2026-03-28 — Roadmap created, ready to begin Phase 1 planning
+status: executing
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-03-28T19:26:41.137Z"
+last_activity: 2026-03-28
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 5
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Code is the plan — developers build first and extract structured planning from annotated code
-**Current focus:** Phase 1 — Annotation Foundation
+**Current focus:** Phase 01 — annotation-foundation
 
 ## Current Position
 
-Phase: 1 of 3 (Annotation Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-28 — Roadmap created, ready to begin Phase 1 planning
+Phase: 01 (annotation-foundation) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-03-28
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 01-annotation-foundation P04 | 3 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - Initialization: Regex-based tag extraction (simpler than AST, language-agnostic)
 - Initialization: Preserve all original commands (users can mix code-first and plan-first per phase)
 - Research: gsd-executor modification to be implemented as new gsd-arc-executor.md wrapper, not a patch to upstream file
+- [Phase 01-annotation-foundation]: Exported buildNewProjectConfig() for programmatic config access by Phase 2 agents
+- [Phase 01-annotation-foundation]: arc.enabled/tag_prefix/comment_anchors and phase_modes/default_phase_mode added as ADDITIVE config extension
 
 ### Pending Todos
 
@@ -76,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T19:03:36.720Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-annotation-foundation/01-CONTEXT.md
+Last session: 2026-03-28T19:26:41.135Z
+Stopped at: Completed 01-04-PLAN.md
+Resume file: None
