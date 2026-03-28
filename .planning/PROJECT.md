@@ -2,88 +2,94 @@
 
 ## What This Is
 
-A fork of the GSD (Get Shit Done) framework that implements the "Code-First" principle. Instead of running discuss → plan → execute for every phase, developers build a prototype directly, annotate the code with structured @gsd-tags (the "ARC" system), and use those annotations as planning input for further iterations. Installable as `npx gsd-code-first@latest`.
+A fork of the GSD (Get Shit Done) framework that implements the "Code-First" principle. Instead of running discuss -> plan -> execute for every phase, developers build a prototype directly, annotate the code with structured @gsd-tags (the "ARC" system), and use those annotations as planning input for further iterations. Installable as `npx gsd-code-first@latest`.
+
+Shipped v1.0 with 4 new agents, 6 new commands, ARC annotation standard, and full documentation.
 
 ## Core Value
 
-Code is the plan — developers build first and extract structured planning from annotated code, eliminating the overhead of upfront document-heavy planning while maintaining traceability.
+Code is the plan -- developers build first and extract structured planning from annotated code, eliminating the overhead of upfront document-heavy planning while maintaining traceability.
 
 ## Requirements
 
 ### Validated
 
-- ✓ ARC annotation standard with @gsd-tags (context, decision, todo, constraint, pattern, ref, risk, api) — Phase 1
-- ✓ Tag scanner in gsd-tools.cjs that extracts @gsd-tags from code — Phase 1
-- ✓ extract-plan command that generates CODE-INVENTORY.md from tags — Phase 1
-- ✓ gsd-annotator agent for retroactive code annotation — Phase 1
-- ✓ annotate command that spawns annotator + runs extract-plan — Phase 1
-- ✓ Extended config schema (phase_modes, arc settings, default_phase_mode) — Phase 1
-- ✓ gsd-prototyper agent that builds prototypes with ARC annotations — Phase 2
-- ✓ prototype command that spawns prototyper with project context — Phase 2
-- ✓ gsd-code-planner agent that reads code + tags to generate plans — Phase 2
-- ✓ Modified gsd-executor with ARC comment obligation (gsd-arc-executor wrapper) — Phase 2
-- ✓ Modified gsd-planner with code-based planning mode (gsd-arc-planner wrapper) — Phase 2
-
-- ✓ iterate command (extract-tags → code-planner → approval → executor) — Phase 3
-- ✓ deep-plan command wrapping discuss-phase + plan-phase — Phase 3
-- ✓ set-mode command for per-phase mode configuration — Phase 3
-- ✓ Updated installer (bin/install.js) with new agents + commands — Phase 3 (verified wholesale copy)
-- ✓ Updated package.json (name: gsd-code-first) — Phase 3 (verified)
-- ✓ Updated help command with new commands — Phase 3
-- ✓ User documentation and README for the fork — Phase 3
+- ✓ ARC annotation standard with 8 @gsd-tag types -- v1.0
+- ✓ Tag scanner with regex extraction, false-positive prevention, phase/type filtering -- v1.0
+- ✓ extract-plan command producing CODE-INVENTORY.md -- v1.0
+- ✓ gsd-annotator agent for retroactive code annotation -- v1.0
+- ✓ annotate command with auto-chain to extract-plan -- v1.0
+- ✓ Config schema extended (phase_modes, arc settings, default_phase_mode) -- v1.0
+- ✓ gsd-prototyper agent building annotated scaffolds -- v1.0
+- ✓ prototype command with --phases scoping and auto-chain -- v1.0
+- ✓ gsd-code-planner reading CODE-INVENTORY.md to produce compact plans -- v1.0
+- ✓ gsd-arc-executor wrapper with ARC comment obligations -- v1.0
+- ✓ gsd-arc-planner wrapper with code-based planning mode -- v1.0
+- ✓ iterate command (flagship code-first loop with approval gate) -- v1.0
+- ✓ deep-plan command chaining discuss-phase + plan-phase -- v1.0
+- ✓ set-mode command for per-phase mode configuration -- v1.0
+- ✓ Installer verified (wholesale copy of agents/ and commands/) -- v1.0
+- ✓ package.json with name gsd-code-first -- v1.0
+- ✓ Help command with all 6 Code-First commands -- v1.0
+- ✓ README.md with installation, workflow, and user guide -- v1.0
 
 ### Active
 
-All v1 requirements complete. No active requirements remaining.
+No active requirements. Next milestone requirements TBD via `/gsd:new-milestone`.
 
 ### Out of Scope
 
-- UI/Frontend — this is a CLI tool, no visual interface
-- Breaking changes to original GSD commands — existing workflows must still function
-- Custom editor integrations — IDE plugins are out of scope for v1
-- Multi-language AST parsing for tags — regex-based extraction is sufficient for v1
+- UI/Frontend -- this is a CLI tool, no visual interface
+- Breaking changes to original GSD commands -- existing workflows must still function
+- Custom editor integrations -- IDE plugins are out of scope for v1
+- Multi-language AST parsing for tags -- regex-based extraction is sufficient for v1
+- ARC wrapper routing in traditional workflows -- wrapper agents only reachable via /gsd:iterate (documented limitation, tracked for v1.1)
 
 ## Context
 
-- This is a fork of `get-shit-done-cc` (the original GSD npm package)
-- The codebase is JavaScript/Node.js with Markdown for agent prompts and commands, JSON for config
-- The ARC (Annotated Reasoning in Code) system is the core innovation — structured comments that serve as both documentation and planning input
-- The fork adds new agents, commands, and tooling while preserving all original GSD functionality
-- Target audience: developers and teams already using GSD who want a faster, code-centric workflow
-- The fork should remain mergeable with upstream GSD updates (primarily additive changes)
+- Shipped v1.0 on 2026-03-28 with 4 phases, 13 plans, 18 tasks
+- Tech stack: JavaScript/Node.js (CJS), Markdown agents/commands, JSON config
+- Zero runtime dependencies -- all tooling uses Node.js built-ins
+- 4 new agents: gsd-prototyper, gsd-code-planner, gsd-arc-executor, gsd-arc-planner
+- 6 new commands: prototype, iterate, annotate, extract-plan, set-mode, deep-plan
+- All original GSD commands continue working unchanged
+- 106 agent-frontmatter tests pass, 21 arc-scanner tests pass
 
 ## Constraints
 
-- **Tech stack**: JavaScript/Node.js, Markdown, JSON — must match original GSD stack
+- **Tech stack**: JavaScript/Node.js, Markdown, JSON -- must match original GSD stack
 - **Compatibility**: All original GSD commands must continue working unchanged
 - **Distribution**: Must be installable via `npx gsd-code-first@latest`
 - **Upstream mergeability**: Primarily additive changes to minimize merge conflicts with upstream
+- **Zero runtime deps**: No external npm packages at runtime
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fork rather than PR upstream | Fundamentally different workflow philosophy (code-first vs plan-first) | — Pending |
-| Regex-based tag extraction | Simpler than AST parsing, language-agnostic, sufficient for structured comments | — Pending |
-| ARC annotation standard | Structured @gsd-tags provide machine-readable planning data embedded in code | — Pending |
-| Preserve all original commands | Users can mix code-first and plan-first workflows per phase | — Pending |
+| Fork rather than PR upstream | Fundamentally different workflow philosophy (code-first vs plan-first) | ✓ Good -- clean separation, no upstream conflicts |
+| Regex-based tag extraction | Simpler than AST parsing, language-agnostic, sufficient for structured comments | ✓ Good -- handles all test cases, zero false positives |
+| ARC annotation standard | Structured @gsd-tags provide machine-readable planning data embedded in code | ✓ Good -- 8 tag types frozen at v1.0, stable spec |
+| Preserve all original commands | Users can mix code-first and plan-first workflows per phase | ✓ Good -- zero regressions in original functionality |
+| Wrapper agents over patches | New gsd-arc-executor/planner files instead of modifying upstream agents | ✓ Good -- upstream files untouched, merge-safe |
+| Comment anchor rule | @gsd-tags only valid on dedicated comment lines, not trailing comments | ✓ Good -- eliminates false positives in strings/URLs |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd:transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
+1. Requirements invalidated? -> Move to Out of Scope with reason
+2. Requirements validated? -> Move to Validated with phase reference
+3. New requirements emerged? -> Add to Active
+4. Decisions to log? -> Add to Key Decisions
+5. "What This Is" still accurate? -> Update if drifted
 
 **After each milestone** (via `/gsd:complete-milestone`):
 1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
+2. Core Value check -- still the right priority?
+3. Audit Out of Scope -- reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 3 completion (v1 milestone complete)*
+*Last updated: 2026-03-28 after v1.0 milestone completion*
