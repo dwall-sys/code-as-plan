@@ -1,3 +1,77 @@
+# GSD Code-First
+
+> Code is the plan -- build first, extract structured planning from annotated code.
+
+A fork of GSD (Get Shit Done) that implements code-first development with Claude Code. Instead of running discuss -> plan -> execute for every phase, developers build a prototype directly, annotate the code with structured @gsd-tags (the "ARC" system), and use those annotations as planning input for further iterations.
+
+## Installation
+
+```bash
+npx gsd-code-first@latest
+```
+
+Installs GSD Code-First into your Claude Code environment. All original GSD commands continue working -- code-first commands are additive.
+
+## Quick Start: Code-First Workflow
+
+**Step 1:** `/gsd:prototype --phases 1` — build a prototype with embedded @gsd-tag annotations
+
+**Step 2:** `/gsd:iterate` — extract tags, generate plan, approve, execute
+
+**Step 3:** Repeat — iterate as many times as needed
+
+```
+/gsd:prototype -> code with @gsd-tags -> /gsd:iterate -> approve plan -> execute -> repeat
+```
+
+## ARC Annotations
+
+ARC (Annotated Reasoning in Code) tags are structured comments that planning agents read to understand your code's intent, decisions, and next steps without reading every file.
+
+```javascript
+// @gsd-context Auth module -- stateless JWT validation, RS256 only
+// @gsd-decision(phase:1) Use jose library for JWT parsing -- zero native deps
+// @gsd-todo(phase:2, priority:high) Add refresh token rotation
+// @gsd-constraint Must remain stateless -- no session storage
+```
+
+Tag types: `@gsd-context`, `@gsd-decision`, `@gsd-todo`, `@gsd-constraint`, `@gsd-pattern`, `@gsd-ref`, `@gsd-risk`, `@gsd-api`
+
+For full tag syntax, metadata format, and per-language examples, see [arc-standard.md](get-shit-done/references/arc-standard.md).
+
+## Workflow Modes
+
+| Mode | Pattern | When to Use |
+|------|---------|-------------|
+| `code-first` | prototype -> iterate | You know what to build, want to move fast |
+| `plan-first` | discuss -> plan -> execute | Complex domain, need upfront reasoning |
+| `hybrid` | Mix per preference | Some phases code-first, others plan-first |
+
+```bash
+/gsd:set-mode code-first           # set default mode
+/gsd:set-mode plan-first --phase 3 # override for one phase
+/gsd:deep-plan 3                   # chain discuss + plan for phase 3
+```
+
+## Code-First Commands
+
+| Command | Description |
+|---------|-------------|
+| `/gsd:prototype` | Build working prototype with @gsd-tags |
+| `/gsd:annotate` | Retroactively add @gsd-tags to existing code |
+| `/gsd:extract-plan` | Scan code for @gsd-tags, produce CODE-INVENTORY.md |
+| `/gsd:iterate` | Full code-first loop: extract -> plan -> approve -> execute |
+| `/gsd:set-mode` | Configure workflow mode (code-first, plan-first, hybrid) |
+| `/gsd:deep-plan` | Chain discuss + plan for upfront reasoning phases |
+
+All original GSD commands continue working unchanged.
+
+---
+
+*The sections below are from the original GSD framework. All original commands and workflows remain fully functional.*
+
+---
+
 <div align="center">
 
 # GET SHIT DONE
