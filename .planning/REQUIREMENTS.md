@@ -21,8 +21,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Extract Plan
 
-- [ ] **EXTR-01**: extract-plan command invokes tag scanner and writes .planning/prototype/CODE-INVENTORY.md
-- [ ] **EXTR-02**: CODE-INVENTORY.md groups tags by type, file, and phase reference with summary statistics
+- [x] **EXTR-01**: extract-plan command invokes tag scanner and writes .planning/prototype/CODE-INVENTORY.md
+- [x] **EXTR-02**: CODE-INVENTORY.md groups tags by type, file, and phase reference with summary statistics
 
 ### Prototyper
 
@@ -119,8 +119,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCAN-02 | Phase 1 | Complete |
 | SCAN-03 | Phase 1 | Complete |
 | SCAN-04 | Phase 1 | Complete |
-| EXTR-01 | Phase 1 | Pending |
-| EXTR-02 | Phase 1 | Pending |
+| EXTR-01 | Phase 1 | Complete |
+| EXTR-02 | Phase 1 | Complete |
 | ANNOT-01 | Phase 1 | Complete |
 | ANNOT-02 | Phase 1 | Complete |
 | MODE-02 | Phase 1 | Complete |

@@ -12,7 +12,7 @@ Three phases take GSD Code-First from zero to a shippable npm package. Phase 1 l
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Annotation Foundation** - ARC standard, tag scanner, config schema, and extract-plan command
+- [x] **Phase 1: Annotation Foundation** - ARC standard, tag scanner, config schema, and extract-plan command (completed 2026-03-28)
 - [ ] **Phase 2: Core Agents** - gsd-prototyper, gsd-annotator, gsd-code-planner, and modified agent behavior
 - [ ] **Phase 3: Workflow, Distribution, and Docs** - iterate loop, mode commands, installer, and documentation
 
@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Write arc-standard.md (ARC annotation standard v1.0)
 - [x] 01-02-PLAN.md — Build arc-scanner.cjs with TDD (regex scanner + test suite)
-- [ ] 01-03-PLAN.md — Wire extract-tags subcommand in gsd-tools.cjs + create extract-plan command
+- [x] 01-03-PLAN.md — Wire extract-tags subcommand in gsd-tools.cjs + create extract-plan command
 - [x] 01-04-PLAN.md — Extend config.cjs with arc and phase_modes schema
 - [x] 01-05-PLAN.md — Create gsd-annotator agent + annotate slash command
 
@@ -68,6 +68,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Annotation Foundation | 4/5 | In Progress|  |
+| 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
 | 2. Core Agents | 0/TBD | Not started | - |
 | 3. Workflow, Distribution, and Docs | 0/TBD | Not started | - |
