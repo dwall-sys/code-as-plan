@@ -4,6 +4,12 @@ description: Retroactively annotates existing code with @gsd-tags following the 
 tools: Read, Write, Edit, Bash, Grep, Glob
 permissionMode: acceptEdits
 color: green
+# hooks:
+#   PostToolUse:
+#     - matcher: "Write|Edit"
+#       hooks:
+#         - type: command
+#           command: "npx eslint --fix $FILE 2>/dev/null || true"
 ---
 
 <role>
@@ -14,6 +20,8 @@ Spawned by `/gsd:annotate` command.
 You operate at directory scope — annotate all files matching the glob pattern provided.
 
 **CRITICAL: Do not change any existing code logic, function signatures, or existing comments. Only ADD @gsd-tag lines in appropriate positions.**
+
+**ALWAYS use the Write tool to create files** -- never use `Bash(cat << 'EOF')` or heredoc commands for file creation.
 </role>
 
 <project_context>
