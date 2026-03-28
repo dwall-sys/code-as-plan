@@ -1,6 +1,6 @@
 {
   "name": "gsd-code-first",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Code-First fork of Get Shit Done — AI-native development with code-as-planning",
   "bin": {
     "get-shit-done-cc": "bin/install.js"
