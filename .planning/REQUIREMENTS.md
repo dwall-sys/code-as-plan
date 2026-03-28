@@ -38,9 +38,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Iterate
 
-- [ ] **ITER-01**: iterate command runs the full loop: extract-tags → code-planner → user approval gate → executor
-- [ ] **ITER-02**: iterate command supports --verify and --annotate flags
-- [ ] **ITER-03**: Approval gate pauses for human review before execution (headless-capable for CI)
+- [x] **ITER-01**: iterate command runs the full loop: extract-tags → code-planner → user approval gate → executor
+- [x] **ITER-02**: iterate command supports --verify and --annotate flags
+- [x] **ITER-03**: Approval gate pauses for human review before execution (headless-capable for CI)
 
 ### Annotator
 
@@ -133,9 +133,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AMOD-01 | Phase 2 | Complete |
 | AMOD-02 | Phase 2 | Complete |
 | AMOD-03 | Phase 2 | Complete |
-| ITER-01 | Phase 3 | Pending |
-| ITER-02 | Phase 3 | Pending |
-| ITER-03 | Phase 3 | Pending |
+| ITER-01 | Phase 3 | Complete |
+| ITER-02 | Phase 3 | Complete |
+| ITER-03 | Phase 3 | Complete |
 | MODE-01 | Phase 3 | Pending |
 | MODE-03 | Phase 3 | Pending |
 | DIST-01 | Phase 3 | Pending |
