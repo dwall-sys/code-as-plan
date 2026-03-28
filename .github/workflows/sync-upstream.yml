@@ -112,7 +112,7 @@ jobs:
           - [ ] Tests pass
 
           ### After merging
-          Bump version in `package.json` and run `npm publish`.
+          Version bump and npm publish happen automatically via the publish workflow.
           EOF
           )" \
             --base main \
