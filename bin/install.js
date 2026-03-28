@@ -288,9 +288,9 @@ const banner = '\n' +
   '  ╚██████╔╝███████║██████╔╝\n' +
   '   ╚═════╝ ╚══════╝╚═════╝' + reset + '\n' +
   '\n' +
-  '  Get Shit Done ' + dim + 'v' + pkg.version + reset + '\n' +
-  '  A meta-prompting, context engineering and spec-driven\n' +
-  '  development system for Claude Code, OpenCode, Gemini, Codex, Copilot, Antigravity, Cursor, and Windsurf by TÂCHES.\n';
+  '  GSD Code-First ' + dim + 'v' + pkg.version + reset + '\n' +
+  '  Code-first development fork of GSD — build first, annotate,\n' +
+  '  iterate. For Claude Code, OpenCode, Gemini, Codex, Copilot, Antigravity, Cursor, and Windsurf.\n';
 
 // Parse --config-dir argument
 function parseConfigDirArg() {
@@ -4695,8 +4695,7 @@ function handleStatusline(settings, isInteractive, callback) {
  * @returns {boolean} true if install succeeded
  */
 function installSdk() {
-  const sdkVersion = pkg.version;
-  const sdkPkg = `@gsd-build/sdk@${sdkVersion}`;
+  const sdkPkg = `@gsd-build/sdk@latest`;
   console.log(`\n  ${cyan}Installing GSD SDK...${reset}`);
   console.log(`  ${dim}npm install -g ${sdkPkg}${reset}\n`);
   try {
