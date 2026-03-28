@@ -22,10 +22,6 @@ Spawns the `gsd-annotator` agent to read existing source code and add `@gsd-tags
 The annotator reads `PROJECT.md` and `REQUIREMENTS.md` before annotating so tags reflect actual project goals and requirement IDs. It follows the ARC standard from `get-shit-done/references/arc-standard.md` for all tag type and comment anchor rules.
 </objective>
 
-<execution_context>
-@~/.claude/get-shit-done/workflows/annotate.md
-</execution_context>
-
 <context>
 $ARGUMENTS
 

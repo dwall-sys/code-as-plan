@@ -17,10 +17,6 @@ Optional arguments:
 - --type TYPE: Filter tags by tag type (context, decision, todo, constraint, pattern, ref, risk, api)
 </objective>
 
-<execution_context>
-@~/.claude/get-shit-done/workflows/extract-plan.md
-</execution_context>
-
 <context>
 $ARGUMENTS
 </context>

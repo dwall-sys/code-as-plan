@@ -22,10 +22,6 @@ Spawns the `gsd-prototyper` agent to build working prototype code with `@gsd-tag
 The prototyper reads `PROJECT.md`, `REQUIREMENTS.md`, and `ROADMAP.md` before building so all generated code reflects actual project goals, requirement IDs, and phase structure.
 </objective>
 
-<execution_context>
-@~/.claude/get-shit-done/workflows/prototype.md
-</execution_context>
-
 <context>
 $ARGUMENTS
 
