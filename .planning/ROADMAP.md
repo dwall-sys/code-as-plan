@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Annotation Foundation** - ARC standard, tag scanner, config schema, and extract-plan command (completed 2026-03-28)
 - [x] **Phase 2: Core Agents** - gsd-prototyper, gsd-annotator, gsd-code-planner, and modified agent behavior (completed 2026-03-28)
 - [x] **Phase 3: Workflow, Distribution, and Docs** - iterate loop, mode commands, installer, and documentation (completed 2026-03-28)
-- [ ] **Phase 4: Tech Debt Cleanup** - Fix stale workflow refs, annotator test failures, document ARC routing limitation
+- [x] **Phase 4: Tech Debt Cleanup** - Fix stale workflow refs, annotator test failures, document ARC routing limitation (completed 2026-03-28)
 
 ## Phase Details
 
@@ -84,7 +84,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Remove stale execution_context blocks + fix gsd-annotator frontmatter tests
+- [x] 04-01-PLAN.md — Remove stale execution_context blocks + fix gsd-annotator frontmatter tests
 - [x] 04-02-PLAN.md — Add Known Limitations section to README.md
 
 ## Progress
@@ -97,4 +97,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
 | 2. Core Agents | 3/3 | Complete   | 2026-03-28 |
 | 3. Workflow, Distribution, and Docs | 3/3 | Complete   | 2026-03-28 |
-| 4. Tech Debt Cleanup | 1/2 | In Progress|  |
+| 4. Tech Debt Cleanup | 2/2 | Complete   | 2026-03-28 |
