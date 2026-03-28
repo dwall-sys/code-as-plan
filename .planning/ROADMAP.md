@@ -47,7 +47,12 @@ Plans:
   3. gsd-code-planner reads CODE-INVENTORY.md and source @gsd-tags as primary input and generates a compact Markdown plan without XML or research sections
   4. gsd-executor adds @gsd-decision tags and removes completed @gsd-todo tags during execution, and this behavior is gated by config so it does not affect users who have not opted in
   5. gsd-planner can read @gsd-tags as planning input when code-based planning mode is enabled in config
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — gsd-prototyper agent + prototype command
+- [ ] 02-02-PLAN.md — gsd-code-planner agent
+- [ ] 02-03-PLAN.md — ARC wrapper agents (gsd-arc-executor + gsd-arc-planner)
 
 ### Phase 3: Workflow, Distribution, and Docs
 **Goal**: The complete code-first workflow is available as an installable npm package with full documentation
@@ -69,5 +74,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
-| 2. Core Agents | 0/TBD | Not started | - |
+| 2. Core Agents | 0/3 | Planning complete | - |
 | 3. Workflow, Distribution, and Docs | 0/TBD | Not started | - |
