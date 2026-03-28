@@ -28,7 +28,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Tag scanner correctly extracts tags anchored to comment tokens and does not produce false positives from strings, URLs, or template literals
   4. Tag scanner supports filtering by phase reference and tag type, and works on any text file without language-specific configuration
   5. Running `annotate` on an existing unannotated codebase produces annotated code files and auto-generates CODE-INVENTORY.md on completion
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Write arc-standard.md (ARC annotation standard v1.0)
+- [ ] 01-02-PLAN.md — Build arc-scanner.cjs with TDD (regex scanner + test suite)
+- [ ] 01-03-PLAN.md — Wire extract-tags subcommand in gsd-tools.cjs + create extract-plan command
+- [ ] 01-04-PLAN.md — Extend config.cjs with arc and phase_modes schema
+- [ ] 01-05-PLAN.md — Create gsd-annotator agent + annotate slash command
 
 ### Phase 2: Core Agents
 **Goal**: Developers can build annotated prototypes from scratch or have existing code annotated, and a code-planner agent reads those annotations to produce execution plans
@@ -61,6 +68,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Annotation Foundation | 0/TBD | Not started | - |
+| 1. Annotation Foundation | 0/5 | Not started | - |
 | 2. Core Agents | 0/TBD | Not started | - |
 | 3. Workflow, Distribution, and Docs | 0/TBD | Not started | - |
