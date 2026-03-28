@@ -24,15 +24,17 @@ Code is the plan — developers build first and extract structured planning from
 - ✓ Modified gsd-executor with ARC comment obligation (gsd-arc-executor wrapper) — Phase 2
 - ✓ Modified gsd-planner with code-based planning mode (gsd-arc-planner wrapper) — Phase 2
 
+- ✓ iterate command (extract-tags → code-planner → approval → executor) — Phase 3
+- ✓ deep-plan command wrapping discuss-phase + plan-phase — Phase 3
+- ✓ set-mode command for per-phase mode configuration — Phase 3
+- ✓ Updated installer (bin/install.js) with new agents + commands — Phase 3 (verified wholesale copy)
+- ✓ Updated package.json (name: gsd-code-first) — Phase 3 (verified)
+- ✓ Updated help command with new commands — Phase 3
+- ✓ User documentation and README for the fork — Phase 3
+
 ### Active
 
-- [ ] iterate command (extract-tags → code-planner → approval → executor)
-- [ ] deep-plan command wrapping discuss-phase + plan-phase
-- [ ] set-mode command for per-phase mode configuration
-- [ ] Updated installer (bin/install.js) with new agents + commands
-- [ ] Updated package.json (name: gsd-code-first)
-- [ ] Updated help command with new commands
-- [ ] User documentation and README for the fork
+All v1 requirements complete. No active requirements remaining.
 
 ### Out of Scope
 
@@ -84,4 +86,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after Phase 2 completion*
+*Last updated: 2026-03-28 after Phase 3 completion (v1 milestone complete)*
