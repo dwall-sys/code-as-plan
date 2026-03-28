@@ -1,7 +1,7 @@
 {
-  "name": "get-shit-done-cc",
-  "version": "1.30.0",
-  "description": "A meta-prompting, context engineering and spec-driven development system for Claude Code, OpenCode, Gemini and Codex by TÂCHES.",
+  "name": "gsd-code-first",
+  "version": "2.0.0-alpha.1",
+  "description": "Code-First fork of Get Shit Done — AI-native development with code-as-planning",
   "bin": {
     "get-shit-done-cc": "bin/install.js"
   },
