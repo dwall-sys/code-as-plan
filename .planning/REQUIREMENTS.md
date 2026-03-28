@@ -9,8 +9,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### ARC Standard
 
-- [ ] **ARC-01**: Developer can annotate code with structured @gsd-tags (context, decision, todo, constraint, pattern, ref, risk, api) following a documented standard
-- [ ] **ARC-02**: ARC standard reference document exists at get-shit-done/references/arc-standard.md with syntax rules, tag definitions, and per-language examples
+- [x] **ARC-01**: Developer can annotate code with structured @gsd-tags (context, decision, todo, constraint, pattern, ref, risk, api) following a documented standard
+- [x] **ARC-02**: ARC standard reference document exists at get-shit-done/references/arc-standard.md with syntax rules, tag definitions, and per-language examples
 
 ### Tag Scanner
 
@@ -113,8 +113,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARC-01 | Phase 1 | Pending |
-| ARC-02 | Phase 1 | Pending |
+| ARC-01 | Phase 1 | Complete |
+| ARC-02 | Phase 1 | Complete |
 | SCAN-01 | Phase 1 | Pending |
 | SCAN-02 | Phase 1 | Pending |
 | SCAN-03 | Phase 1 | Pending |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-03-28T19:26:41.137Z"
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-03-28T19:27:34.894Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 01 (annotation-foundation) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01-annotation-foundation P04 | 3 | 1 tasks | 1 files |
+| Phase 01 P01 | 2 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,8 @@ Recent decisions affecting current work:
 - Research: gsd-executor modification to be implemented as new gsd-arc-executor.md wrapper, not a patch to upstream file
 - [Phase 01-annotation-foundation]: Exported buildNewProjectConfig() for programmatic config access by Phase 2 agents
 - [Phase 01-annotation-foundation]: arc.enabled/tag_prefix/comment_anchors and phase_modes/default_phase_mode added as ADDITIVE config extension
+- [Phase 01]: Tag names are frozen as of v1.0 — 8 @gsd-tag types will not be renamed (arc-standard.md)
+- [Phase 01]: Comment anchor rule: @gsd-tags only valid when comment token is first non-whitespace content on the line
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T19:26:41.135Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-03-28T19:27:34.892Z
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None

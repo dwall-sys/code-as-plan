@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Write arc-standard.md (ARC annotation standard v1.0)
+- [x] 01-01-PLAN.md — Write arc-standard.md (ARC annotation standard v1.0)
 - [ ] 01-02-PLAN.md — Build arc-scanner.cjs with TDD (regex scanner + test suite)
 - [ ] 01-03-PLAN.md — Wire extract-tags subcommand in gsd-tools.cjs + create extract-plan command
 - [x] 01-04-PLAN.md — Extend config.cjs with arc and phase_modes schema
@@ -68,6 +68,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Annotation Foundation | 1/5 | In Progress|  |
+| 1. Annotation Foundation | 2/5 | In Progress|  |
 | 2. Core Agents | 0/TBD | Not started | - |
 | 3. Workflow, Distribution, and Docs | 0/TBD | Not started | - |
