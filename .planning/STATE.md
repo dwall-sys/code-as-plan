@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-28T19:47:24.971Z"
+status: executing
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-28T20:08:50.891Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 7
   percent: 0
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Code is the plan — developers build first and extract structured planning from annotated code
-**Current focus:** Phase 01 — annotation-foundation
+**Current focus:** Phase 02 — core-agents
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 02 (core-agents) — EXECUTING
+Plan: 3 of 3
+Status: Ready to execute
 Last activity: 2026-03-28
 
 Progress: [░░░░░░░░░░] 0%
@@ -57,6 +57,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-annotation-foundation P05 | 2min | 2 tasks | 2 files |
 | Phase 01-annotation-foundation P02 | 12 | 2 tasks | 2 files |
 | Phase 01-annotation-foundation P03 | 2min | 2 tasks | 3 files |
+| Phase 02-core-agents P02 | 2min | 1 tasks | 1 files |
+| Phase 02-core-agents P01 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -81,6 +83,8 @@ Recent decisions affecting current work:
 - [Phase 01-annotation-foundation]: Inline trailing comment false positive (const x = 1; // @gsd-context ...) excluded by TAG_LINE_RE ^[\t]* anchor — correct per ARC Comment Anchor Rule
 - [Phase 01-annotation-foundation]: Used parseNamedArgs() helper for extract-tags flag parsing to match the style of all other case branches
 - [Phase 01-annotation-foundation]: gsd:extract-plan slash command writes to .planning/prototype/CODE-INVENTORY.md per Decision D-09
+- [Phase 02-core-agents]: gsd-code-planner reads CODE-INVENTORY.md as primary input and bans XML output, research sections, and plan-check blocks (D-08, D-09)
+- [Phase 02-core-agents]: @gsd-todo maps to tasks, @gsd-context/@gsd-decision to context section, @gsd-constraint to hard limits, @gsd-risk to special handling (D-09, D-10)
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T19:47:24.968Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-core-agents/02-CONTEXT.md
+Last session: 2026-03-28T20:08:43.286Z
+Stopped at: Completed 02-02-PLAN.md
+Resume file: None

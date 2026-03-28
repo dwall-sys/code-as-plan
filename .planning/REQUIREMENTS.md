@@ -33,8 +33,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Code Planner
 
-- [ ] **PLAN-01**: gsd-code-planner agent reads CODE-INVENTORY.md and source code @gsd-tags as primary input
-- [ ] **PLAN-02**: gsd-code-planner generates compact Markdown plans (no XML, no research, no plan-check)
+- [x] **PLAN-01**: gsd-code-planner agent reads CODE-INVENTORY.md and source code @gsd-tags as primary input
+- [x] **PLAN-02**: gsd-code-planner generates compact Markdown plans (no XML, no research, no plan-check)
 
 ### Iterate
 
@@ -128,8 +128,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROT-02 | Phase 2 | Pending |
 | PROT-03 | Phase 2 | Pending |
 | PROT-04 | Phase 2 | Pending |
-| PLAN-01 | Phase 2 | Pending |
-| PLAN-02 | Phase 2 | Pending |
+| PLAN-01 | Phase 2 | Complete |
+| PLAN-02 | Phase 2 | Complete |
 | AMOD-01 | Phase 2 | Pending |
 | AMOD-02 | Phase 2 | Pending |
 | AMOD-03 | Phase 2 | Pending |

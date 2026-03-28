@@ -50,8 +50,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — gsd-prototyper agent + prototype command
-- [ ] 02-02-PLAN.md — gsd-code-planner agent
+- [x] 02-01-PLAN.md — gsd-prototyper agent + prototype command
+- [x] 02-02-PLAN.md — gsd-code-planner agent
 - [ ] 02-03-PLAN.md — ARC wrapper agents (gsd-arc-executor + gsd-arc-planner)
 
 ### Phase 3: Workflow, Distribution, and Docs
@@ -74,5 +74,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
-| 2. Core Agents | 0/3 | Planning complete | - |
+| 2. Core Agents | 2/3 | In Progress|  |
 | 3. Workflow, Distribution, and Docs | 0/TBD | Not started | - |
