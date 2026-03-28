@@ -66,6 +66,23 @@ For full tag syntax, metadata format, and per-language examples, see [arc-standa
 
 All original GSD commands continue working unchanged.
 
+## Known Limitations
+
+### ARC Wrapper Agents: Only Reachable via `/gsd:iterate`
+
+When `arc.enabled` is `true` in your project config, the ARC wrapper agents
+(`gsd-arc-executor` and `gsd-arc-planner`) are only invoked by the
+`/gsd:iterate` command. The traditional GSD entry points `/gsd:execute-phase`
+and `/gsd:plan-phase` always spawn the standard `gsd-executor` and
+`gsd-planner` regardless of the `arc.enabled` setting.
+
+**Workaround:** Use `/gsd:iterate` for code-first workflows where ARC
+annotation obligations are needed. Use `/gsd:execute-phase` or
+`/gsd:plan-phase` for plan-first workflows where ARC obligations are not
+required.
+
+This limitation is tracked for resolution in v1.1.
+
 ---
 
 *The sections below are from the original GSD framework. All original commands and workflows remain fully functional.*
