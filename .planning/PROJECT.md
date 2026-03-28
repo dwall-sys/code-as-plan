@@ -12,24 +12,23 @@ Code is the plan — developers build first and extract structured planning from
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ ARC annotation standard with @gsd-tags (context, decision, todo, constraint, pattern, ref, risk, api) — Phase 1
+- ✓ Tag scanner in gsd-tools.cjs that extracts @gsd-tags from code — Phase 1
+- ✓ extract-plan command that generates CODE-INVENTORY.md from tags — Phase 1
+- ✓ gsd-annotator agent for retroactive code annotation — Phase 1
+- ✓ annotate command that spawns annotator + runs extract-plan — Phase 1
+- ✓ Extended config schema (phase_modes, arc settings, default_phase_mode) — Phase 1
 
 ### Active
 
-- [ ] ARC annotation standard with @gsd-tags (context, decision, todo, constraint, pattern, ref, risk, api)
-- [ ] Tag scanner in gsd-tools.cjs that extracts @gsd-tags from code
-- [ ] extract-plan command that generates CODE-INVENTORY.md from tags
 - [ ] gsd-prototyper agent that builds prototypes with ARC annotations
 - [ ] prototype command that spawns prototyper with project context
 - [ ] gsd-code-planner agent that reads code + tags to generate plans
 - [ ] iterate command (extract-tags → code-planner → approval → executor)
-- [ ] gsd-annotator agent for retroactive code annotation
-- [ ] annotate command that spawns annotator + runs extract-plan
 - [ ] deep-plan command wrapping discuss-phase + plan-phase
 - [ ] set-mode command for per-phase mode configuration
 - [ ] Modified gsd-executor with ARC comment obligation
 - [ ] Modified gsd-planner with code-based planning mode
-- [ ] Extended config schema (phase_modes, arc settings, default_phase_mode)
 - [ ] Updated installer (bin/install.js) with new agents + commands
 - [ ] Updated package.json (name: gsd-code-first)
 - [ ] Updated help command with new commands
@@ -85,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after initialization*
+*Last updated: 2026-03-28 after Phase 1 completion*
