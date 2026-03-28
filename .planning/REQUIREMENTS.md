@@ -55,9 +55,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Mode Configuration
 
-- [ ] **MODE-01**: set-mode command configures per-phase workflow mode (code-first, plan-first, hybrid)
+- [x] **MODE-01**: set-mode command configures per-phase workflow mode (code-first, plan-first, hybrid)
 - [x] **MODE-02**: Config schema extended with phase_modes, arc settings, and default_phase_mode
-- [ ] **MODE-03**: deep-plan command wraps discuss-phase + plan-phase for phases needing upfront reasoning
+- [x] **MODE-03**: deep-plan command wraps discuss-phase + plan-phase for phases needing upfront reasoning
 
 ### Distribution
 
@@ -136,8 +136,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ITER-01 | Phase 3 | Complete |
 | ITER-02 | Phase 3 | Complete |
 | ITER-03 | Phase 3 | Complete |
-| MODE-01 | Phase 3 | Pending |
-| MODE-03 | Phase 3 | Pending |
+| MODE-01 | Phase 3 | Complete |
+| MODE-03 | Phase 3 | Complete |
 | DIST-01 | Phase 3 | Pending |
 | DIST-02 | Phase 3 | Pending |
 | DIST-03 | Phase 3 | Pending |

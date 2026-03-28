@@ -67,7 +67,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — set-mode subcommand + config.cjs patch + set-mode.md + deep-plan.md commands
+- [x] 03-01-PLAN.md — set-mode subcommand + config.cjs patch + set-mode.md + deep-plan.md commands
 - [x] 03-02-PLAN.md — iterate.md command (flagship code-first workflow loop)
 - [ ] 03-03-PLAN.md — Distribution verification + help.md update + README.md documentation
 
@@ -80,4 +80,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
 | 2. Core Agents | 3/3 | Complete   | 2026-03-28 |
-| 3. Workflow, Distribution, and Docs | 1/3 | In Progress|  |
+| 3. Workflow, Distribution, and Docs | 2/3 | In Progress|  |
