@@ -81,7 +81,11 @@ Plans:
   1. Commands annotate.md, prototype.md, and extract-plan.md do not reference non-existent workflow files
   2. All agent-frontmatter tests pass (including gsd-annotator)
   3. README.md or a known-issues section documents that ARC wrapper agents are only reachable via /gsd:iterate (not via /gsd:execute-phase or /gsd:plan-phase)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Remove stale execution_context blocks + fix gsd-annotator frontmatter tests
+- [ ] 04-02-PLAN.md — Add Known Limitations section to README.md
 
 ## Progress
 
@@ -93,4 +97,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
 | 2. Core Agents | 3/3 | Complete   | 2026-03-28 |
 | 3. Workflow, Distribution, and Docs | 3/3 | Complete   | 2026-03-28 |
-| 4. Tech Debt Cleanup | 0/TBD | Not started | - |
+| 4. Tech Debt Cleanup | 0/2 | Not started | - |
