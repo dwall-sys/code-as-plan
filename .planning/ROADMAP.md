@@ -13,7 +13,7 @@ Three phases take GSD Code-First from zero to a shippable npm package. Phase 1 l
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Annotation Foundation** - ARC standard, tag scanner, config schema, and extract-plan command (completed 2026-03-28)
-- [ ] **Phase 2: Core Agents** - gsd-prototyper, gsd-annotator, gsd-code-planner, and modified agent behavior
+- [x] **Phase 2: Core Agents** - gsd-prototyper, gsd-annotator, gsd-code-planner, and modified agent behavior (completed 2026-03-28)
 - [ ] **Phase 3: Workflow, Distribution, and Docs** - iterate loop, mode commands, installer, and documentation
 
 ## Phase Details
@@ -52,7 +52,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — gsd-prototyper agent + prototype command
 - [x] 02-02-PLAN.md — gsd-code-planner agent
-- [ ] 02-03-PLAN.md — ARC wrapper agents (gsd-arc-executor + gsd-arc-planner)
+- [x] 02-03-PLAN.md — ARC wrapper agents (gsd-arc-executor + gsd-arc-planner)
 
 ### Phase 3: Workflow, Distribution, and Docs
 **Goal**: The complete code-first workflow is available as an installable npm package with full documentation
@@ -74,5 +74,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Annotation Foundation | 5/5 | Complete   | 2026-03-28 |
-| 2. Core Agents | 2/3 | In Progress|  |
+| 2. Core Agents | 3/3 | Complete   | 2026-03-28 |
 | 3. Workflow, Distribution, and Docs | 0/TBD | Not started | - |

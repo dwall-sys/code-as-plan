@@ -49,9 +49,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Agent Modifications
 
-- [ ] **AMOD-01**: gsd-executor extended with ARC comment obligation (adds @gsd-decision tags, removes completed @gsd-todo tags)
-- [ ] **AMOD-02**: gsd-planner extended with code-based planning mode (reads @gsd-tags as input alongside or instead of requirements docs)
-- [ ] **AMOD-03**: Agent modifications are config-gated to preserve upstream compatibility
+- [x] **AMOD-01**: gsd-executor extended with ARC comment obligation (adds @gsd-decision tags, removes completed @gsd-todo tags)
+- [x] **AMOD-02**: gsd-planner extended with code-based planning mode (reads @gsd-tags as input alongside or instead of requirements docs)
+- [x] **AMOD-03**: Agent modifications are config-gated to preserve upstream compatibility
 
 ### Mode Configuration
 
@@ -130,9 +130,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROT-04 | Phase 2 | Complete |
 | PLAN-01 | Phase 2 | Complete |
 | PLAN-02 | Phase 2 | Complete |
-| AMOD-01 | Phase 2 | Pending |
-| AMOD-02 | Phase 2 | Pending |
-| AMOD-03 | Phase 2 | Pending |
+| AMOD-01 | Phase 2 | Complete |
+| AMOD-02 | Phase 2 | Complete |
+| AMOD-03 | Phase 2 | Complete |
 | ITER-01 | Phase 3 | Pending |
 | ITER-02 | Phase 3 | Pending |
 | ITER-03 | Phase 3 | Pending |

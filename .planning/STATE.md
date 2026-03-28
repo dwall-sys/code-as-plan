@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-28T20:08:58.946Z"
+status: verifying
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-03-28T20:12:28.824Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 Phase: 02 (core-agents) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-28
 
 Progress: [░░░░░░░░░░] 0%
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-annotation-foundation P03 | 2min | 2 tasks | 3 files |
 | Phase 02-core-agents P02 | 2min | 1 tasks | 1 files |
 | Phase 02-core-agents P01 | 2min | 2 tasks | 2 files |
+| Phase 02-core-agents P03 | 310s | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Recent decisions affecting current work:
 - [Phase 02-core-agents]: Prototyper reads arc-standard.md at startup (same pattern as gsd-annotator) — keeps agent lean and spec authoritative
 - [Phase 02-core-agents]: prototype command uses $HOME not ~ in bash commands for portability
 - [Phase 02-core-agents]: Auto-chain uses same extract-tags command as annotate — consistent pattern across annotation-producing commands
+- [Phase 02-core-agents]: Option A wrapper delegation: self-contained prose files carry all upstream behavior inline, no runtime reads of upstream agent files (avoids installation-path fragility)
+- [Phase 02-core-agents]: gsd-arc-planner output format is always standard PLAN.md -- code-first mode changes INPUT (CODE-INVENTORY.md vs REQUIREMENTS.md), not output structure
 
 ### Pending Todos
 
@@ -100,6 +103,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T20:08:58.944Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-28T20:12:28.822Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
