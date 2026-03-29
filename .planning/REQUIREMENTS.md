@@ -9,8 +9,8 @@ Requirements for v1.1 Autonomous Prototype & Review Loop. Each maps to roadmap p
 
 ### ARC Default
 
-- [ ] **ARC-01**: arc.enabled defaults to true for all new gsd-code-first installations
-- [ ] **ARC-02**: Existing projects with explicit arc.enabled: false preserve their setting
+- [x] **ARC-01**: arc.enabled defaults to true for all new gsd-code-first installations
+- [x] **ARC-02**: Existing projects with explicit arc.enabled: false preserve their setting
 
 ### PRD Pipeline
 
@@ -73,8 +73,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARC-01 | Phase 5 | Pending |
-| ARC-02 | Phase 5 | Pending |
+| ARC-01 | Phase 5 | Complete |
+| ARC-02 | Phase 5 | Complete |
 | PRD-01 | Phase 6 | Pending |
 | PRD-02 | Phase 6 | Pending |
 | PRD-03 | Phase 6 | Pending |

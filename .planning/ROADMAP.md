@@ -21,7 +21,7 @@
 
 **Milestone Goal:** Make the code-first workflow the standard routine -- PRD in, functional prototype out, with tests written and review produced.
 
-- [ ] **Phase 5: ARC as Default** - Make ARC annotations always-on for new installs while preserving existing configs
+- [x] **Phase 5: ARC as Default** - Make ARC annotations always-on for new installs while preserving existing configs (completed 2026-03-29)
 - [ ] **Phase 6: PRD-to-Prototype Pipeline** - Overhaul /gsd:prototype to ingest a PRD and drive scaffold generation from acceptance criteria
 - [ ] **Phase 7: Test Agent** - New gsd-tester agent that writes and runs tests against annotated code with RED-GREEN discipline
 - [ ] **Phase 8: Review Agent + Command** - New gsd-reviewer agent and /gsd:review-code command that evaluates spec compliance, code quality, and test results
@@ -36,9 +36,9 @@
   1. Running /gsd:prototype or /gsd:iterate on a fresh install produces @gsd-tag annotations without any config change
   2. An existing project with arc.enabled: false in config.json continues to function without ARC annotations after upgrading
   3. The /gsd:iterate command logs which executor (gsd-arc-executor vs gsd-executor) was selected at runtime, making the ARC/non-ARC routing visible
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 05-01-PLAN.md -- Fix ARC fallback defaults to true, add routing log line, add config test
+- [x] 05-01-PLAN.md -- Fix ARC fallback defaults to true, add routing log line, add config test
 
 ### Phase 6: PRD-to-Prototype Pipeline
 **Goal**: Users can run /gsd:prototype with a PRD file and receive a scaffolded prototype where each acceptance criterion from the PRD becomes a @gsd-todo tag in the code
@@ -88,7 +88,7 @@ Plans:
 | 2. Core Agents | v1.0 | 3/3 | Complete | 2026-03-28 |
 | 3. Workflow, Distribution, and Docs | v1.0 | 3/3 | Complete | 2026-03-28 |
 | 4. Tech Debt Cleanup | v1.0 | 2/2 | Complete | 2026-03-28 |
-| 5. ARC as Default | v1.1 | 0/1 | Planning | - |
+| 5. ARC as Default | v1.1 | 1/1 | Complete   | 2026-03-29 |
 | 6. PRD-to-Prototype Pipeline | v1.1 | 0/TBD | Not started | - |
 | 7. Test Agent | v1.1 | 0/TBD | Not started | - |
 | 8. Review Agent + Command | v1.1 | 0/TBD | Not started | - |
