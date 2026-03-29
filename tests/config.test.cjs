@@ -384,6 +384,11 @@ describe('config-new-project command', () => {
     // hooks section present
     assert.ok(config.hooks && typeof config.hooks === 'object', 'hooks section should exist');
     assert.strictEqual(config.hooks.context_warnings, true);
+
+    // arc section present with correct defaults (ARC-01)
+    assert.ok(config.arc && typeof config.arc === 'object', 'arc section should exist');
+    assert.strictEqual(config.arc.enabled, true, 'arc.enabled should default to true');
+    assert.strictEqual(config.arc.tag_prefix, '@gsd-', 'arc.tag_prefix should default to @gsd-');
   });
 
   test('user choices override defaults', () => {
@@ -411,6 +416,19 @@ describe('config-new-project command', () => {
     // Defaults still present for non-chosen keys
     assert.strictEqual(config.git.branching_strategy, 'none');
     assert.strictEqual(typeof config.search_gitignored, 'boolean');
+  });
+
+  test('explicit arc.enabled false is preserved (ARC-02)', () => {
+    const choices = JSON.stringify({
+      mode: 'interactive',
+      granularity: 'standard',
+      arc: { enabled: false },
+    });
+    const result = runGsdTools(['config-new-project', choices], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.arc.enabled, false, 'explicit arc.enabled: false must be preserved');
   });
 
   test('works with empty choices — all defaults materialized', () => {
