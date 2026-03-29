@@ -35,7 +35,15 @@ Code is the plan -- developers build first and extract structured planning from 
 
 ### Active
 
-No active requirements. Next milestone requirements TBD via `/gsd:new-milestone`.
+#### Current Milestone: v1.1 Autonomous Prototype & Review Loop
+
+**Goal:** Make the code-first workflow the standard routine -- PRD in, functional prototype out, with review and verification.
+
+**Target features:**
+- PRD-to-Prototype Pipeline (`/gsd:prototype` overhaul)
+- ARC as default (`arc.enabled` always `true`)
+- Test-Agent (new agent for writing unit/integration tests)
+- Review-Agent + `/gsd:review` command (test execution, evaluation, manual verification, next steps)
 
 ### Out of Scope
 
@@ -92,4 +100,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-28 after v1.0 milestone completion*
+*Last updated: 2026-03-29 after v1.1 milestone start*
