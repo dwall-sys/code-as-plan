@@ -23,7 +23,7 @@
 
 - [x] **Phase 5: ARC as Default** - Make ARC annotations always-on for new installs while preserving existing configs (completed 2026-03-29)
 - [x] **Phase 6: PRD-to-Prototype Pipeline** - Overhaul /gsd:prototype to ingest a PRD and drive scaffold generation from acceptance criteria (completed 2026-03-29)
-- [ ] **Phase 7: Test Agent** - New gsd-tester agent that writes and runs tests against annotated code with RED-GREEN discipline
+- [x] **Phase 7: Test Agent** - New gsd-tester agent that writes and runs tests against annotated code with RED-GREEN discipline (completed 2026-03-29)
 - [ ] **Phase 8: Review Agent + Command** - New gsd-reviewer agent and /gsd:review-code command that evaluates spec compliance, code quality, and test results
 
 ## Phase Details
@@ -67,10 +67,10 @@ Plans:
   3. gsd-tester detects the project's test framework (vitest, jest, mocha, ava, or node:test) automatically from package.json without user input
   4. Code paths that gsd-tester cannot test or deems high-risk receive @gsd-risk annotations, making coverage gaps visible in CODE-INVENTORY.md
   5. The agent confirms all tests pass (green) before marking its work complete
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 07-01-PLAN.md -- Create test-detector.cjs module with TDD tests and gsd-tools.cjs subcommand
-- [ ] 07-02-PLAN.md -- Create gsd-tester agent and update add-tests.md with ARC routing
+- [x] 07-02-PLAN.md -- Create gsd-tester agent and update add-tests.md with ARC routing
 
 ### Phase 8: Review Agent + Command
 **Goal**: Users can run /gsd:review-code to get a two-stage evaluation of their prototype -- spec compliance first, then code quality -- with test results included and actionable next steps written to REVIEW-CODE.md
@@ -96,5 +96,5 @@ Plans:
 | 4. Tech Debt Cleanup | v1.0 | 2/2 | Complete | 2026-03-28 |
 | 5. ARC as Default | v1.1 | 1/1 | Complete   | 2026-03-29 |
 | 6. PRD-to-Prototype Pipeline | v1.1 | 2/2 | Complete   | 2026-03-29 |
-| 7. Test Agent | v1.1 | 1/2 | In Progress|  |
+| 7. Test Agent | v1.1 | 2/2 | Complete   | 2026-03-29 |
 | 8. Review Agent + Command | v1.1 | 0/TBD | Not started | - |
