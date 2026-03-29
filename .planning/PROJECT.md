@@ -2,9 +2,9 @@
 
 ## What This Is
 
-A fork of the GSD (Get Shit Done) framework that implements the "Code-First" principle. Instead of running discuss -> plan -> execute for every phase, developers build a prototype directly, annotate the code with structured @gsd-tags (the "ARC" system), and use those annotations as planning input for further iterations. Installable as `npx gsd-code-first@latest`.
+A fork of the GSD (Get Shit Done) framework that implements the "Code-First" principle. Developers build a prototype directly from a PRD, annotate code with structured @gsd-tags (ARC system), run tests with RED-GREEN discipline, and get two-stage code review -- all from the CLI. Installable as `npx gsd-code-first@latest`.
 
-Shipped v1.0 with 4 new agents, 6 new commands, ARC annotation standard, and full documentation.
+Shipped v1.1 with PRD-to-prototype pipeline, test agent, review agent, and ARC-by-default.
 
 ## Core Value
 
@@ -26,46 +26,45 @@ Code is the plan -- developers build first and extract structured planning from 
 - ✓ gsd-arc-executor wrapper with ARC comment obligations -- v1.0
 - ✓ gsd-arc-planner wrapper with code-based planning mode -- v1.0
 - ✓ iterate command (flagship code-first loop with approval gate) -- v1.0
-- ✓ ARC annotations enabled by default for new installations -- v1.1 Phase 5
-- ✓ PRD-to-Prototype pipeline with AC extraction, confirmation gate, autonomous iteration loop -- v1.1 Phase 6
-- ✓ gsd-tester agent with RED-GREEN discipline, test-detector.cjs, @gsd-risk annotation -- v1.1 Phase 7
-- ✓ gsd-reviewer agent and /gsd:review-code command with two-stage evaluation -- v1.1 Phase 8
 - ✓ deep-plan command chaining discuss-phase + plan-phase -- v1.0
 - ✓ set-mode command for per-phase mode configuration -- v1.0
 - ✓ Installer verified (wholesale copy of agents/ and commands/) -- v1.0
 - ✓ package.json with name gsd-code-first -- v1.0
 - ✓ Help command with all 6 Code-First commands -- v1.0
 - ✓ README.md with installation, workflow, and user guide -- v1.0
+- ✓ ARC annotations enabled by default for new installations -- v1.1
+- ✓ PRD-to-Prototype pipeline with AC extraction, confirmation gate, autonomous iteration loop -- v1.1
+- ✓ gsd-tester agent with RED-GREEN discipline, test-detector.cjs, @gsd-risk annotation -- v1.1
+- ✓ gsd-reviewer agent and /gsd:review-code command with two-stage evaluation -- v1.1
 
 ### Active
 
-#### Current Milestone: v1.1 Autonomous Prototype & Review Loop
-
-**Goal:** Make the code-first workflow the standard routine -- PRD in, functional prototype out, with review and verification.
-
-**Target features:**
-- PRD-to-Prototype Pipeline (`/gsd:prototype` overhaul)
-- ARC as default (`arc.enabled` always `true`)
-- Test-Agent (new agent for writing unit/integration tests)
-- Review-Agent + `/gsd:review` command (test execution, evaluation, manual verification, next steps)
+(None -- next milestone not yet defined)
 
 ### Out of Scope
 
 - UI/Frontend -- this is a CLI tool, no visual interface
 - Breaking changes to original GSD commands -- existing workflows must still function
-- Custom editor integrations -- IDE plugins are out of scope for v1
-- Multi-language AST parsing for tags -- regex-based extraction is sufficient for v1
-- ARC wrapper routing in traditional workflows -- wrapper agents only reachable via /gsd:iterate (documented limitation, tracked for v1.1)
+- Custom editor integrations -- IDE plugins are out of scope
+- Multi-language AST parsing for tags -- regex-based extraction is sufficient
+- ARC wrapper routing in traditional workflows -- wrapper agents only reachable via /gsd:iterate (documented limitation)
+- Parallel test generation across files -- coordination complexity exceeds benefit for single-developer workflow
+- Auto-commit after prototype/test generation -- erodes developer trust; human approval gates are non-negotiable
+- Remote PRD URLs (Notion, Confluence) -- local file/paste is sufficient; remote access adds complexity
+- Single mega-agent for entire pipeline -- context window exhaustion, role confusion
+- Fully autonomous with zero human checkpoints -- agents hallucinate; approval gates are required
 
 ## Context
 
 - Shipped v1.0 on 2026-03-28 with 4 phases, 13 plans, 18 tasks
+- Shipped v1.1 on 2026-03-29 with 4 phases, 6 plans
 - Tech stack: JavaScript/Node.js (CJS), Markdown agents/commands, JSON config
 - Zero runtime dependencies -- all tooling uses Node.js built-ins
-- 4 new agents: gsd-prototyper, gsd-code-planner, gsd-arc-executor, gsd-arc-planner
-- 6 new commands: prototype, iterate, annotate, extract-plan, set-mode, deep-plan
+- 5 new agents total: gsd-prototyper, gsd-code-planner, gsd-arc-executor, gsd-arc-planner, gsd-tester, gsd-reviewer
+- 8 commands: prototype, iterate, annotate, extract-plan, set-mode, deep-plan, add-tests (ARC routing), review-code
+- test-detector.cjs utility detecting 5 frameworks (vitest, jest, mocha, ava, node:test)
 - All original GSD commands continue working unchanged
-- 106 agent-frontmatter tests pass, 21 arc-scanner tests pass
+- Known tech debt: `extract-plan` stale ref in gsd-tester.md:221, `grep -oP` non-portable in review-code.md:103
 
 ## Constraints
 
@@ -85,6 +84,11 @@ Code is the plan -- developers build first and extract structured planning from 
 | Preserve all original commands | Users can mix code-first and plan-first workflows per phase | ✓ Good -- zero regressions in original functionality |
 | Wrapper agents over patches | New gsd-arc-executor/planner files instead of modifying upstream agents | ✓ Good -- upstream files untouched, merge-safe |
 | Comment anchor rule | @gsd-tags only valid on dedicated comment lines, not trailing comments | ✓ Good -- eliminates false positives in strings/URLs |
+| ARC enabled by default | New installs get ARC annotations without config change; existing opt-outs preserved | ✓ Good -- reduces onboarding friction |
+| PRD ingestion in command layer | prototype.md orchestrator handles PRD, not gsd-prototyper agent | ✓ Good -- agent stays reusable across PRD formats |
+| Two-stage review gate | Stage 2 (quality) only runs if Stage 1 (spec compliance) passes | ✓ Good -- prevents wasted review cycles on non-compliant code |
+| Test execution in command layer | review-code.md runs tests, passes results to agent | ✓ Good -- prevents context window blockage |
+| RED-GREEN discipline in gsd-tester | Tests must fail against stubs before passing against implementation | ✓ Good -- ensures tests are meaningful, not tautological |
 
 ## Evolution
 

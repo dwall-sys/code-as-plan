@@ -1,5 +1,19 @@
 # Milestones
 
+## v1.1 Autonomous Prototype & Review Loop (Shipped: 2026-03-29)
+
+**Phases completed:** 4 phases, 6 plans, 3 tasks
+
+**Key accomplishments:**
+
+- ARC annotations enabled by default for new installations; existing opt-out configs preserved
+- PRD-to-Prototype pipeline with 3-way PRD resolution, semantic AC extraction, confirmation gate, and @gsd-todo(ref:AC-N) traceability
+- Autonomous iteration loop (max 5) with AC_REMAINING exit condition, --interactive pause points, and final report
+- Test agent (gsd-tester) with auto-detection of 5 test frameworks, RED-GREEN discipline, and @gsd-risk annotations
+- Two-stage review agent (gsd-reviewer) with spec compliance gate, code quality evaluation, test results, and structured REVIEW-CODE.md output
+
+---
+
 ## v1.0 GSD Code-First Fork (Shipped: 2026-03-28)
 
 **Phases completed:** 4 phases, 13 plans, 18 tasks
