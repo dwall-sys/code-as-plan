@@ -67,7 +67,10 @@ Plans:
   3. gsd-tester detects the project's test framework (vitest, jest, mocha, ava, or node:test) automatically from package.json without user input
   4. Code paths that gsd-tester cannot test or deems high-risk receive @gsd-risk annotations, making coverage gaps visible in CODE-INVENTORY.md
   5. The agent confirms all tests pass (green) before marking its work complete
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 07-01-PLAN.md -- Create test-detector.cjs module with TDD tests and gsd-tools.cjs subcommand
+- [ ] 07-02-PLAN.md -- Create gsd-tester agent and update add-tests.md with ARC routing
 
 ### Phase 8: Review Agent + Command
 **Goal**: Users can run /gsd:review-code to get a two-stage evaluation of their prototype -- spec compliance first, then code quality -- with test results included and actionable next steps written to REVIEW-CODE.md
@@ -93,5 +96,5 @@ Plans:
 | 4. Tech Debt Cleanup | v1.0 | 2/2 | Complete | 2026-03-28 |
 | 5. ARC as Default | v1.1 | 1/1 | Complete   | 2026-03-29 |
 | 6. PRD-to-Prototype Pipeline | v1.1 | 2/2 | Complete   | 2026-03-29 |
-| 7. Test Agent | v1.1 | 0/TBD | Not started | - |
+| 7. Test Agent | v1.1 | 0/2 | Planning | - |
 | 8. Review Agent + Command | v1.1 | 0/TBD | Not started | - |
