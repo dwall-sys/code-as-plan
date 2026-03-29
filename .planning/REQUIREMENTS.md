@@ -32,13 +32,13 @@ Requirements for v1.1 Autonomous Prototype & Review Loop. Each maps to roadmap p
 
 ### Review Agent
 
-- [ ] **REV-01**: /gsd:review-code performs Stage 1 review: spec compliance (PRD ACs met?)
-- [ ] **REV-02**: /gsd:review-code performs Stage 2 review: code quality (security, maintainability)
-- [ ] **REV-03**: Stage 2 only runs if Stage 1 passes
-- [ ] **REV-04**: Review includes manual verification steps (UI, navigation, UX checklist)
-- [ ] **REV-05**: Review includes actionable next steps for user and agent
-- [ ] **REV-06**: Review output written to REVIEW-CODE.md with structured schema for future --fix chaining
-- [ ] **REV-07**: gsd-reviewer executes test suite and includes results in review
+- [x] **REV-01**: /gsd:review-code performs Stage 1 review: spec compliance (PRD ACs met?)
+- [x] **REV-02**: /gsd:review-code performs Stage 2 review: code quality (security, maintainability)
+- [x] **REV-03**: Stage 2 only runs if Stage 1 passes
+- [x] **REV-04**: Review includes manual verification steps (UI, navigation, UX checklist)
+- [x] **REV-05**: Review includes actionable next steps for user and agent
+- [x] **REV-06**: Review output written to REVIEW-CODE.md with structured schema for future --fix chaining
+- [x] **REV-07**: gsd-reviewer executes test suite and includes results in review
 
 ## v1.2+ Requirements
 
@@ -87,13 +87,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-03 | Phase 7 | Complete |
 | TEST-04 | Phase 7 | Complete |
 | TEST-05 | Phase 7 | Complete |
-| REV-01 | Phase 8 | Pending |
-| REV-02 | Phase 8 | Pending |
-| REV-03 | Phase 8 | Pending |
-| REV-04 | Phase 8 | Pending |
-| REV-05 | Phase 8 | Pending |
-| REV-06 | Phase 8 | Pending |
-| REV-07 | Phase 8 | Pending |
+| REV-01 | Phase 8 | Complete |
+| REV-02 | Phase 8 | Complete |
+| REV-03 | Phase 8 | Complete |
+| REV-04 | Phase 8 | Complete |
+| REV-05 | Phase 8 | Complete |
+| REV-06 | Phase 8 | Complete |
+| REV-07 | Phase 8 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 21 total

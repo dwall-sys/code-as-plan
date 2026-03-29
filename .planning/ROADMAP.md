@@ -24,7 +24,7 @@
 - [x] **Phase 5: ARC as Default** - Make ARC annotations always-on for new installs while preserving existing configs (completed 2026-03-29)
 - [x] **Phase 6: PRD-to-Prototype Pipeline** - Overhaul /gsd:prototype to ingest a PRD and drive scaffold generation from acceptance criteria (completed 2026-03-29)
 - [x] **Phase 7: Test Agent** - New gsd-tester agent that writes and runs tests against annotated code with RED-GREEN discipline (completed 2026-03-29)
-- [ ] **Phase 8: Review Agent + Command** - New gsd-reviewer agent and /gsd:review-code command that evaluates spec compliance, code quality, and test results
+- [x] **Phase 8: Review Agent + Command** - New gsd-reviewer agent and /gsd:review-code command that evaluates spec compliance, code quality, and test results (completed 2026-03-29)
 
 ## Phase Details
 
@@ -82,9 +82,9 @@ Plans:
   3. The review output includes manual verification steps that the user can follow to check UI, navigation, and UX behavior
   4. REVIEW-CODE.md is written with a structured schema containing at most 5 prioritized next steps, each with file path, severity level, and a concrete action
   5. Test suite results are executed and included in the review output, giving the reviewer full pass/fail context alongside the evaluation
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 08-01-PLAN.md -- Create /gsd:review-code command orchestrator and gsd-reviewer agent with two-stage evaluation pipeline
+- [x] 08-01-PLAN.md -- Create /gsd:review-code command orchestrator and gsd-reviewer agent with two-stage evaluation pipeline
 
 ## Progress
 
@@ -99,4 +99,4 @@ Plans:
 | 5. ARC as Default | v1.1 | 1/1 | Complete   | 2026-03-29 |
 | 6. PRD-to-Prototype Pipeline | v1.1 | 2/2 | Complete   | 2026-03-29 |
 | 7. Test Agent | v1.1 | 2/2 | Complete   | 2026-03-29 |
-| 8. Review Agent + Command | v1.1 | 0/1 | Not started | - |
+| 8. Review Agent + Command | v1.1 | 1/1 | Complete   | 2026-03-29 |
