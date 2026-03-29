@@ -27,6 +27,7 @@ Code is the plan -- developers build first and extract structured planning from 
 - ✓ gsd-arc-planner wrapper with code-based planning mode -- v1.0
 - ✓ iterate command (flagship code-first loop with approval gate) -- v1.0
 - ✓ ARC annotations enabled by default for new installations -- v1.1 Phase 5
+- ✓ PRD-to-Prototype pipeline with AC extraction, confirmation gate, autonomous iteration loop -- v1.1 Phase 6
 - ✓ deep-plan command chaining discuss-phase + plan-phase -- v1.0
 - ✓ set-mode command for per-phase mode configuration -- v1.0
 - ✓ Installer verified (wholesale copy of agents/ and commands/) -- v1.0
@@ -101,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after Phase 5 completion*
+*Last updated: 2026-03-29 after Phase 6 completion*
