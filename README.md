@@ -24,6 +24,45 @@ Installs GSD Code-First into your Claude Code environment. All original GSD comm
 /gsd:prototype -> code with @gsd-tags -> /gsd:iterate -> approve plan -> execute -> repeat
 ```
 
+## Brainstorm: Conversation to PRD
+
+Don't write PRDs manually. Talk through your ideas and let Claude structure them:
+
+```
+/gsd:brainstorm
+  -> "What do you want to build?"
+  -> Targeted questions, one at a time
+  -> Feature grouping + dependency analysis
+  -> PRD summary for your approval
+  -> .planning/PRD.md written (ready for /gsd:prototype)
+```
+
+For multi-feature projects, brainstorm produces separate `PRD-[slug].md` files. Decisions are persisted to `BRAINSTORM-LEDGER.md` for cross-session continuity.
+
+## Architecture Mode
+
+Start a new project with structure before features:
+
+```
+/gsd:prototype --architecture
+  -> Reads existing conventions (package.json, tsconfig, etc.)
+  -> Generates skeleton: folders, config, typed interfaces
+  -> Every module boundary annotated with @gsd-decision tags
+  -> Zero feature code -- only structure and stubs
+  -> You confirm before any files are written
+```
+
+## Feature Map
+
+Track multi-feature project status automatically:
+
+```
+.planning/FEATURES.md (auto-generated, never edit manually)
+  -> Derived from PRD acceptance criteria + @gsd-tags in code
+  -> Shows per-AC completion status (open @gsd-todo = not done)
+  -> Regenerates automatically when /gsd:extract-plan runs
+```
+
 ## ARC Annotations
 
 ARC (Annotated Reasoning in Code) tags are structured comments that planning agents read to understand your code's intent, decisions, and next steps without reading every file.
@@ -57,10 +96,13 @@ For full tag syntax, metadata format, and per-language examples, see [arc-standa
 
 | Command | Description |
 |---------|-------------|
-| `/gsd:prototype` | Build working prototype with @gsd-tags |
+| `/gsd:brainstorm` | Interactive conversation that produces structured PRD(s) with ACs |
+| `/gsd:prototype` | Build working prototype with @gsd-tags (supports `--architecture` for skeletons) |
 | `/gsd:annotate` | Retroactively add @gsd-tags to existing code |
-| `/gsd:extract-plan` | Scan code for @gsd-tags, produce CODE-INVENTORY.md |
+| `/gsd:extract-plan` | Scan code for @gsd-tags, produce CODE-INVENTORY.md + FEATURES.md |
 | `/gsd:iterate` | Full code-first loop: extract -> plan -> approve -> execute |
+| `/gsd:add-tests` | Generate tests with RED-GREEN discipline |
+| `/gsd:review-code` | Two-stage review: spec compliance + code quality |
 | `/gsd:set-mode` | Configure workflow mode (code-first, plan-first, hybrid) |
 | `/gsd:deep-plan` | Chain discuss + plan for upfront reasoning phases |
 

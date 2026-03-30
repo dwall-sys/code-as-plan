@@ -631,4 +631,12 @@ Usage: `/gsd:set-mode <mode> [--phase N]`
 **`/gsd:deep-plan`**
 Chain discuss-phase then plan-phase for phases needing upfront reasoning.
 Usage: `/gsd:deep-plan <phase-number> [flags]`
+
+**`/gsd:brainstorm`**
+Interactive conversation that produces structured PRD(s) with acceptance criteria.
+Usage: `/gsd:brainstorm [--resume]`
+
+**`/gsd:review-code`**
+Two-stage prototype review: spec compliance (Stage 1) then code quality (Stage 2).
+Usage: `/gsd:review-code [--non-interactive]`
 </reference>

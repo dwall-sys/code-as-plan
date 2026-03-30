@@ -93,6 +93,19 @@ describe('readProjectConventions', () => {
     assert.deepStrictEqual(report.pathAliases, { '@/*': ['src/*'] });
   });
 
+  it('reads tsconfig with JSONC comments', () => {
+    const jsonc = `{
+      // This is a comment
+      "compilerOptions": {
+        /* block comment */
+        "paths": { "@/*": ["src/*"] }
+      }
+    }`;
+    fs.writeFileSync(path.join(tmpDir, 'tsconfig.json'), jsonc);
+    const report = readProjectConventions(tmpDir);
+    assert.deepStrictEqual(report.pathAliases, { '@/*': ['src/*'] });
+  });
+
   it('handles malformed package.json gracefully', () => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), 'not valid json');
     const report = readProjectConventions(tmpDir);

@@ -83,13 +83,15 @@ function readProjectConventions(projectRoot) {
 
   if (configPath) {
     try {
-      // @gsd-risk tsconfig.json may have comments (JSONC) -- JSON.parse will fail on comments. Stub ignores this for now.
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      // Strip JS-style comments (// and /* */) before parsing — handles JSONC tsconfig files
+      let raw = fs.readFileSync(configPath, 'utf8');
+      raw = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const config = JSON.parse(raw);
       if (config.compilerOptions && config.compilerOptions.paths) {
         report.pathAliases = config.compilerOptions.paths;
       }
     } catch (_e) {
-      // JSONC not handled in stub
+      // Malformed config silently ignored
     }
   }
 
