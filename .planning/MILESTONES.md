@@ -1,5 +1,19 @@
 # Milestones
 
+## v1.2 Brainstorm & Feature Map (Shipped: 2026-03-30)
+
+**Phases completed:** 4 phases (Code-First workflow: PRD → prototype → iterate), 15 commits, 18 requirements
+
+**Key accomplishments:**
+
+- /gsd:brainstorm command with conversational PRD generation, feature grouping, dependency analysis, approval gate, and cross-session BRAINSTORM-LEDGER.md
+- /gsd:prototype --architecture mode with convention reading, project skeleton generation, and @gsd-decision annotations at every module boundary
+- Feature Map auto-aggregation (FEATURES.md) from PRD ACs + @gsd-tags, coupled to extract-tags for always-current status
+- v1.1 tech debt resolved (stale extract-plan ref, non-portable grep -oP) + JSONC tsconfig support
+- 57 new tests (convention-reader, skeleton-generator, feature-aggregator) all green
+
+---
+
 ## v1.1 Autonomous Prototype & Review Loop (Shipped: 2026-03-29)
 
 **Phases completed:** 4 phases, 6 plans, 3 tasks

@@ -2,9 +2,9 @@
 
 ## What This Is
 
-A fork of the GSD (Get Shit Done) framework that implements the "Code-First" principle. Developers build a prototype directly from a PRD, annotate code with structured @gsd-tags (ARC system), run tests with RED-GREEN discipline, and get two-stage code review -- all from the CLI. Installable as `npx gsd-code-first@latest`.
+A fork of the GSD (Get Shit Done) framework that implements the "Code-First" principle. Developers brainstorm ideas in conversation, build prototypes from PRDs, annotate code with @gsd-tags, iterate with AI planning, run tests, and get two-stage reviews -- all from the CLI. Installable as `npx gsd-code-first@latest`.
 
-Shipped v1.1 with PRD-to-prototype pipeline, test agent, review agent, and ARC-by-default.
+Shipped v1.2 with brainstorm command, feature map, and architecture mode.
 
 ## Core Value
 
@@ -30,23 +30,20 @@ Code is the plan -- developers build first and extract structured planning from 
 - ✓ set-mode command for per-phase mode configuration -- v1.0
 - ✓ Installer verified (wholesale copy of agents/ and commands/) -- v1.0
 - ✓ package.json with name gsd-code-first -- v1.0
-- ✓ Help command with all 6 Code-First commands -- v1.0
+- ✓ Help command with all Code-First commands -- v1.0
 - ✓ README.md with installation, workflow, and user guide -- v1.0
 - ✓ ARC annotations enabled by default for new installations -- v1.1
 - ✓ PRD-to-Prototype pipeline with AC extraction, confirmation gate, autonomous iteration loop -- v1.1
 - ✓ gsd-tester agent with RED-GREEN discipline, test-detector.cjs, @gsd-risk annotation -- v1.1
 - ✓ gsd-reviewer agent and /gsd:review-code command with two-stage evaluation -- v1.1
+- ✓ /gsd:brainstorm conversational PRD generation with feature grouping and ledger -- v1.2
+- ✓ /gsd:prototype --architecture skeleton-first mode with convention reading -- v1.2
+- ✓ Feature Map (FEATURES.md) auto-aggregated from PRDs + @gsd-tags, coupled to extract-tags -- v1.2
+- ✓ v1.1 tech debt resolved (extract-plan ref, grep portability, JSONC support) -- v1.2
 
 ### Active
 
-#### Current Milestone: v1.2 Brainstorm & Feature Map
-
-**Goal:** Make Code-First the complete workflow by adding interactive scoping, automatic feature tracking, and architecture-first prototyping.
-
-**Target features:**
-- `/gsd:brainstorm` command — interactive conversation → structured PRD(s) with ACs, feature grouping, dependency analysis
-- Feature Map (`FEATURES.md`) — auto-aggregated overview from PRDs and @gsd-tags in code
-- Architecture Mode for `/gsd:prototype` — skeleton-first prototyping for new projects
+(None -- next milestone not yet defined)
 
 ### Out of Scope
 
@@ -54,24 +51,26 @@ Code is the plan -- developers build first and extract structured planning from 
 - Breaking changes to original GSD commands -- existing workflows must still function
 - Custom editor integrations -- IDE plugins are out of scope
 - Multi-language AST parsing for tags -- regex-based extraction is sufficient
-- ARC wrapper routing in traditional workflows -- wrapper agents only reachable via /gsd:iterate (documented limitation)
-- Parallel test generation across files -- coordination complexity exceeds benefit for single-developer workflow
-- Auto-commit after prototype/test generation -- erodes developer trust; human approval gates are non-negotiable
-- Remote PRD URLs (Notion, Confluence) -- local file/paste is sufficient; remote access adds complexity
-- Single mega-agent for entire pipeline -- context window exhaustion, role confusion
-- Fully autonomous with zero human checkpoints -- agents hallucinate; approval gates are required
+- Parallel test generation across files -- coordination complexity exceeds benefit
+- Auto-commit after prototype/test generation -- human approval gates are non-negotiable
+- Remote PRD URLs (Notion, Confluence) -- local file/paste is sufficient
+- Fully autonomous with zero human checkpoints -- agents hallucinate; approval gates required
+- Brainstorm auto-chains to prototype without stop -- PRD is the error-correction surface
+- FEATURES.md manually editable -- derived artifact, overwritten on regeneration
+- Architecture mode replaces dedicated scaffolding tools -- annotates decisions, delegates boilerplate
+- Line-level code coverage per feature in Feature Map -- false signals erode trust
 
 ## Context
 
-- Shipped v1.0 on 2026-03-28 with 4 phases, 13 plans, 18 tasks
+- Shipped v1.0 on 2026-03-28 with 4 phases, 13 plans
 - Shipped v1.1 on 2026-03-29 with 4 phases, 6 plans
+- Shipped v1.2 on 2026-03-30 with 4 phases (Code-First workflow), 15 commits
 - Tech stack: JavaScript/Node.js (CJS), Markdown agents/commands, JSON config
 - Zero runtime dependencies -- all tooling uses Node.js built-ins
-- 5 new agents total: gsd-prototyper, gsd-code-planner, gsd-arc-executor, gsd-arc-planner, gsd-tester, gsd-reviewer
-- 8 commands: prototype, iterate, annotate, extract-plan, set-mode, deep-plan, add-tests (ARC routing), review-code
-- test-detector.cjs utility detecting 5 frameworks (vitest, jest, mocha, ava, node:test)
-- All original GSD commands continue working unchanged
-- Known tech debt: `extract-plan` stale ref in gsd-tester.md:221, `grep -oP` non-portable in review-code.md:103
+- 7 agents: gsd-prototyper, gsd-code-planner, gsd-arc-executor, gsd-arc-planner, gsd-tester, gsd-reviewer, gsd-brainstormer
+- 10 commands: brainstorm, prototype (with --architecture), iterate, annotate, extract-plan, set-mode, deep-plan, add-tests, review-code
+- 3 CJS utilities: test-detector.cjs, feature-aggregator.cjs, convention-reader.cjs, skeleton-generator.cjs
+- 57 new tests in v1.2 (convention-reader: 22, skeleton-generator: 16, feature-aggregator: 19)
 
 ## Constraints
 
@@ -90,12 +89,13 @@ Code is the plan -- developers build first and extract structured planning from 
 | ARC annotation standard | Structured @gsd-tags provide machine-readable planning data embedded in code | ✓ Good -- 8 tag types frozen at v1.0, stable spec |
 | Preserve all original commands | Users can mix code-first and plan-first workflows per phase | ✓ Good -- zero regressions in original functionality |
 | Wrapper agents over patches | New gsd-arc-executor/planner files instead of modifying upstream agents | ✓ Good -- upstream files untouched, merge-safe |
-| Comment anchor rule | @gsd-tags only valid on dedicated comment lines, not trailing comments | ✓ Good -- eliminates false positives in strings/URLs |
-| ARC enabled by default | New installs get ARC annotations without config change; existing opt-outs preserved | ✓ Good -- reduces onboarding friction |
-| PRD ingestion in command layer | prototype.md orchestrator handles PRD, not gsd-prototyper agent | ✓ Good -- agent stays reusable across PRD formats |
-| Two-stage review gate | Stage 2 (quality) only runs if Stage 1 (spec compliance) passes | ✓ Good -- prevents wasted review cycles on non-compliant code |
-| Test execution in command layer | review-code.md runs tests, passes results to agent | ✓ Good -- prevents context window blockage |
-| RED-GREEN discipline in gsd-tester | Tests must fail against stubs before passing against implementation | ✓ Good -- ensures tests are meaningful, not tautological |
+| PRD ingestion in command layer | prototype.md orchestrator handles PRD, not agent | ✓ Good -- agent stays reusable across PRD formats |
+| Two-stage review gate | Stage 2 only runs if Stage 1 passes | ✓ Good -- prevents wasted review cycles |
+| RED-GREEN discipline | Tests must fail against stubs before passing against implementation | ✓ Good -- ensures meaningful tests |
+| Brainstorm → PRD → Prototype pipeline | Conversation produces PRD, PRD feeds prototype, no auto-chain | ✓ Good -- human reviews PRD before code generation |
+| Feature Map derived from code | FEATURES.md aggregated from PRD ACs + @gsd-tags, never manually edited | ✓ Good -- always in sync with actual code |
+| Architecture mode as flag | --architecture on existing /gsd:prototype, not a separate command | ✓ Good -- one command, two modes, no surface area bloat |
+| Code-First workflow for v1.2 | PRD → prototype → iterate instead of discuss → plan → execute | ✓ Good -- faster, fewer tokens, less overhead |
 
 ## Evolution
 
@@ -115,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after v1.2 milestone start*
+*Last updated: 2026-03-30 after v1.2 milestone completion*

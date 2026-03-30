@@ -77,14 +77,51 @@
 - Integration defects hide at phase boundaries -- cross-phase integration checking should happen during execution, not just at audit
 - Agent prompt files are hard to test statically -- behavioral verification requires live runs
 
+## Milestone: v1.2 -- Brainstorm & Feature Map
+
+**Shipped:** 2026-03-30
+**Phases:** 4 | **Workflow:** Code-First (PRD -> prototype -> iterate)
+
+### What Was Built
+- /gsd:brainstorm command + gsd-brainstormer agent for conversational PRD generation
+- /gsd:prototype --architecture mode with convention reading and @gsd-decision annotations
+- Feature Map auto-aggregation (FEATURES.md) coupled to extract-tags
+- feature-aggregator.cjs, convention-reader.cjs, skeleton-generator.cjs utilities
+- 57 new tests across 3 CJS modules
+- v1.1 tech debt resolved + JSONC tsconfig support
+
+### What Worked
+- Code-First workflow (PRD -> prototype -> iterate) was dramatically faster than discuss -> plan -> execute
+- Writing PRDs in conversation then feeding to /gsd:prototype eliminated planning ceremony overhead
+- Parallel prototype + iterate cycles for independent phases (brainstorm, architecture) worked cleanly
+- Inline review caught all 18 requirements without formal verification agents
+
+### What Was Inefficient
+- gsd-tester and gsd-reviewer agents not available as spawnable subagent types -- had to write tests and review inline
+- Prototyper created patch documents for architecture mode instead of directly modifying files -- added an extra iterate step
+- CODE-INVENTORY.md scanner doesn't reliably count AC tags in .md command files -- grep workaround needed
+- No formal SUMMARY.md or VERIFICATION.md files generated -- milestone completion CLI reported 0 phases/plans
+
+### Patterns Established
+- Code-First milestone workflow: PRD.md -> /gsd:prototype -> /gsd:iterate -> /gsd:add-tests -> /gsd:review-code
+- /gsd:fast for trivial fixes (tech debt, doc updates) -- skip all ceremony
+- Brainstorm -> PRD -> Prototype pipeline as the standard feature development loop
+- Inline review as lightweight alternative when formal agents aren't spawnable
+
+### Key Lessons
+- The Code-First workflow is production-ready for feature development -- v1.2 was built entirely without traditional GSD phases
+- Milestone completion tooling needs updating to support Code-First milestones (no SUMMARY.md files)
+- Agent availability as subagent types is a distribution gap -- installed agents work but can't be spawned programmatically
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v1.1 |
-|--------|------|------|
-| Phases | 4 | 4 |
-| Plans | 13 | 6 |
-| Tasks | 18 | 11 |
-| Requirements | 31/31 | 21/21 |
-| Verification pass rate | 100% | 100% |
-| Integration defects | 0 | 2 (tech debt) |
-| Gap closure phases | 1 | 0 |
+| Metric | v1.0 | v1.1 | v1.2 |
+|--------|------|------|------|
+| Phases | 4 | 4 | 4 |
+| Plans | 13 | 6 | 0 (Code-First) |
+| Commits | ~30 | ~15 | 15 |
+| Requirements | 31/31 | 21/21 | 18/18 |
+| Tests added | 21 | 11 | 57 |
+| Verification pass rate | 100% | 100% | 100% (inline) |
+| Integration defects | 0 | 2 (tech debt) | 0 |
+| Workflow | plan-first | plan-first | code-first |
