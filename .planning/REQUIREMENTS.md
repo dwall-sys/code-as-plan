@@ -70,30 +70,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEBT-01 | - | Pending |
-| DEBT-02 | - | Pending |
-| BRAIN-01 | - | Pending |
-| BRAIN-02 | - | Pending |
-| BRAIN-03 | - | Pending |
-| BRAIN-04 | - | Pending |
-| BRAIN-05 | - | Pending |
-| BRAIN-06 | - | Pending |
-| BRAIN-07 | - | Pending |
-| FMAP-01 | - | Pending |
-| FMAP-02 | - | Pending |
-| FMAP-03 | - | Pending |
-| FMAP-04 | - | Pending |
-| FMAP-05 | - | Pending |
-| ARCH-01 | - | Pending |
-| ARCH-02 | - | Pending |
-| ARCH-03 | - | Pending |
-| ARCH-04 | - | Pending |
+| DEBT-01 | Phase 9 | Pending |
+| DEBT-02 | Phase 9 | Pending |
+| BRAIN-01 | Phase 10 | Pending |
+| BRAIN-02 | Phase 10 | Pending |
+| BRAIN-03 | Phase 10 | Pending |
+| BRAIN-04 | Phase 10 | Pending |
+| BRAIN-05 | Phase 10 | Pending |
+| BRAIN-06 | Phase 10 | Pending |
+| BRAIN-07 | Phase 10 | Pending |
+| FMAP-01 | Phase 12 | Pending |
+| FMAP-02 | Phase 12 | Pending |
+| FMAP-03 | Phase 12 | Pending |
+| FMAP-04 | Phase 12 | Pending |
+| FMAP-05 | Phase 12 | Pending |
+| ARCH-01 | Phase 11 | Pending |
+| ARCH-02 | Phase 11 | Pending |
+| ARCH-03 | Phase 11 | Pending |
+| ARCH-04 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after initial definition*
+*Last updated: 2026-03-30 after roadmap creation*
