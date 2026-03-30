@@ -100,7 +100,7 @@ AC_COUNT=$(grep -c "ref:AC-" .planning/prototype/CODE-INVENTORY.md 2>/dev/null |
 If `AC_COUNT > 0`:
 - Extract AC list from CODE-INVENTORY.md:
   ```bash
-  grep "ref:AC-" .planning/prototype/CODE-INVENTORY.md | grep -oP "ref:AC-\d+" | sort -u
+  grep "ref:AC-" .planning/prototype/CODE-INVENTORY.md | grep -oE "ref:AC-[0-9]+" | sort -u
   ```
 - Read `.planning/prototype/CODE-INVENTORY.md` using the Read tool to get full AC descriptions from the @gsd-todo tags
 - Log: "AC source: CODE-INVENTORY.md ({AC_COUNT} AC-linked tags found)"

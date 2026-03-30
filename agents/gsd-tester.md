@@ -218,7 +218,7 @@ GREEN phase: [CONFIRMED -- all N tests pass | DEFERRED -- code is still in stub 
 @gsd-risk annotations added:
   - [file]:[line]: reason:[reason], severity:[severity] -- [description]
 
-Run extract-plan to update CODE-INVENTORY.md with the new @gsd-risk annotations.
+Run extract-tags to update CODE-INVENTORY.md with the new @gsd-risk annotations.
 ```
 </step>
 
