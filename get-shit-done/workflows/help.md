@@ -640,6 +640,10 @@ Usage: `/gsd:brainstorm [--resume]`
 Two-stage prototype review: spec compliance (Stage 1) then code quality (Stage 2).
 Usage: `/gsd:review-code [--non-interactive]`
 
+**`/gsd:start`**
+Initialize a GSD session: detect monorepo, restore last app context, or prompt for app selection. Run at the start of each new conversation.
+Usage: `/gsd:start`
+
 **`/gsd:monorepo-init`**
 Initialize monorepo mode: detect workspace, list apps/packages, create per-app .planning/ dirs, generate package manifests.
 Usage: `/gsd:monorepo-init [--migrate]`

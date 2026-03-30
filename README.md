@@ -129,6 +129,7 @@ For full tag syntax, metadata format, and per-language examples, see [arc-standa
 | `/gsd:review-code` | Two-stage review: spec compliance + code quality |
 | `/gsd:set-mode` | Configure workflow mode (code-first, plan-first, hybrid) |
 | `/gsd:deep-plan` | Chain discuss + plan for upfront reasoning phases |
+| `/gsd:start` | Initialize session: detect monorepo, restore last app, auto-scope |
 | `/gsd:monorepo-init` | Initialize monorepo mode (use `--migrate` for existing projects) |
 | `/gsd:switch-app` | Switch active app in monorepo session |
 
