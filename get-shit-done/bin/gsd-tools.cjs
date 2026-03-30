@@ -1125,6 +1125,14 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
+    case 'session-set-default': {
+      const sessionManager = require('./lib/session-manager.cjs');
+      const appPath = args[1] || null;
+      const updated = sessionManager.setDefaultApp(cwd, appPath);
+      core.output(updated, raw, JSON.stringify(updated, null, 2));
+      break;
+    }
+
     default:
       error(`Unknown command: ${command}`);
   }
