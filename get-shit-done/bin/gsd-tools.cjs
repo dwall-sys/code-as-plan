@@ -933,6 +933,21 @@ async function runCommand(command, args, cwd, raw) {
         format: format || 'json',
         outputFile,
       });
+
+      // Auto-chain: regenerate FEATURES.md after extract-tags completes
+      // Only run when outputFile is set (markdown mode) — skip for JSON stdout mode
+      if (outputFile) {
+        try {
+          const featureAggregator = require('./lib/feature-aggregator.cjs');
+          featureAggregator.cmdAggregateFeatures(cwd, {
+            inventoryFile: outputFile,
+          });
+        } catch (e) {
+          // Non-fatal: feature aggregation failure should not break extract-tags
+          process.stderr.write(`feature-aggregator: auto-chain skipped — ${e.message}\n`);
+        }
+      }
+
       break;
     }
 
