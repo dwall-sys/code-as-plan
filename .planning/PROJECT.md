@@ -39,7 +39,14 @@ Code is the plan -- developers build first and extract structured planning from 
 
 ### Active
 
-(None -- next milestone not yet defined)
+#### Current Milestone: v1.2 Brainstorm & Feature Map
+
+**Goal:** Make Code-First the complete workflow by adding interactive scoping, automatic feature tracking, and architecture-first prototyping.
+
+**Target features:**
+- `/gsd:brainstorm` command — interactive conversation → structured PRD(s) with ACs, feature grouping, dependency analysis
+- Feature Map (`FEATURES.md`) — auto-aggregated overview from PRDs and @gsd-tags in code
+- Architecture Mode for `/gsd:prototype` — skeleton-first prototyping for new projects
 
 ### Out of Scope
 
@@ -108,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after v1.1 milestone completion*
+*Last updated: 2026-03-30 after v1.2 milestone start*
