@@ -642,9 +642,15 @@ Usage: `/gsd:review-code [--non-interactive]`
 
 **`/gsd:monorepo-init`**
 Initialize monorepo mode: detect workspace, list apps/packages, create per-app .planning/ dirs, generate package manifests.
-Usage: `/gsd:monorepo-init`
+Usage: `/gsd:monorepo-init [--migrate]`
+`--migrate` detects existing .planning/ in apps and guides migration (keep/archive/replace per app).
+
+**`/gsd:switch-app`**
+Switch the active app in a monorepo session. All subsequent commands auto-scope to the selected app.
+Usage: `/gsd:switch-app`
 
 **Monorepo `--app` flag:**
 Scope any command to a specific app in a monorepo. Works with prototype, iterate, extract-plan, brainstorm, add-tests, review-code.
 Usage: `/gsd:prototype --app apps/dashboard`
+Auto-scoping: after `/gsd:monorepo-init` or `/gsd:switch-app`, the `--app` flag is set automatically from SESSION.json.
 </reference>

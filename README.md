@@ -72,6 +72,12 @@ Work on individual apps in a monorepo without scanning the entire codebase:
   -> Auto-detects NX / Turbo / pnpm workspaces
   -> Creates per-app .planning/ directories
   -> Generates package manifests for shared packages
+  -> Use --migrate for existing projects with .planning/ in apps
+
+/gsd:switch-app
+  -> "Which app do you want to work on?"
+  -> All commands auto-scope to selected app
+  -> No --app flag needed after selection
 
 /gsd:prototype --app apps/dashboard
   -> Scopes all work to that app
@@ -123,7 +129,8 @@ For full tag syntax, metadata format, and per-language examples, see [arc-standa
 | `/gsd:review-code` | Two-stage review: spec compliance + code quality |
 | `/gsd:set-mode` | Configure workflow mode (code-first, plan-first, hybrid) |
 | `/gsd:deep-plan` | Chain discuss + plan for upfront reasoning phases |
-| `/gsd:monorepo-init` | Initialize monorepo mode: detect workspace, setup per-app planning |
+| `/gsd:monorepo-init` | Initialize monorepo mode (use `--migrate` for existing projects) |
+| `/gsd:switch-app` | Switch active app in monorepo session |
 
 All original GSD commands continue working unchanged.
 
