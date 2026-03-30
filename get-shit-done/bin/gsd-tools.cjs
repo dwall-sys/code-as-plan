@@ -141,6 +141,12 @@
  *
  * Feature Aggregation:
  *   aggregate-features [--output path] [--inventory path]  Generate .planning/FEATURES.md from PRDs and CODE-INVENTORY.md
+ *
+ * Session & Migration Operations:
+ *   monorepo-migrate [--output file]    Audit monorepo apps for existing .planning/ dirs
+ *   session-get                         Print current SESSION.json or "No session"
+ *   session-set --app <path>            Set active app in SESSION.json
+ *   session-set --global                Clear active app (root/global scope)
  */
 
 const fs = require('fs');
@@ -1042,6 +1048,50 @@ async function runCommand(command, args, cwd, raw) {
       const appName = parseNamedArgs(args.slice(2), ['name']).name || path.basename(appPath);
       const created = monorepoContext.initAppPlanning(cwd, appPath, { appName });
       process.stdout.write(`Initialized: ${created}\n`);
+      break;
+    }
+
+    case 'monorepo-migrate': {
+      const workspaceDetector = require('./lib/workspace-detector.cjs');
+      const monorepoMigrator = require('./lib/monorepo-migrator.cjs');
+      const workspace = workspaceDetector.detectWorkspace(cwd);
+      if (!workspace) {
+        process.stderr.write('No workspace detected. Not a monorepo or missing workspace config.\n');
+        process.exitCode = 1;
+        break;
+      }
+      const audit = monorepoMigrator.auditAppPlanning(cwd, workspace.apps);
+      const report = monorepoMigrator.formatAuditReport(audit);
+      process.stdout.write(report + '\n');
+      const allArgs = args.slice(1);
+      const { output: outputFile } = parseNamedArgs(allArgs, ['output']);
+      if (outputFile) {
+        const outDir = path.dirname(outputFile);
+        fs.mkdirSync(outDir, { recursive: true });
+        fs.writeFileSync(outputFile, report + '\n', 'utf-8');
+      }
+      break;
+    }
+
+    case 'session-get': {
+      const sessionManager = require('./lib/session-manager.cjs');
+      const session = sessionManager.getSession(cwd);
+      core.output(session, raw, session ? JSON.stringify(session, null, 2) : 'No session');
+      break;
+    }
+
+    case 'session-set': {
+      const sessionManager = require('./lib/session-manager.cjs');
+      const allArgs = args.slice(1);
+      const { app: appPath } = parseNamedArgs(allArgs, ['app']);
+      const isGlobal = allArgs.includes('--global');
+      if (!appPath && !isGlobal) {
+        error('Usage: session-set --app <path> | --global');
+      }
+      const updated = isGlobal
+        ? sessionManager.setCurrentApp(cwd, null, [])
+        : sessionManager.setCurrentApp(cwd, appPath, []);
+      core.output(updated, raw, JSON.stringify(updated, null, 2));
       break;
     }
 
