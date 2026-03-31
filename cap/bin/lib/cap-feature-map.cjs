@@ -553,6 +553,128 @@ function listAppFeatureMaps(projectRoot) {
   return results;
 }
 
+/**
+ * Rescope a root FEATURE-MAP.md into per-app Feature Maps in a monorepo.
+ * Distributes features to apps based on file references (feature.files paths).
+ * Features with no file refs or cross-app refs stay at root.
+ *
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string[]} appPaths - List of app relative paths (e.g., ["apps/flow", "apps/hub"])
+ * @param {Object} [options]
+ * @param {boolean} [options.dryRun] - If true, report changes without writing
+ * @returns {{ appsCreated: number, featuresDistributed: number, featuresKeptAtRoot: number, distribution: Object }}
+ */
+function rescopeFeatures(projectRoot, appPaths, options = {}) {
+  const rootMap = readFeatureMap(projectRoot);
+  if (!rootMap.features || rootMap.features.length === 0) {
+    return { appsCreated: 0, featuresDistributed: 0, featuresKeptAtRoot: 0, distribution: {} };
+  }
+
+  // Build distribution: which features belong to which app
+  const distribution = {}; // appPath -> features[]
+  const rootFeatures = []; // features that stay at root (no refs or cross-app)
+
+  for (const feature of rootMap.features) {
+    if (!feature.files || feature.files.length === 0) {
+      rootFeatures.push(feature);
+      continue;
+    }
+
+    // Determine which app this feature belongs to based on file paths
+    const appCounts = {}; // appPath -> count of matching files
+    for (const file of feature.files) {
+      for (const appPath of appPaths) {
+        if (file.startsWith(appPath + '/') || file.startsWith(appPath + path.sep)) {
+          appCounts[appPath] = (appCounts[appPath] || 0) + 1;
+        }
+      }
+    }
+
+    const entries = Object.entries(appCounts);
+    if (entries.length === 0) {
+      // Files don't match any app — keep at root
+      rootFeatures.push(feature);
+    } else if (entries.length === 1) {
+      // All files in one app — distribute there
+      const [appPath] = entries[0];
+      if (!distribution[appPath]) distribution[appPath] = [];
+      distribution[appPath].push(feature);
+    } else {
+      // Files across multiple apps — assign to the app with most refs
+      entries.sort((a, b) => b[1] - a[1]);
+      const primaryApp = entries[0][0];
+      if (!distribution[primaryApp]) distribution[primaryApp] = [];
+      distribution[primaryApp].push(feature);
+    }
+  }
+
+  if (options.dryRun) {
+    let totalDistributed = 0;
+    for (const features of Object.values(distribution)) {
+      totalDistributed += features.length;
+    }
+    return {
+      appsCreated: Object.keys(distribution).length,
+      featuresDistributed: totalDistributed,
+      featuresKeptAtRoot: rootFeatures.length,
+      distribution: Object.fromEntries(
+        Object.entries(distribution).map(([app, features]) => [app, features.map(f => f.id)])
+      ),
+    };
+  }
+
+  // Write per-app Feature Maps
+  let appsCreated = 0;
+  let featuresDistributed = 0;
+
+  for (const [appPath, features] of Object.entries(distribution)) {
+    const appDir = path.join(projectRoot, appPath);
+    if (!fs.existsSync(appDir)) continue;
+
+    // Read existing app Feature Map (or create new)
+    const existingMap = readFeatureMap(projectRoot, appPath);
+    const existingIds = new Set(existingMap.features.map(f => f.id));
+
+    // Re-number features for the app (F-001, F-002, ...)
+    let nextId = existingMap.features.length + 1;
+    for (const feature of features) {
+      if (existingIds.has(feature.id)) continue; // skip duplicates
+
+      // Rewrite file paths to be relative to app
+      const appRelativeFiles = feature.files
+        .filter(f => f.startsWith(appPath + '/'))
+        .map(f => f.slice(appPath.length + 1));
+      const otherFiles = feature.files.filter(f => !f.startsWith(appPath + '/'));
+
+      const appFeature = {
+        ...feature,
+        id: `F-${String(nextId).padStart(3, '0')}`,
+        files: [...appRelativeFiles, ...otherFiles],
+        metadata: { ...feature.metadata, originalId: feature.id },
+      };
+      existingMap.features.push(appFeature);
+      nextId++;
+      featuresDistributed++;
+    }
+
+    writeFeatureMap(projectRoot, existingMap, appPath);
+    appsCreated++;
+  }
+
+  // Rewrite root Feature Map with only root features
+  const newRootMap = { features: rootFeatures, lastScan: rootMap.lastScan };
+  writeFeatureMap(projectRoot, newRootMap);
+
+  return {
+    appsCreated,
+    featuresDistributed,
+    featuresKeptAtRoot: rootFeatures.length,
+    distribution: Object.fromEntries(
+      Object.entries(distribution).map(([app, features]) => [app, features.map(f => f.id)])
+    ),
+  };
+}
+
 module.exports = {
   FEATURE_MAP_FILE,
   VALID_STATES,
@@ -572,4 +694,5 @@ module.exports = {
   getStatus,
   initAppFeatureMap,
   listAppFeatureMaps,
+  rescopeFeatures,
 };

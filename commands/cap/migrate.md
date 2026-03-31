@@ -1,7 +1,7 @@
 ---
 name: cap:migrate
 description: "Migrate GSD Code-First v1.x projects to CAP v2.0 -- converts @gsd-* tags, planning artifacts, and session format."
-argument-hint: "[--dry-run] [--tags-only] [--force]"
+argument-hint: "[--dry-run] [--tags-only] [--rescope] [--force]"
 allowed-tools:
   - Read
   - Write
@@ -31,6 +31,7 @@ $ARGUMENTS
 Check `$ARGUMENTS` for:
 - `--dry-run` — show what would change without writing files
 - `--tags-only` — only migrate tags, skip artifact and session migration
+- `--rescope` — split root FEATURE-MAP.md into per-app Feature Maps (monorepo only)
 - `--force` — skip user confirmation gate
 
 ## Step 1: Analyze migration scope
@@ -140,6 +141,45 @@ Old format:   {oldFormat}
 New format:   {newFormat}
 Migrated:     {migrated ? 'yes' : 'no'}
 ```
+
+## Step 5b: Rescope Feature Map for monorepo (if --rescope)
+
+If `--rescope` is set, split the root FEATURE-MAP.md into per-app Feature Maps:
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const dryRun = process.argv[1] === 'true';
+
+// Detect workspace apps
+const workspaces = scanner.detectWorkspaces(process.cwd());
+if (!workspaces.isMonorepo || workspaces.packages.length === 0) {
+  console.log(JSON.stringify({ error: 'Not a monorepo or no packages found. --rescope only works in monorepos.' }));
+  process.exit(0);
+}
+
+const result = fm.rescopeFeatures(process.cwd(), workspaces.packages, { dryRun });
+console.log(JSON.stringify(result, null, 2));
+" '<DRY_RUN_VALUE>'
+```
+
+Store as `rescope_result`. Report:
+
+```
+Feature Map Rescoping
+=====================
+Apps with features:     {appsCreated}
+Features distributed:   {featuresDistributed}
+Features kept at root:  {featuresKeptAtRoot}
+
+Distribution:
+{For each app in distribution:}
+  {appPath}: {feature_ids.length} features ({feature_ids.join(', ')})
+Root: {featuresKeptAtRoot} features (cross-app or no file refs)
+```
+
+If `--rescope` is NOT set, skip this step.
 
 ## Step 6: Final report and session update
 
