@@ -1,9 +1,9 @@
 {
-  "name": "gsd-code-first",
-  "version": "1.3.3",
-  "description": "Code-First fork of Get Shit Done — AI-native development with code-as-planning",
+  "name": "code-as-plan",
+  "version": "2.0.0",
+  "description": "CAP — Code as Plan. Build first, plan from code. Farley-aligned engineering framework for Claude Code.",
   "bin": {
-    "get-shit-done-cc": "bin/install.js"
+    "cap": "bin/install.js"
   },
   "files": [
     "bin",
@@ -17,23 +17,22 @@
     "claude",
     "claude-code",
     "ai",
-    "meta-prompting",
-    "context-engineering",
-    "spec-driven-development",
-    "gemini",
-    "gemini-cli",
-    "codex",
-    "codex-cli"
+    "code-first",
+    "code-as-plan",
+    "engineering-framework",
+    "prototype-driven",
+    "annotation-driven",
+    "farley"
   ],
   "author": "TÂCHES",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dwall-sys/gsd-code-first.git"
+    "url": "git+https://github.com/dwall-sys/code-as-plan.git"
   },
-  "homepage": "https://github.com/dwall-sys/gsd-code-first",
+  "homepage": "https://github.com/dwall-sys/code-as-plan",
   "bugs": {
-    "url": "https://github.com/dwall-sys/gsd-code-first/issues"
+    "url": "https://github.com/dwall-sys/code-as-plan/issues"
   },
   "engines": {
     "node": ">=20.0.0"
