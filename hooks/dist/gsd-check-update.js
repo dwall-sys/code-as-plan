@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// gsd-hook-version: {{GSD_VERSION}}
-// Check for GSD updates in background, write result to cache
+// cap-hook-version: {{GSD_VERSION}}
+// Check for CAP updates in background, write result to cache
 // Called by SessionStart hook - runs once per session
 
 const fs = require('fs');
@@ -30,7 +30,7 @@ function detectConfigDir(baseDir) {
 const globalConfigDir = detectConfigDir(homeDir);
 const projectConfigDir = detectConfigDir(cwd);
 const cacheDir = path.join(globalConfigDir, 'cache');
-const cacheFile = path.join(cacheDir, 'gsd-update-check.json');
+const cacheFile = path.join(cacheDir, 'cap-update-check.json');
 
 // VERSION file locations (check project first, then global)
 const projectVersionFile = path.join(projectConfigDir, 'cap', 'VERSION');
@@ -71,11 +71,11 @@ const child = spawn(process.execPath, ['-e', `
     const hooksDir = path.join(configDir, 'cap', 'hooks');
     try {
       if (fs.existsSync(hooksDir)) {
-        const hookFiles = fs.readdirSync(hooksDir).filter(f => f.startsWith('gsd-') && f.endsWith('.js'));
+        const hookFiles = fs.readdirSync(hooksDir).filter(f => (f.startsWith('gsd-') || f.startsWith('cap-')) && f.endsWith('.js'));
         for (const hookFile of hookFiles) {
           try {
             const content = fs.readFileSync(path.join(hooksDir, hookFile), 'utf8');
-            const versionMatch = content.match(/\\/\\/ gsd-hook-version:\\s*(.+)/);
+            const versionMatch = content.match(/\\/\\/ (?:gsd|cap)-hook-version:\\s*(.+)/);
             if (versionMatch) {
               const hookVersion = versionMatch[1].trim();
               if (hookVersion !== installed && !hookVersion.includes('{{')) {
@@ -93,7 +93,7 @@ const child = spawn(process.execPath, ['-e', `
 
   let latest = null;
   try {
-    latest = execSync('npm view gsd-code-first version', { encoding: 'utf8', timeout: 10000, windowsHide: true }).trim();
+    latest = execSync('npm view code-as-plan version', { encoding: 'utf8', timeout: 10000, windowsHide: true }).trim();
   } catch (e) {}
 
   const result = {
