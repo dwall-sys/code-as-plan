@@ -2686,10 +2686,10 @@ function convertClaudeToGeminiToml(content) {
 
 /**
  * Copy commands to a flat structure for OpenCode
- * OpenCode expects: command/gsd-help.md (invoked as /gsd-help)
- * Source structure: commands/gsd/help.md
- * 
- * @param {string} srcDir - Source directory (e.g., commands/gsd/)
+ * OpenCode expects: command/cap-help.md (invoked as /cap-help)
+ * Source structure: commands/cap/help.md
+ *
+ * @param {string} srcDir - Source directory (e.g., commands/cap/)
  * @param {string} destDir - Destination directory (e.g., command/)
  * @param {string} prefix - Prefix for filenames (e.g., 'gsd')
  * @param {string} pathPrefix - Path prefix for file references
@@ -2718,7 +2718,7 @@ function copyFlattenedCommands(srcDir, destDir, prefix, pathPrefix, runtime) {
     
     if (entry.isDirectory()) {
       // Recurse into subdirectories, adding to prefix
-      // e.g., commands/gsd/debug/start.md -> command/gsd-debug-start.md
+      // e.g., commands/cap/debug/start.md -> command/cap-debug-start.md
       copyFlattenedCommands(srcPath, destDir, `${prefix}-${entry.name}`, pathPrefix, runtime);
     } else if (entry.name.endsWith('.md')) {
       // Flatten: help.md -> gsd-help.md
@@ -3336,7 +3336,7 @@ function uninstall(isGlobal, runtime = 'claude') {
     if (fs.existsSync(commandDir)) {
       const files = fs.readdirSync(commandDir);
       for (const file of files) {
-        if (file.startsWith('gsd-') && file.endsWith('.md')) {
+        if (file.startsWith('cap-') && file.endsWith('.md')) {
           fs.unlinkSync(path.join(commandDir, file));
           removedCount++;
         }
@@ -3481,11 +3481,18 @@ function uninstall(isGlobal, runtime = 'claude') {
       }
     }
   } else {
-    const capCommandsDir = path.join(targetDir, 'commands', 'gsd');
+    const capCommandsDir = path.join(targetDir, 'commands', 'cap');
     if (fs.existsSync(capCommandsDir)) {
       fs.rmSync(capCommandsDir, { recursive: true });
       removedCount++;
-      console.log(`  ${green}✓${reset} Removed commands/gsd/`);
+      console.log(`  ${green}✓${reset} Removed commands/cap/`);
+    }
+    // Also remove legacy commands/gsd/ if it exists from previous installs
+    const legacyCommandsDir = path.join(targetDir, 'commands', 'gsd');
+    if (fs.existsSync(legacyCommandsDir)) {
+      fs.rmSync(legacyCommandsDir, { recursive: true });
+      removedCount++;
+      console.log(`  ${green}✓${reset} Removed legacy commands/gsd/`);
     }
   }
 
@@ -3503,7 +3510,7 @@ function uninstall(isGlobal, runtime = 'claude') {
     const files = fs.readdirSync(agentsDir);
     let agentCount = 0;
     for (const file of files) {
-      if (file.startsWith('gsd-') && file.endsWith('.md')) {
+      if (file.startsWith('cap-') && file.endsWith('.md')) {
         fs.unlinkSync(path.join(agentsDir, file));
         agentCount++;
       }
@@ -3914,7 +3921,7 @@ function writeManifest(configDir, runtime = 'claude') {
   const isCursor = runtime === 'cursor';
   const isWindsurf = runtime === 'windsurf';
   const capDir = path.join(configDir, 'cap');
-  const commandsDir = path.join(configDir, 'commands', 'gsd');
+  const commandsDir = path.join(configDir, 'commands', 'cap');
   const opencodeCommandDir = path.join(configDir, 'command');
   const codexSkillsDir = path.join(configDir, 'skills');
   const agentsDir = path.join(configDir, 'agents');
@@ -3927,12 +3934,12 @@ function writeManifest(configDir, runtime = 'claude') {
   if (!isOpencode && !isCodex && !isCopilot && !isAntigravity && !isCursor && !isWindsurf && fs.existsSync(commandsDir)) {
     const cmdHashes = generateManifest(commandsDir);
     for (const [rel, hash] of Object.entries(cmdHashes)) {
-      manifest.files['commands/gsd/' + rel] = hash;
+      manifest.files['commands/cap/' + rel] = hash;
     }
   }
   if (isOpencode && fs.existsSync(opencodeCommandDir)) {
     for (const file of fs.readdirSync(opencodeCommandDir)) {
-      if (file.startsWith('gsd-') && file.endsWith('.md')) {
+      if (file.startsWith('cap-') && file.endsWith('.md')) {
         manifest.files['command/' + file] = fileHash(path.join(opencodeCommandDir, file));
       }
     }
@@ -3948,7 +3955,7 @@ function writeManifest(configDir, runtime = 'claude') {
   }
   if (fs.existsSync(agentsDir)) {
     for (const file of fs.readdirSync(agentsDir)) {
-      if (file.startsWith('gsd-') && file.endsWith('.md')) {
+      if (file.startsWith('cap-') && file.endsWith('.md')) {
         manifest.files['agents/' + file] = fileHash(path.join(agentsDir, file));
       }
     }
@@ -4095,93 +4102,93 @@ function install(isGlobal, runtime = 'claude') {
   // Clean up orphaned files from previous versions
   cleanupOrphanedFiles(targetDir);
 
-  // OpenCode uses command/ (flat), Codex uses skills/, Claude/Gemini use commands/gsd/
+  // OpenCode uses command/ (flat), Codex uses skills/, Claude/Gemini use commands/cap/
   if (isOpencode) {
     // OpenCode: flat structure in command/ directory
     const commandDir = path.join(targetDir, 'command');
     fs.mkdirSync(commandDir, { recursive: true });
-    
-    // Copy commands/gsd/*.md as command/gsd-*.md (flatten structure)
-    const capSrc = path.join(src, 'commands', 'gsd');
-    copyFlattenedCommands(capSrc, commandDir, 'gsd', pathPrefix, runtime);
-    if (verifyInstalled(commandDir, 'command/gsd-*')) {
-      const count = fs.readdirSync(commandDir).filter(f => f.startsWith('gsd-')).length;
+
+    // Copy commands/cap/*.md as command/cap-*.md (flatten structure)
+    const capSrc = path.join(src, 'commands', 'cap');
+    copyFlattenedCommands(capSrc, commandDir, 'cap', pathPrefix, runtime);
+    if (verifyInstalled(commandDir, 'command/cap-*')) {
+      const count = fs.readdirSync(commandDir).filter(f => f.startsWith('cap-')).length;
       console.log(`  ${green}✓${reset} Installed ${count} commands to command/`);
     } else {
-      failures.push('command/gsd-*');
+      failures.push('command/cap-*');
     }
   } else if (isCodex) {
     const skillsDir = path.join(targetDir, 'skills');
-    const capSrc = path.join(src, 'commands', 'gsd');
-    copyCommandsAsCodexSkills(capSrc, skillsDir, 'gsd', pathPrefix, runtime);
+    const capSrc = path.join(src, 'commands', 'cap');
+    copyCommandsAsCodexSkills(capSrc, skillsDir, 'cap', pathPrefix, runtime);
     const installedSkillNames = listCodexSkillNames(skillsDir);
     if (installedSkillNames.length > 0) {
       console.log(`  ${green}✓${reset} Installed ${installedSkillNames.length} skills to skills/`);
     } else {
-      failures.push('skills/gsd-*');
+      failures.push('skills/cap-*');
     }
   } else if (isCopilot) {
     const skillsDir = path.join(targetDir, 'skills');
-    const capSrc = path.join(src, 'commands', 'gsd');
-    copyCommandsAsCopilotSkills(capSrc, skillsDir, 'gsd', isGlobal);
+    const capSrc = path.join(src, 'commands', 'cap');
+    copyCommandsAsCopilotSkills(capSrc, skillsDir, 'cap', isGlobal);
     if (fs.existsSync(skillsDir)) {
       const count = fs.readdirSync(skillsDir, { withFileTypes: true })
-        .filter(e => e.isDirectory() && e.name.startsWith('gsd-')).length;
+        .filter(e => e.isDirectory() && e.name.startsWith('cap-')).length;
       if (count > 0) {
         console.log(`  ${green}✓${reset} Installed ${count} skills to skills/`);
       } else {
-        failures.push('skills/gsd-*');
+        failures.push('skills/cap-*');
       }
     } else {
-      failures.push('skills/gsd-*');
+      failures.push('skills/cap-*');
     }
   } else if (isAntigravity) {
     const skillsDir = path.join(targetDir, 'skills');
-    const capSrc = path.join(src, 'commands', 'gsd');
-    copyCommandsAsAntigravitySkills(capSrc, skillsDir, 'gsd', isGlobal);
+    const capSrc = path.join(src, 'commands', 'cap');
+    copyCommandsAsAntigravitySkills(capSrc, skillsDir, 'cap', isGlobal);
     if (fs.existsSync(skillsDir)) {
       const count = fs.readdirSync(skillsDir, { withFileTypes: true })
-        .filter(e => e.isDirectory() && e.name.startsWith('gsd-')).length;
+        .filter(e => e.isDirectory() && e.name.startsWith('cap-')).length;
       if (count > 0) {
         console.log(`  ${green}✓${reset} Installed ${count} skills to skills/`);
       } else {
-        failures.push('skills/gsd-*');
+        failures.push('skills/cap-*');
       }
     } else {
-      failures.push('skills/gsd-*');
+      failures.push('skills/cap-*');
     }
   } else if (isCursor) {
     const skillsDir = path.join(targetDir, 'skills');
-    const capSrc = path.join(src, 'commands', 'gsd');
-    copyCommandsAsCursorSkills(capSrc, skillsDir, 'gsd', pathPrefix, runtime);
+    const capSrc = path.join(src, 'commands', 'cap');
+    copyCommandsAsCursorSkills(capSrc, skillsDir, 'cap', pathPrefix, runtime);
     const installedSkillNames = listCodexSkillNames(skillsDir); // reuse — same dir structure
     if (installedSkillNames.length > 0) {
       console.log(`  ${green}✓${reset} Installed ${installedSkillNames.length} skills to skills/`);
     } else {
-      failures.push('skills/gsd-*');
+      failures.push('skills/cap-*');
     }
   } else if (isWindsurf) {
     const skillsDir = path.join(targetDir, 'skills');
-    const capSrc = path.join(src, 'commands', 'gsd');
-    copyCommandsAsWindsurfSkills(capSrc, skillsDir, 'gsd', pathPrefix, runtime);
+    const capSrc = path.join(src, 'commands', 'cap');
+    copyCommandsAsWindsurfSkills(capSrc, skillsDir, 'cap', pathPrefix, runtime);
     const installedSkillNames = listCodexSkillNames(skillsDir); // reuse — same dir structure
     if (installedSkillNames.length > 0) {
       console.log(`  ${green}✓${reset} Installed ${installedSkillNames.length} skills to skills/`);
     } else {
-      failures.push('skills/gsd-*');
+      failures.push('skills/cap-*');
     }
   } else {
     // Claude Code & Gemini: nested structure in commands/ directory
     const commandsDir = path.join(targetDir, 'commands');
     fs.mkdirSync(commandsDir, { recursive: true });
-    
-    const capSrc = path.join(src, 'commands', 'gsd');
-    const capDest = path.join(commandsDir, 'gsd');
+
+    const capSrc = path.join(src, 'commands', 'cap');
+    const capDest = path.join(commandsDir, 'cap');
     copyWithPathReplacement(capSrc, capDest, pathPrefix, runtime, true, isGlobal);
-    if (verifyInstalled(capDest, 'commands/gsd')) {
-      console.log(`  ${green}✓${reset} Installed commands/gsd`);
+    if (verifyInstalled(capDest, 'commands/cap')) {
+      console.log(`  ${green}✓${reset} Installed commands/cap`);
     } else {
-      failures.push('commands/gsd');
+      failures.push('commands/cap');
     }
   }
 
@@ -4204,7 +4211,7 @@ function install(isGlobal, runtime = 'claude') {
     // Remove old CAP agents (gsd-*.md) before copying new ones
     if (fs.existsSync(agentsDest)) {
       for (const file of fs.readdirSync(agentsDest)) {
-        if (file.startsWith('gsd-') && file.endsWith('.md')) {
+        if (file.startsWith('cap-') && file.endsWith('.md')) {
           fs.unlinkSync(path.join(agentsDest, file));
         }
       }
