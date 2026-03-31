@@ -1,0 +1,9 @@
+# CAP runtime state -- ephemeral, not committed to git
+SESSION.json
+
+# Debug sessions -- ephemeral per-developer state
+debug/
+
+# Stack docs are NOT gitignored -- they can be committed for offline use
+# To ignore them, uncomment the next line:
+# stack-docs/
