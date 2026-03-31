@@ -73,6 +73,61 @@ console.log('FEATURE-MAP.md created');
 
 Log: "Created .cap/ directory and FEATURE-MAP.md"
 
+## Step 1b: Detect monorepo and handle app scoping
+
+```bash
+node -e "
+const session = require('./cap/bin/lib/cap-session.cjs');
+const s = session.loadSession(process.cwd());
+const mono = session.listApps(process.cwd());
+console.log(JSON.stringify({ isMonorepo: mono.isMonorepo, apps: mono.apps, activeApp: s.activeApp }));
+"
+```
+
+Store as `mono_info`.
+
+**If monorepo and no activeApp in session:**
+
+Log: "Monorepo detected with {N} apps. Select an app to scope your session."
+
+List apps:
+```
+Available apps:
+{For each app:}
+  {index}. {app}
+{End for}
+  0. (root) -- Work at monorepo root level
+```
+
+Use AskUserQuestion:
+> "Select an app to focus on (enter number or path, e.g., 'apps/flow'), or '0' for root-level work:"
+
+Process response and set active app:
+
+```bash
+node -e "
+const session = require('./cap/bin/lib/cap-session.cjs');
+const selected = process.argv[1] === 'null' ? null : process.argv[1];
+session.setActiveApp(process.cwd(), selected);
+console.log('Active app set to: ' + (selected || '(root)'));
+" '<SELECTED_APP_PATH_OR_NULL>'
+```
+
+**If monorepo and activeApp is set:**
+
+Log: "Monorepo session restored. Active app: {activeApp}"
+Continue with existing activeApp. User can switch later with /cap:switch-app.
+
+**If not a monorepo:**
+
+Continue with single-repo behavior (no app scoping).
+
+**For all subsequent steps:** When reading/writing FEATURE-MAP.md, use the activeApp path.
+The effective FEATURE-MAP.md location is:
+- Monorepo with activeApp: `{projectRoot}/{activeApp}/FEATURE-MAP.md`
+- Monorepo without activeApp (root): `{projectRoot}/FEATURE-MAP.md`
+- Single repo: `{projectRoot}/FEATURE-MAP.md`
+
 ## Step 2: Auto-detect project context
 
 <!-- @gsd-todo(ref:AC-35) /cap:start shall auto-scope to the project by deriving project information from actual code (package.json, directory structure) rather than asking questions. -->

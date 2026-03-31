@@ -493,6 +493,92 @@ function groupByPackage(tags, packages) {
   return groups;
 }
 
+// @gsd-api scanApp(projectRoot, appPath, options) -- Scans a single app directory plus referenced shared packages.
+// When activeApp is set, scans only the active app and shared packages it imports.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string} appPath - Relative app path (e.g., "apps/flow")
+ * @param {Object} [options]
+ * @param {string[]} [options.extensions] - File extensions to include
+ * @param {string[]} [options.exclude] - Directory names to exclude
+ * @returns {{ tags: CapTag[], scannedDirs: string[] }}
+ */
+function scanApp(projectRoot, appPath, options = {}) {
+  const appDir = path.join(projectRoot, appPath);
+  const scannedDirs = [appPath];
+
+  // Scan the app directory itself
+  const appTags = scanDirectory(appDir, {
+    ...options,
+    projectRoot,
+  });
+
+  const allTags = [...appTags];
+  const seen = new Set(appTags.map(t => `${t.file}:${t.line}`));
+
+  // Detect shared packages referenced by this app via package.json dependencies
+  const sharedPkgs = detectSharedPackages(projectRoot, appPath);
+  for (const pkg of sharedPkgs) {
+    const pkgDir = path.join(projectRoot, pkg);
+    if (!fs.existsSync(pkgDir)) continue;
+    scannedDirs.push(pkg);
+    const pkgTags = scanDirectory(pkgDir, {
+      ...options,
+      projectRoot,
+    });
+    for (const tag of pkgTags) {
+      const key = `${tag.file}:${tag.line}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        allTags.push(tag);
+      }
+    }
+  }
+
+  return { tags: allTags, scannedDirs };
+}
+
+// @gsd-api detectSharedPackages(projectRoot, appPath) -- Detects workspace packages referenced by an app's package.json.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string} appPath - Relative app path
+ * @returns {string[]} - Array of relative paths to shared packages
+ */
+function detectSharedPackages(projectRoot, appPath) {
+  const packages = [];
+  const appPkgPath = path.join(projectRoot, appPath, 'package.json');
+  if (!fs.existsSync(appPkgPath)) return packages;
+
+  let appPkg;
+  try {
+    appPkg = JSON.parse(fs.readFileSync(appPkgPath, 'utf8'));
+  } catch (_e) {
+    return packages;
+  }
+
+  // Collect all dependency names
+  const allDeps = Object.keys(appPkg.dependencies || {}).concat(Object.keys(appPkg.devDependencies || {}));
+
+  // Resolve workspace packages -- check if any dep matches a workspace package name
+  const workspaces = detectWorkspaces(projectRoot);
+  if (!workspaces.isMonorepo) return packages;
+
+  for (const wsPkg of workspaces.packages) {
+    const wsPkgJsonPath = path.join(projectRoot, wsPkg, 'package.json');
+    if (!fs.existsSync(wsPkgJsonPath)) continue;
+    try {
+      const wsPkgJson = JSON.parse(fs.readFileSync(wsPkgJsonPath, 'utf8'));
+      if (wsPkgJson.name && allDeps.includes(wsPkgJson.name)) {
+        packages.push(wsPkg);
+      }
+    } catch (_e) {
+      // Skip malformed
+    }
+  }
+
+  return packages;
+}
+
 // @cap-todo Detect legacy @gsd-* tags and recommend /cap:migrate
 const LEGACY_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@gsd-(feature|todo|risk|decision|context|status|depends|ref|pattern|api|constraint)/;
 
@@ -581,4 +667,6 @@ module.exports = {
   scanMonorepo,
   groupByPackage,
   detectLegacyTags,
+  scanApp,
+  detectSharedPackages,
 };

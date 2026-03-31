@@ -75,15 +75,17 @@ function generateTemplate() {
 `;
 }
 
-// @gsd-api readFeatureMap(projectRoot) -- Reads and parses FEATURE-MAP.md from project root.
+// @gsd-api readFeatureMap(projectRoot, appPath) -- Reads and parses FEATURE-MAP.md from project root or app subdirectory.
 // Returns: FeatureMap object with features and lastScan timestamp.
 // @gsd-todo(ref:AC-10) Feature Map is the single source of truth for feature identity, state, ACs, and relationships
 /**
  * @param {string} projectRoot - Absolute path to project root
+ * @param {string|null} [appPath=null] - Relative app path (e.g., "apps/flow"). If null, reads from projectRoot.
  * @returns {FeatureMap}
  */
-function readFeatureMap(projectRoot) {
-  const filePath = path.join(projectRoot, FEATURE_MAP_FILE);
+function readFeatureMap(projectRoot, appPath) {
+  const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
+  const filePath = path.join(baseDir, FEATURE_MAP_FILE);
   if (!fs.existsSync(filePath)) {
     return { features: [], lastScan: null };
   }
@@ -195,14 +197,16 @@ function parseFeatureMapContent(content) {
   return { features, lastScan };
 }
 
-// @gsd-api writeFeatureMap(projectRoot, featureMap) -- Serializes FeatureMap to FEATURE-MAP.md.
-// Side effect: overwrites FEATURE-MAP.md at project root.
+// @gsd-api writeFeatureMap(projectRoot, featureMap, appPath) -- Serializes FeatureMap to FEATURE-MAP.md.
+// Side effect: overwrites FEATURE-MAP.md at project root or app subdirectory.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {FeatureMap} featureMap - Structured feature map data
+ * @param {string|null} [appPath=null] - Relative app path (e.g., "apps/flow"). If null, writes to projectRoot.
  */
-function writeFeatureMap(projectRoot, featureMap) {
-  const filePath = path.join(projectRoot, FEATURE_MAP_FILE);
+function writeFeatureMap(projectRoot, featureMap, appPath) {
+  const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
+  const filePath = path.join(baseDir, FEATURE_MAP_FILE);
   const content = serializeFeatureMap(featureMap);
   fs.writeFileSync(filePath, content, 'utf8');
 }
@@ -271,14 +275,15 @@ function serializeFeatureMap(featureMap) {
   return lines.join('\n');
 }
 
-// @gsd-api addFeature(projectRoot, feature) -- Add a new feature entry to FEATURE-MAP.md.
+// @gsd-api addFeature(projectRoot, feature, appPath) -- Add a new feature entry to FEATURE-MAP.md.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {{ title: string, acs?: AcceptanceCriterion[], dependencies?: string[], metadata?: Object }} feature - Feature data (ID auto-generated)
+ * @param {string|null} [appPath=null] - Relative app path for monorepo scoping
  * @returns {Feature} - The added feature with generated ID
  */
-function addFeature(projectRoot, feature) {
-  const featureMap = readFeatureMap(projectRoot);
+function addFeature(projectRoot, feature, appPath) {
+  const featureMap = readFeatureMap(projectRoot, appPath);
   const id = getNextFeatureId(featureMap.features);
   const newFeature = {
     id,
@@ -290,22 +295,23 @@ function addFeature(projectRoot, feature) {
     metadata: feature.metadata || {},
   };
   featureMap.features.push(newFeature);
-  writeFeatureMap(projectRoot, featureMap);
+  writeFeatureMap(projectRoot, featureMap, appPath);
   return newFeature;
 }
 
-// @gsd-api updateFeatureState(projectRoot, featureId, newState) -- Transition feature state.
+// @gsd-api updateFeatureState(projectRoot, featureId, newState, appPath) -- Transition feature state.
 // @gsd-todo(ref:AC-9) Enforce valid state transitions: planned->prototyped->tested->shipped
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} featureId - Feature ID (e.g., "F-001")
  * @param {string} newState - Target state
+ * @param {string|null} [appPath=null] - Relative app path for monorepo scoping
  * @returns {boolean} - True if transition was valid and applied
  */
-function updateFeatureState(projectRoot, featureId, newState) {
+function updateFeatureState(projectRoot, featureId, newState, appPath) {
   if (!VALID_STATES.includes(newState)) return false;
 
-  const featureMap = readFeatureMap(projectRoot);
+  const featureMap = readFeatureMap(projectRoot, appPath);
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
 
@@ -313,19 +319,20 @@ function updateFeatureState(projectRoot, featureId, newState) {
   if (!allowed || !allowed.includes(newState)) return false;
 
   feature.state = newState;
-  writeFeatureMap(projectRoot, featureMap);
+  writeFeatureMap(projectRoot, featureMap, appPath);
   return true;
 }
 
-// @gsd-api enrichFromTags(projectRoot, scanResults) -- Update file references from tag scan.
+// @gsd-api enrichFromTags(projectRoot, scanResults, appPath) -- Update file references from tag scan.
 // @gsd-todo(ref:AC-12) Feature Map auto-enriched from @cap-feature tags found in source code
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {import('./cap-tag-scanner.cjs').CapTag[]} scanResults - Tags from cap-tag-scanner
+ * @param {string|null} [appPath=null] - Relative app path for monorepo scoping
  * @returns {FeatureMap}
  */
-function enrichFromTags(projectRoot, scanResults) {
-  const featureMap = readFeatureMap(projectRoot);
+function enrichFromTags(projectRoot, scanResults, appPath) {
+  const featureMap = readFeatureMap(projectRoot, appPath);
 
   for (const tag of scanResults) {
     if (tag.type !== 'feature') continue;
@@ -341,7 +348,7 @@ function enrichFromTags(projectRoot, scanResults) {
     }
   }
 
-  writeFeatureMap(projectRoot, featureMap);
+  writeFeatureMap(projectRoot, featureMap, appPath);
   return featureMap;
 }
 
@@ -486,6 +493,66 @@ function getStatus(featureMap) {
   return { totalFeatures, completedFeatures, totalACs, implementedACs, testedACs, reviewedACs };
 }
 
+// @gsd-api initAppFeatureMap(projectRoot, appPath) -- Create FEATURE-MAP.md for a specific app in a monorepo.
+// Idempotent: does not overwrite existing FEATURE-MAP.md.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string} appPath - Relative app path (e.g., "apps/flow")
+ * @returns {boolean} - True if created, false if already existed
+ */
+function initAppFeatureMap(projectRoot, appPath) {
+  const baseDir = path.join(projectRoot, appPath);
+  const filePath = path.join(baseDir, FEATURE_MAP_FILE);
+  if (fs.existsSync(filePath)) return false;
+  // Ensure directory exists
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, generateTemplate(), 'utf8');
+  return true;
+}
+
+// @gsd-api listAppFeatureMaps(projectRoot) -- Find all FEATURE-MAP.md files in a monorepo.
+// Returns array of relative paths to directories containing FEATURE-MAP.md.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {string[]} - Relative directory paths that contain FEATURE-MAP.md (e.g., [".", "apps/flow", "packages/ui"])
+ */
+function listAppFeatureMaps(projectRoot) {
+  const results = [];
+
+  // Check root
+  if (fs.existsSync(path.join(projectRoot, FEATURE_MAP_FILE))) {
+    results.push('.');
+  }
+
+  // Walk subdirectories (max depth 3, skip excluded dirs)
+  const excludeDirs = new Set(['node_modules', '.git', '.cap', 'dist', 'build', 'coverage', '.planning']);
+
+  function walk(dir, depth) {
+    if (depth > 3) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_e) {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (excludeDirs.has(entry.name) || entry.name.startsWith('.')) continue;
+      const fullPath = path.join(dir, entry.name);
+      const fmPath = path.join(fullPath, FEATURE_MAP_FILE);
+      if (fs.existsSync(fmPath)) {
+        results.push(path.relative(projectRoot, fullPath));
+      }
+      walk(fullPath, depth + 1);
+    }
+  }
+
+  walk(projectRoot, 0);
+  return results;
+}
+
 module.exports = {
   FEATURE_MAP_FILE,
   VALID_STATES,
@@ -503,4 +570,6 @@ module.exports = {
   enrichFromScan,
   addFeatures,
   getStatus,
+  initAppFeatureMap,
+  listAppFeatureMaps,
 };

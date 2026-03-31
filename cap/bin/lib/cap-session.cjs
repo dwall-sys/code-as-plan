@@ -16,6 +16,7 @@ const path = require('node:path');
  * @property {string} version - Session schema version (e.g., "2.0.0")
  * @property {string|null} lastCommand - Last /cap: command executed
  * @property {string|null} lastCommandTimestamp - ISO timestamp of last command
+ * @property {string|null} activeApp - Currently focused app path (e.g., "apps/flow") or null for single-repo/root
  * @property {string|null} activeFeature - Currently focused feature ID
  * @property {string|null} step - Current workflow step
  * @property {string|null} startedAt - ISO timestamp of when session started
@@ -42,6 +43,7 @@ function getDefaultSession() {
     version: '2.0.0',
     lastCommand: null,
     lastCommandTimestamp: null,
+    activeApp: null,
     activeFeature: null,
     step: null,
     startedAt: null,
@@ -175,6 +177,56 @@ function initCapDirectory(projectRoot) {
   }
 }
 
+// @gsd-api setActiveApp(projectRoot, appPath) -- Set the active app in SESSION.json for monorepo scoping.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string|null} appPath - Relative app path (e.g., "apps/flow") or null to clear
+ * @returns {CapSession}
+ */
+function setActiveApp(projectRoot, appPath) {
+  return updateSession(projectRoot, { activeApp: appPath || null });
+}
+
+// @gsd-api getActiveApp(projectRoot) -- Get current active app path from SESSION.json.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {string|null} - Active app path or null
+ */
+function getActiveApp(projectRoot) {
+  const session = loadSession(projectRoot);
+  return session.activeApp || null;
+}
+
+// @gsd-api getAppRoot(projectRoot) -- Returns the effective root for app-scoped operations.
+// If activeApp is set, returns projectRoot + activeApp. Otherwise returns projectRoot.
+// This is the KEY function for all scoping decisions.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {string} - Absolute path to the active app root (or project root if no app)
+ */
+function getAppRoot(projectRoot) {
+  const activeApp = getActiveApp(projectRoot);
+  if (activeApp) {
+    return path.join(projectRoot, activeApp);
+  }
+  return projectRoot;
+}
+
+// @gsd-api listApps(projectRoot) -- List available apps/packages in a monorepo using detectWorkspaces.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {{ isMonorepo: boolean, apps: string[] }}
+ */
+function listApps(projectRoot) {
+  // Lazy require to avoid circular dependency
+  const { detectWorkspaces } = require('./cap-tag-scanner.cjs');
+  const workspaces = detectWorkspaces(projectRoot);
+  return {
+    isMonorepo: workspaces.isMonorepo,
+    apps: workspaces.packages,
+  };
+}
+
 module.exports = {
   CAP_DIR,
   SESSION_FILE,
@@ -188,4 +240,8 @@ module.exports = {
   endSession,
   isInitialized,
   initCapDirectory,
+  setActiveApp,
+  getActiveApp,
+  getAppRoot,
+  listApps,
 };

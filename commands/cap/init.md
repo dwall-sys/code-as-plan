@@ -103,6 +103,51 @@ Note the `context7Available` field -- this gets set in Step 6 to indicate whethe
 
 If FEATURE-MAP.md does NOT exist, write the empty template.
 
+## Step 5b: Detect monorepo and create per-app FEATURE-MAP.md files
+
+```bash
+node -e "
+const session = require('./cap/bin/lib/cap-session.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const fs = require('node:fs');
+const path = require('node:path');
+const projectRoot = process.cwd();
+const mono = session.listApps(projectRoot);
+
+if (!mono.isMonorepo) {
+  console.log(JSON.stringify({ isMonorepo: false, created: 0, apps: [] }));
+} else {
+  let created = 0;
+  const createdApps = [];
+  for (const app of mono.apps) {
+    // Only create FEATURE-MAP.md for apps that have source files
+    const appDir = path.join(projectRoot, app);
+    if (!fs.existsSync(appDir)) continue;
+    const entries = fs.readdirSync(appDir, { withFileTypes: true });
+    const hasSrc = entries.some(e =>
+      (e.isDirectory() && (e.name === 'src' || e.name === 'lib' || e.name === 'app')) ||
+      (e.isFile() && /\.(js|ts|py|go|rs|java|rb)$/.test(e.name))
+    );
+    if (hasSrc) {
+      const wasCreated = fm.initAppFeatureMap(projectRoot, app);
+      if (wasCreated) {
+        created++;
+        createdApps.push(app);
+      }
+    }
+  }
+  console.log(JSON.stringify({ isMonorepo: true, created, apps: createdApps, totalApps: mono.apps.length }));
+}
+"
+```
+
+Store as `monorepo_init`.
+
+**If monorepo detected:**
+Log: "Monorepo detected with {totalApps} workspace packages."
+If `created > 0`: Log: "Created FEATURE-MAP.md for {created} apps: {apps list}"
+If `created === 0`: Log: "All apps already have FEATURE-MAP.md (or no source files detected)."
+
 ## Step 6: Mandatory Context7 dependency fetch
 
 <!-- @gsd-decision Multi-language dependency detection runs in priority order: package.json first, then requirements.txt, then Cargo.toml, then go.mod. First match sets project type. -->

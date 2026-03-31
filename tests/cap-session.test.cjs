@@ -19,6 +19,10 @@ const {
   endSession,
   isInitialized,
   initCapDirectory,
+  setActiveApp,
+  getActiveApp,
+  getAppRoot,
+  listApps,
 } = require('../cap/bin/lib/cap-session.cjs');
 
 let tmpDir;
@@ -292,5 +296,110 @@ describe('initCapDirectory', () => {
     assert.ok(files.includes('.gitignore'));
     assert.ok(files.includes(SESSION_FILE));
     assert.strictEqual(files.length, 2);
+  });
+});
+
+// --- setActiveApp tests ---
+
+describe('setActiveApp', () => {
+  it('sets activeApp in SESSION.json', () => {
+    initCapDirectory(tmpDir);
+    const session = setActiveApp(tmpDir, 'apps/flow');
+    assert.strictEqual(session.activeApp, 'apps/flow');
+    // Verify persisted
+    const loaded = loadSession(tmpDir);
+    assert.strictEqual(loaded.activeApp, 'apps/flow');
+  });
+
+  it('clears activeApp when set to null', () => {
+    initCapDirectory(tmpDir);
+    setActiveApp(tmpDir, 'apps/flow');
+    const session = setActiveApp(tmpDir, null);
+    assert.strictEqual(session.activeApp, null);
+  });
+
+  it('preserves other session fields', () => {
+    initCapDirectory(tmpDir);
+    startSession(tmpDir, 'F-001', 'prototype');
+    setActiveApp(tmpDir, 'apps/hub');
+    const loaded = loadSession(tmpDir);
+    assert.strictEqual(loaded.activeApp, 'apps/hub');
+    assert.strictEqual(loaded.activeFeature, 'F-001');
+    assert.strictEqual(loaded.step, 'prototype');
+  });
+});
+
+// --- getActiveApp tests ---
+
+describe('getActiveApp', () => {
+  it('returns null when no activeApp is set', () => {
+    initCapDirectory(tmpDir);
+    assert.strictEqual(getActiveApp(tmpDir), null);
+  });
+
+  it('returns the active app path', () => {
+    initCapDirectory(tmpDir);
+    setActiveApp(tmpDir, 'packages/ui');
+    assert.strictEqual(getActiveApp(tmpDir), 'packages/ui');
+  });
+
+  it('returns null when SESSION.json does not exist', () => {
+    assert.strictEqual(getActiveApp(tmpDir), null);
+  });
+});
+
+// --- getAppRoot tests ---
+
+describe('getAppRoot', () => {
+  it('returns projectRoot when no activeApp is set', () => {
+    initCapDirectory(tmpDir);
+    assert.strictEqual(getAppRoot(tmpDir), tmpDir);
+  });
+
+  it('returns projectRoot + activeApp when app is set', () => {
+    initCapDirectory(tmpDir);
+    setActiveApp(tmpDir, 'apps/flow');
+    assert.strictEqual(getAppRoot(tmpDir), path.join(tmpDir, 'apps/flow'));
+  });
+
+  it('returns projectRoot when SESSION.json missing', () => {
+    assert.strictEqual(getAppRoot(tmpDir), tmpDir);
+  });
+});
+
+// --- listApps tests ---
+
+describe('listApps', () => {
+  it('returns isMonorepo false for single-repo project', () => {
+    const result = listApps(tmpDir);
+    assert.strictEqual(result.isMonorepo, false);
+    assert.deepStrictEqual(result.apps, []);
+  });
+
+  it('detects monorepo apps from package.json workspaces', () => {
+    // Create a monorepo structure
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      name: 'monorepo',
+      workspaces: ['apps/*', 'packages/*'],
+    }));
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'hub'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'packages', 'ui'), { recursive: true });
+
+    const result = listApps(tmpDir);
+    assert.strictEqual(result.isMonorepo, true);
+    assert.ok(result.apps.includes(path.join('apps', 'flow')));
+    assert.ok(result.apps.includes(path.join('apps', 'hub')));
+    assert.ok(result.apps.includes(path.join('packages', 'ui')));
+  });
+});
+
+// --- getDefaultSession includes activeApp ---
+
+describe('getDefaultSession activeApp field', () => {
+  it('includes activeApp as null in default session', () => {
+    const session = getDefaultSession();
+    assert.strictEqual(session.activeApp, null);
+    assert.ok('activeApp' in session);
   });
 });

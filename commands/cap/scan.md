@@ -47,6 +47,18 @@ Check `$ARGUMENTS` for:
 - `--features NAME` -- if present, store as `feature_filter`
 - `--json` -- if present, set `json_output = true`
 
+## Step 0b: Check active app scoping
+
+```bash
+node -e "
+const session = require('./cap/bin/lib/cap-session.cjs');
+const s = session.loadSession(process.cwd());
+console.log(JSON.stringify({ activeApp: s.activeApp }));
+"
+```
+
+Store as `app_scope`. If `app_scope.activeApp` is set, this scan will be scoped to the active app directory and its shared packages. The results will be written to the app's FEATURE-MAP.md (not root).
+
 ## Step 1: Detect monorepo configuration
 
 <!-- @gsd-decision Monorepo detection reads package.json workspaces and lerna.json. Supports npm, yarn, pnpm workspace patterns. Glob expansion uses Bash for simplicity. -->
@@ -145,9 +157,27 @@ Store as `monorepo_info`. Log project type:
 - Monorepo: "Detected monorepo with {N} workspace packages: {list}"
 - Single repo: "Single repository project detected."
 
-## Step 2: Run tag scanner (with monorepo awareness)
+## Step 2: Run tag scanner (with monorepo and app-scoping awareness)
 
-If monorepo detected, scan each workspace package independently AND the root:
+**If `app_scope.activeApp` is set (app-scoped scan):**
+
+Scan only the active app directory and its referenced shared packages:
+
+```bash
+node -e "
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const projectRoot = process.cwd();
+const appPath = process.argv[1];
+const result = scanner.scanApp(projectRoot, appPath);
+console.log(JSON.stringify({ tags: result.tags, scannedDirs: result.scannedDirs }, null, 2));
+" '<ACTIVE_APP_PATH>'
+```
+
+Log: "App-scoped scan: {activeApp} (+ {N} shared packages)"
+
+**Else if monorepo detected (full monorepo scan):**
+
+Scan each workspace package independently AND the root:
 
 ```bash
 node -e "
@@ -189,6 +219,10 @@ if (monorepoInfo.isMonorepo) {
 " '<MONOREPO_INFO_JSON>'
 ```
 
+**Else (single repo):**
+
+Standard scan as before.
+
 Store as `all_tags`.
 
 ## Step 3: Group tags by feature and by package
@@ -223,6 +257,25 @@ Same as base scan -- run orphan detection against FEATURE-MAP.md.
 ## Step 5: Auto-enrich Feature Map with cross-package file references
 
 <!-- @gsd-decision Cross-package file refs are stored as full relative paths from project root. This means packages/core/src/auth.ts, not just src/auth.ts. Feature Map readers can identify the package from the path prefix. -->
+
+**If app-scoped (activeApp set):** Enrich the app's FEATURE-MAP.md, not root.
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const activeApp = process.argv[1] === 'null' ? null : process.argv[1];
+const tags = JSON.parse(process.argv[2]);
+const updated = fm.enrichFromTags(process.cwd(), tags, activeApp);
+console.log(JSON.stringify({
+  features_enriched: updated.features.filter(f => f.files.length > 0).length,
+  total_file_refs: updated.features.reduce((sum, f) => sum + f.files.length, 0),
+  cross_package_refs: updated.features.reduce((sum, f) =>
+    sum + f.files.filter(fp => fp.startsWith('packages/')).length, 0)
+}));
+" '<ACTIVE_APP_OR_NULL>' '<ALL_TAGS_JSON>'
+```
+
+**If not app-scoped (full scan):**
 
 ```bash
 node -e "

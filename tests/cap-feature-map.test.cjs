@@ -21,6 +21,8 @@ const {
   enrichFromScan,
   addFeatures,
   getStatus,
+  initAppFeatureMap,
+  listAppFeatureMaps,
 } = require('../cap/bin/lib/cap-feature-map.cjs');
 
 let tmpDir;
@@ -520,5 +522,140 @@ describe('scale', () => {
     const result = readFeatureMap(tmpDir);
     assert.strictEqual(result.features.length, 100);
     assert.strictEqual(result.features[99].id, 'F-100');
+  });
+});
+
+// --- App-scoped readFeatureMap tests ---
+
+describe('readFeatureMap with appPath', () => {
+  it('reads from app subdirectory when appPath provided', () => {
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeFeatureMap(tmpDir, {
+      features: [{
+        id: 'F-001', title: 'Flow auth', state: 'planned', acs: [], files: [], dependencies: [], metadata: {},
+      }],
+      lastScan: null,
+    }, 'apps/flow');
+    const result = readFeatureMap(tmpDir, 'apps/flow');
+    assert.strictEqual(result.features.length, 1);
+    assert.strictEqual(result.features[0].title, 'Flow auth');
+  });
+
+  it('reads from root when appPath is null', () => {
+    writeFeatureMap(tmpDir, {
+      features: [{
+        id: 'F-001', title: 'Root feature', state: 'planned', acs: [], files: [], dependencies: [], metadata: {},
+      }],
+      lastScan: null,
+    });
+    const result = readFeatureMap(tmpDir, null);
+    assert.strictEqual(result.features.length, 1);
+    assert.strictEqual(result.features[0].title, 'Root feature');
+  });
+
+  it('returns empty when app FEATURE-MAP.md does not exist', () => {
+    const result = readFeatureMap(tmpDir, 'apps/nonexistent');
+    assert.strictEqual(result.features.length, 0);
+  });
+});
+
+// --- App-scoped writeFeatureMap tests ---
+
+describe('writeFeatureMap with appPath', () => {
+  it('writes to app subdirectory when appPath provided', () => {
+    const appDir = path.join(tmpDir, 'apps', 'hub');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeFeatureMap(tmpDir, {
+      features: [{
+        id: 'F-001', title: 'Hub feature', state: 'planned', acs: [], files: [], dependencies: [], metadata: {},
+      }],
+      lastScan: null,
+    }, 'apps/hub');
+    assert.ok(fs.existsSync(path.join(appDir, 'FEATURE-MAP.md')));
+    const content = fs.readFileSync(path.join(appDir, 'FEATURE-MAP.md'), 'utf8');
+    assert.ok(content.includes('Hub feature'));
+  });
+
+  it('does not write to root when appPath provided', () => {
+    const appDir = path.join(tmpDir, 'apps', 'hub');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeFeatureMap(tmpDir, {
+      features: [{ id: 'F-001', title: 'Hub only', state: 'planned', acs: [], files: [], dependencies: [], metadata: {} }],
+      lastScan: null,
+    }, 'apps/hub');
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'FEATURE-MAP.md')));
+  });
+});
+
+// --- initAppFeatureMap tests ---
+
+describe('initAppFeatureMap', () => {
+  it('creates FEATURE-MAP.md for an app', () => {
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    const created = initAppFeatureMap(tmpDir, 'apps/flow');
+    assert.strictEqual(created, true);
+    assert.ok(fs.existsSync(path.join(appDir, 'FEATURE-MAP.md')));
+    const content = fs.readFileSync(path.join(appDir, 'FEATURE-MAP.md'), 'utf8');
+    assert.ok(content.includes('## Features'));
+  });
+
+  it('returns false if FEATURE-MAP.md already exists', () => {
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    initAppFeatureMap(tmpDir, 'apps/flow');
+    const created = initAppFeatureMap(tmpDir, 'apps/flow');
+    assert.strictEqual(created, false);
+  });
+
+  it('creates app directory if it does not exist', () => {
+    const created = initAppFeatureMap(tmpDir, 'apps/new-app');
+    assert.strictEqual(created, true);
+    assert.ok(fs.existsSync(path.join(tmpDir, 'apps', 'new-app', 'FEATURE-MAP.md')));
+  });
+});
+
+// --- listAppFeatureMaps tests ---
+
+describe('listAppFeatureMaps', () => {
+  it('finds FEATURE-MAP.md at root and in apps', () => {
+    // Create root FEATURE-MAP.md
+    writeFeatureMap(tmpDir, { features: [], lastScan: null });
+    // Create app FEATURE-MAP.md
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    initAppFeatureMap(tmpDir, 'apps/flow');
+
+    const results = listAppFeatureMaps(tmpDir);
+    assert.ok(results.includes('.'));
+    assert.ok(results.includes(path.join('apps', 'flow')));
+  });
+
+  it('returns empty array when no FEATURE-MAP.md files exist', () => {
+    const results = listAppFeatureMaps(tmpDir);
+    assert.deepStrictEqual(results, []);
+  });
+
+  it('excludes node_modules and .git directories', () => {
+    fs.mkdirSync(path.join(tmpDir, 'node_modules', 'pkg'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'node_modules', 'pkg', 'FEATURE-MAP.md'), '# bogus');
+    const results = listAppFeatureMaps(tmpDir);
+    assert.strictEqual(results.length, 0);
+  });
+});
+
+// --- App-scoped addFeature tests ---
+
+describe('addFeature with appPath', () => {
+  it('adds feature to app FEATURE-MAP.md', () => {
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeFeatureMap(tmpDir, { features: [], lastScan: null }, 'apps/flow');
+    const added = addFeature(tmpDir, { title: 'Flow login' }, 'apps/flow');
+    assert.strictEqual(added.id, 'F-001');
+    const result = readFeatureMap(tmpDir, 'apps/flow');
+    assert.strictEqual(result.features.length, 1);
+    assert.strictEqual(result.features[0].title, 'Flow login');
   });
 });
