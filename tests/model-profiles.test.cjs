@@ -13,7 +13,7 @@ const {
   VALID_PROFILES,
   formatAgentToModelMapAsTable,
   getAgentToModelMapForProfile,
-} = require('../get-shit-done/bin/lib/model-profiles.cjs');
+} = require('../cap/bin/lib/model-profiles.cjs');
 
 // ─── MODEL_PROFILES data integrity ────────────────────────────────────────────
 

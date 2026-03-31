@@ -62,8 +62,8 @@ Log: "cap:iterate | mode: {auto or manual} | max: {max_iterations} | features: {
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const s = session.loadSession(process.cwd());
 const featureMap = fm.readFeatureMap(process.cwd());
 console.log(JSON.stringify({
@@ -89,8 +89,8 @@ Initialize: `ITERATION = 0`
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const featureMap = fm.readFeatureMap(process.cwd());
 
@@ -174,8 +174,8 @@ Wait for cap-prototyper to complete.
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 fm.enrichFromTags(process.cwd(), tags);
 const featureMap = fm.readFeatureMap(process.cwd());
@@ -208,7 +208,7 @@ Use AskUserQuestion:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:iterate',
   lastCommandTimestamp: new Date().toISOString(),

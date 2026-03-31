@@ -8,19 +8,19 @@
 
 **Resolve context rot — a degradação de qualidade que acontece conforme o Claude enche a janela de contexto.**
 
-[![npm version](https://img.shields.io/npm/v/get-shit-done-cc?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/get-shit-done-cc)
-[![npm downloads](https://img.shields.io/npm/dm/get-shit-done-cc?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/get-shit-done-cc)
-[![Tests](https://img.shields.io/github/actions/workflow/status/gsd-build/get-shit-done/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/gsd-build/get-shit-done/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/cap-cc?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/cap-cc)
+[![npm downloads](https://img.shields.io/npm/dm/cap-cc?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/cap-cc)
+[![Tests](https://img.shields.io/github/actions/workflow/status/gsd-build/cap/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/gsd-build/cap/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/gsd)
 [![X (Twitter)](https://img.shields.io/badge/X-@gsd__foundation-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.com/gsd_foundation)
 [![$GSD Token](https://img.shields.io/badge/$GSD-Dexscreener-1C1C1C?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0iIzAwRkYwMCIvPjwvc3ZnPg==&logoColor=00FF00)](https://dexscreener.com/solana/dwudwjvan7bzkw9zwlbyv6kspdlvhwzrqy6ebk8xzxkv)
-[![GitHub stars](https://img.shields.io/github/stars/gsd-build/get-shit-done?style=for-the-badge&logo=github&color=181717)](https://github.com/gsd-build/get-shit-done)
+[![GitHub stars](https://img.shields.io/github/stars/gsd-build/cap?style=for-the-badge&logo=github&color=181717)](https://github.com/gsd-build/cap)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 <br>
 
 ```bash
-npx get-shit-done-cc@latest
+npx cap-cc@latest
 ```
 
 **Funciona em Mac, Windows e Linux.**
@@ -76,7 +76,7 @@ Para quem quer descrever o que precisa e receber isso construído do jeito certo
 ## Primeiros passos
 
 ```bash
-npx get-shit-done-cc@latest
+npx cap-cc@latest
 ```
 
 O instalador pede:
@@ -96,7 +96,7 @@ Verifique com:
 ### Mantendo atualizado
 
 ```bash
-npx get-shit-done-cc@latest
+npx cap-cc@latest
 ```
 
 <details>
@@ -104,33 +104,33 @@ npx get-shit-done-cc@latest
 
 ```bash
 # Claude Code
-npx get-shit-done-cc --claude --global
-npx get-shit-done-cc --claude --local
+npx cap-cc --claude --global
+npx cap-cc --claude --local
 
 # OpenCode
-npx get-shit-done-cc --opencode --global
+npx cap-cc --opencode --global
 
 # Gemini CLI
-npx get-shit-done-cc --gemini --global
+npx cap-cc --gemini --global
 
 # Codex
-npx get-shit-done-cc --codex --global
-npx get-shit-done-cc --codex --local
+npx cap-cc --codex --global
+npx cap-cc --codex --local
 
 # Copilot
-npx get-shit-done-cc --copilot --global
-npx get-shit-done-cc --copilot --local
+npx cap-cc --copilot --global
+npx cap-cc --copilot --local
 
 # Cursor
-npx get-shit-done-cc --cursor --global
-npx get-shit-done-cc --cursor --local
+npx cap-cc --cursor --global
+npx cap-cc --cursor --local
 
 # Antigravity
-npx get-shit-done-cc --antigravity --global
-npx get-shit-done-cc --antigravity --local
+npx cap-cc --antigravity --global
+npx cap-cc --antigravity --local
 
 # Todos
-npx get-shit-done-cc --all --global
+npx cap-cc --all --global
 ```
 
 Use `--global` (`-g`) ou `--local` (`-l`) para pular a pergunta de local.
@@ -383,42 +383,42 @@ Adicione padrões sensíveis ao deny list do Claude Code:
 
 **Comandos não funcionam como esperado?**
 - Rode `/gsd:help`
-- Reinstale com `npx get-shit-done-cc@latest`
+- Reinstale com `npx cap-cc@latest`
 
 **Em Docker/container?**
 - Defina `CLAUDE_CONFIG_DIR` antes da instalação:
 
 ```bash
-CLAUDE_CONFIG_DIR=/home/youruser/.claude npx get-shit-done-cc --global
+CLAUDE_CONFIG_DIR=/home/youruser/.claude npx cap-cc --global
 ```
 
 ### Desinstalar
 
 ```bash
 # Instalações globais
-npx get-shit-done-cc --claude --global --uninstall
-npx get-shit-done-cc --opencode --global --uninstall
-npx get-shit-done-cc --gemini --global --uninstall
-npx get-shit-done-cc --codex --global --uninstall
-npx get-shit-done-cc --copilot --global --uninstall
-npx get-shit-done-cc --cursor --global --uninstall
-npx get-shit-done-cc --antigravity --global --uninstall
+npx cap-cc --claude --global --uninstall
+npx cap-cc --opencode --global --uninstall
+npx cap-cc --gemini --global --uninstall
+npx cap-cc --codex --global --uninstall
+npx cap-cc --copilot --global --uninstall
+npx cap-cc --cursor --global --uninstall
+npx cap-cc --antigravity --global --uninstall
 
 # Instalações locais (projeto atual)
-npx get-shit-done-cc --claude --local --uninstall
-npx get-shit-done-cc --opencode --local --uninstall
-npx get-shit-done-cc --gemini --local --uninstall
-npx get-shit-done-cc --codex --local --uninstall
-npx get-shit-done-cc --copilot --local --uninstall
-npx get-shit-done-cc --cursor --local --uninstall
-npx get-shit-done-cc --antigravity --local --uninstall
+npx cap-cc --claude --local --uninstall
+npx cap-cc --opencode --local --uninstall
+npx cap-cc --gemini --local --uninstall
+npx cap-cc --codex --local --uninstall
+npx cap-cc --copilot --local --uninstall
+npx cap-cc --cursor --local --uninstall
+npx cap-cc --antigravity --local --uninstall
 ```
 
 ---
 
 ## Community Ports
 
-OpenCode, Gemini CLI e Codex agora são suportados nativamente via `npx get-shit-done-cc`.
+OpenCode, Gemini CLI e Codex agora são suportados nativamente via `npx cap-cc`.
 
 | Projeto | Plataforma | Descrição |
 |---------|------------|-----------|
@@ -429,11 +429,11 @@ OpenCode, Gemini CLI e Codex agora são suportados nativamente via `npx get-shit
 
 ## Star History
 
-<a href="https://star-history.com/#gsd-build/get-shit-done&Date">
+<a href="https://star-history.com/#gsd-build/cap&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gsd-build/get-shit-done&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=gsd-build/get-shit-done&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=gsd-build/get-shit-done&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gsd-build/cap&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=gsd-build/cap&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=gsd-build/cap&type=Date" />
  </picture>
 </a>
 

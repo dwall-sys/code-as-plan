@@ -8,8 +8,8 @@
 
 `gsd-tools.cjs` is a Node.js CLI utility that replaces repetitive inline bash patterns across GSD's ~50 command, workflow, and agent files. It centralizes: config parsing, model resolution, phase lookup, git commits, summary verification, state management, and template operations.
 
-**Location:** `get-shit-done/bin/gsd-tools.cjs`
-**Modules:** 15 domain modules in `get-shit-done/bin/lib/`
+**Location:** `cap/bin/gsd-tools.cjs`
+**Modules:** 15 domain modules in `cap/bin/lib/`
 
 **Usage:**
 ```bash

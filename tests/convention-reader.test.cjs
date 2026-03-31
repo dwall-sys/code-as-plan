@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const { readProjectConventions, discoverDirectories, detectNamingConvention } = require('../get-shit-done/bin/lib/convention-reader.cjs');
+const { readProjectConventions, discoverDirectories, detectNamingConvention } = require('../cap/bin/lib/convention-reader.cjs');
 
 let tmpDir;
 

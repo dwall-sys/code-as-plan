@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const session = require('../get-shit-done/bin/lib/session-manager.cjs');
+const session = require('../cap/bin/lib/session-manager.cjs');
 
 function createTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-session-test-'));

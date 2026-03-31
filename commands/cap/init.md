@@ -113,7 +113,7 @@ Run dependency detection for all supported manifest files:
 
 ```bash
 node -e "
-const stackDocs = require('./get-shit-done/bin/lib/cap-stack-docs.cjs');
+const stackDocs = require('./cap/bin/lib/cap-stack-docs.cjs');
 const result = stackDocs.detectDependencies(process.cwd());
 console.log(JSON.stringify(result, null, 2));
 "
@@ -127,7 +127,7 @@ For each dependency in `dep_info.dependencies` (limit to top 10 most important -
 
 ```bash
 node -e "
-const stackDocs = require('./get-shit-done/bin/lib/cap-stack-docs.cjs');
+const stackDocs = require('./cap/bin/lib/cap-stack-docs.cjs');
 const depName = process.argv[1];
 const lib = stackDocs.resolveLibrary(depName, 'API surface and configuration');
 if (lib) {
@@ -250,7 +250,7 @@ Next steps:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:init',
   lastCommandTimestamp: new Date().toISOString(),

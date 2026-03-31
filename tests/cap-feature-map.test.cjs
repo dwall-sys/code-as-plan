@@ -21,7 +21,7 @@ const {
   enrichFromScan,
   addFeatures,
   getStatus,
-} = require('../get-shit-done/bin/lib/cap-feature-map.cjs');
+} = require('../cap/bin/lib/cap-feature-map.cjs');
 
 let tmpDir;
 

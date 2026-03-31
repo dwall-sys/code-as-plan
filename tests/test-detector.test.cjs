@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { detectTestFramework } = require('../get-shit-done/bin/lib/test-detector.cjs');
+const { detectTestFramework } = require('../cap/bin/lib/test-detector.cjs');
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

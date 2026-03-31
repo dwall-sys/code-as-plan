@@ -19,7 +19,7 @@ const {
   buildMonorepoContext,
   resolveRelevantManifests,
   scopeExtractTags,
-} = require('../get-shit-done/bin/lib/monorepo-context.cjs');
+} = require('../cap/bin/lib/monorepo-context.cjs');
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

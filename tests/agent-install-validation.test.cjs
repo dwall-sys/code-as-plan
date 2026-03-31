@@ -14,12 +14,12 @@ const path = require('path');
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
 
 const AGENTS_DIR_NAME = 'agents';
-const MODEL_PROFILES = require('../get-shit-done/bin/lib/model-profiles.cjs').MODEL_PROFILES;
+const MODEL_PROFILES = require('../cap/bin/lib/model-profiles.cjs').MODEL_PROFILES;
 const EXPECTED_AGENTS = Object.keys(MODEL_PROFILES);
 
 /**
  * Create a fake GSD install directory structure that mirrors what the installer
- * produces. gsd-tools.cjs lives at <configDir>/get-shit-done/bin/gsd-tools.cjs,
+ * produces. gsd-tools.cjs lives at <configDir>/cap/bin/gsd-tools.cjs,
  * so the agents dir is at <configDir>/agents/.
  *
  * We use --cwd to point at the project, and GSD_INSTALL_DIR env to override
@@ -55,13 +55,13 @@ describe('init commands: agents_installed field (#1371)', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-setup');
     fs.mkdirSync(phaseDir, { recursive: true });
 
-    // Create agents dir as sibling of get-shit-done/ (the installed layout)
+    // Create agents dir as sibling of cap/ (the installed layout)
     // gsd-tools.cjs resolves agents from GSD_INSTALL_DIR or __dirname/../../agents
-    const gsdInstallDir = path.resolve(__dirname, '..', 'get-shit-done', 'bin');
+    const gsdInstallDir = path.resolve(__dirname, '..', 'cap', 'bin');
     const configDir = path.resolve(gsdInstallDir, '..', '..');
     const agentsDir = path.join(configDir, 'agents');
 
-    // Agents already exist in the repo root /agents/ dir which is sibling to get-shit-done/
+    // Agents already exist in the repo root /agents/ dir which is sibling to cap/
     const result = runGsdTools('init execute-phase 1 --raw', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);
 
@@ -144,7 +144,7 @@ describe('validate health: agent installation check W010 (#1371)', () => {
   });
 
   test('health check reports healthy when agents are installed (repo layout)', () => {
-    // In the repo, agents/ exists as a sibling of get-shit-done/, so the
+    // In the repo, agents/ exists as a sibling of cap/, so the
     // health check should find them via the gsd-tools.cjs path resolution
     const result = runGsdTools('validate health --raw', tmpDir);
     assert.ok(result.success, `Command failed: ${result.error}`);

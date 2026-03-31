@@ -4,8 +4,8 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/gsd-build/get-shit-done.git
-cd get-shit-done
+git clone https://github.com/gsd-build/cap.git
+cd cap
 
 # Install dependencies
 npm install
@@ -177,7 +177,7 @@ npm run test:coverage
 
 ```
 bin/install.js          — Installer (multi-runtime)
-get-shit-done/
+cap/
   bin/lib/              — Core library modules (.cjs)
   workflows/            — Workflow definitions (.md)
   references/           — Reference documentation (.md)

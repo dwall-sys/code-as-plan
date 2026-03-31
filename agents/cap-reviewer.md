@@ -47,7 +47,7 @@ Before reviewing, load context:
 ```bash
 # Count tags per feature
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const groups = scanner.groupByFeature(tags);
 for (const [id, ftags] of Object.entries(groups)) {

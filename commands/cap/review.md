@@ -62,9 +62,9 @@ Store output as `test_output` and exit code as `test_exit_code`.
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 const s = session.loadSession(process.cwd());
 const tags = scanner.scanDirectory(process.cwd());
@@ -212,7 +212,7 @@ If both stages pass (or Stage 1 skipped with `stage2_only` and Stage 2 passes):
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const targetIds = {JSON.stringify(target_feature_ids)};
 for (const id of targetIds) {
   const result = fm.updateFeatureState(process.cwd(), id, 'shipped');
@@ -239,7 +239,7 @@ Update session:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:review',
   lastCommandTimestamp: new Date().toISOString(),

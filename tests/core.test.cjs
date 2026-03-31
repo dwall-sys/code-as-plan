@@ -30,7 +30,7 @@ const {
   findPhaseInternal,
   findProjectRoot,
   detectSubRepos,
-} = require('../get-shit-done/bin/lib/core.cjs');
+} = require('../cap/bin/lib/core.cjs');
 
 // ─── loadConfig ────────────────────────────────────────────────────────────────
 
@@ -996,17 +996,17 @@ describe('stale hook filter', () => {
 // ─── stale hook path regression (#1249) ──────────────────────────────────────
 
 describe('stale hook path', () => {
-  test('gsd-check-update.js checks get-shit-done/hooks/ not configDir/hooks/', () => {
+  test('gsd-check-update.js checks cap/hooks/ not configDir/hooks/', () => {
     const content = fs.readFileSync(
       path.join(__dirname, '..', 'hooks', 'gsd-check-update.js'), 'utf-8'
     );
     assert.ok(
-      content.includes("path.join(configDir, 'get-shit-done', 'hooks')"),
-      'stale hook check must look in configDir/get-shit-done/hooks/, not configDir/hooks/'
+      content.includes("path.join(configDir, 'cap', 'hooks')"),
+      'stale hook check must look in configDir/cap/hooks/, not configDir/hooks/'
     );
     assert.ok(
       !content.includes("path.join(configDir, 'hooks')") ||
-      content.indexOf("path.join(configDir, 'get-shit-done', 'hooks')") <
+      content.indexOf("path.join(configDir, 'cap', 'hooks')") <
       content.indexOf("path.join(configDir, 'hooks')") + 100, // allow the old pattern only if corrected version exists first
       'should not use the wrong hooks path'
     );
@@ -1016,7 +1016,7 @@ describe('stale hook path', () => {
 // ─── resolveWorktreeRoot ─────────────────────────────────────────────────────
 
 describe('resolveWorktreeRoot', () => {
-  const { resolveWorktreeRoot } = require('../get-shit-done/bin/lib/core.cjs');
+  const { resolveWorktreeRoot } = require('../cap/bin/lib/core.cjs');
   let tmpDir;
 
   beforeEach(() => {
@@ -1041,7 +1041,7 @@ describe('resolveWorktreeRoot', () => {
 // ─── resolveWorktreeRoot — linked worktree with .planning/ (#1315) ───────────
 
 describe('resolveWorktreeRoot with linked worktree .planning/', () => {
-  const { resolveWorktreeRoot } = require('../get-shit-done/bin/lib/core.cjs');
+  const { resolveWorktreeRoot } = require('../cap/bin/lib/core.cjs');
   const { execSync: execSyncLocal } = require('child_process');
   // On Windows CI, os.tmpdir() may return 8.3 short paths (RUNNER~1) while
   // git returns long paths (runneradmin). realpathSync.native resolves both.
@@ -1112,7 +1112,7 @@ describe('resolveWorktreeRoot with linked worktree .planning/', () => {
 // ─── monorepo worktree CWD preservation (#1283) ─────────────────────────────
 
 describe('monorepo worktree CWD preservation', () => {
-  const { resolveWorktreeRoot } = require('../get-shit-done/bin/lib/core.cjs');
+  const { resolveWorktreeRoot } = require('../cap/bin/lib/core.cjs');
   let tmpDir;
 
   beforeEach(() => {
@@ -1149,7 +1149,7 @@ describe('monorepo worktree CWD preservation', () => {
 // ─── withPlanningLock ────────────────────────────────────────────────────────
 
 describe('withPlanningLock', () => {
-  const { withPlanningLock, planningDir } = require('../get-shit-done/bin/lib/core.cjs');
+  const { withPlanningLock, planningDir } = require('../cap/bin/lib/core.cjs');
   let tmpDir;
 
   beforeEach(() => {

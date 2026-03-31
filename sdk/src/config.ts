@@ -1,7 +1,7 @@
 /**
  * Config reader — loads `.planning/config.json` and merges with defaults.
  *
- * Mirrors the default structure from `get-shit-done/bin/lib/config.cjs`
+ * Mirrors the default structure from `cap/bin/lib/config.cjs`
  * `buildNewProjectConfig()`.
  */
 

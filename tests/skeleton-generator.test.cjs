@@ -3,7 +3,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
-const { generateSkeletonPlan, applyNamingConvention, buildTreeString } = require('../get-shit-done/bin/lib/skeleton-generator.cjs');
+const { generateSkeletonPlan, applyNamingConvention, buildTreeString } = require('../cap/bin/lib/skeleton-generator.cjs');
 
 const defaultConventions = {
   moduleType: 'cjs',

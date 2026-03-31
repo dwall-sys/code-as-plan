@@ -36,7 +36,7 @@ import { sanitizePrompt } from './prompt-sanitizer.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const GSD_TEMPLATES_DIR = join(homedir(), '.claude', 'get-shit-done', 'templates');
+const GSD_TEMPLATES_DIR = join(homedir(), '.claude', 'cap', 'templates');
 const GSD_AGENTS_DIR = join(homedir(), '.claude', 'agents');
 
 const RESEARCH_TYPES = ['STACK', 'FEATURES', 'ARCHITECTURE', 'PITFALLS'] as const;
@@ -621,7 +621,7 @@ export class InitRunner {
   /**
    * Read a file from the GSD templates directory.
    * Tries sdk/prompts/{relativePath} first (headless versions), then
-   * falls back to GSD-1 originals (~/.claude/get-shit-done/).
+   * falls back to GSD-1 originals (~/.claude/cap/).
    */
   private async readGSDFile(relativePath: string): Promise<string> {
     // Try SDK prompts dir first (headless versions)

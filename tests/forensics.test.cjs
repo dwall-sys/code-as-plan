@@ -13,7 +13,7 @@ const os = require('os');
 
 const repoRoot = path.resolve(__dirname, '..');
 const commandPath = path.join(repoRoot, 'commands', 'gsd', 'forensics.md');
-const workflowPath = path.join(repoRoot, 'get-shit-done', 'workflows', 'forensics.md');
+const workflowPath = path.join(repoRoot, 'cap', 'workflows', 'forensics.md');
 
 describe('forensics command', () => {
   test('command file exists', () => {

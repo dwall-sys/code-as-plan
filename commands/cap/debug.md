@@ -41,7 +41,7 @@ ls .cap/debug/*.md 2>/dev/null | head -5
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const s = session.loadSession(process.cwd());
@@ -152,7 +152,7 @@ Update session:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   activeDebugSession: '{session_id}',
   lastCommand: '/cap:debug',
@@ -171,8 +171,8 @@ Identify relevant files from the active feature:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const s = session.loadSession(process.cwd());
 const featureMap = fm.readFeatureMap(process.cwd());
 const feature = s.activeFeature ? featureMap.features.find(f => f.id === s.activeFeature) : null;
@@ -272,7 +272,7 @@ Update debug session file with resolution (via Write tool).
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   activeDebugSession: null,
   lastCommand: '/cap:debug',

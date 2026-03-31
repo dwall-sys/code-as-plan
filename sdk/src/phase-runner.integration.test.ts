@@ -24,7 +24,7 @@ import { GSDEventType, PhaseStepType } from './types.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const GSD_TOOLS_PATH = join(homedir(), '.claude', 'get-shit-done', 'bin', 'gsd-tools.cjs');
+const GSD_TOOLS_PATH = join(homedir(), '.claude', 'cap', 'bin', 'gsd-tools.cjs');
 
 async function createTempPlanningDir(): Promise<string> {
   const tmpDir = await mkdtemp(join(tmpdir(), 'gsd-sdk-phase-int-'));

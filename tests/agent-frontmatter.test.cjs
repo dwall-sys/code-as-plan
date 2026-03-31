@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 
 const AGENTS_DIR = path.join(__dirname, '..', 'agents');
-const WORKFLOWS_DIR = path.join(__dirname, '..', 'get-shit-done', 'workflows');
+const WORKFLOWS_DIR = path.join(__dirname, '..', 'cap', 'workflows');
 const COMMANDS_DIR = path.join(__dirname, '..', 'commands', 'gsd');
 
 const ALL_AGENTS = fs.readdirSync(AGENTS_DIR)
@@ -373,7 +373,7 @@ describe('DISCUSS: discussion log generation', () => {
   });
 
   test('discussion-log template exists', () => {
-    const templatePath = path.join(__dirname, '..', 'get-shit-done', 'templates', 'discussion-log.md');
+    const templatePath = path.join(__dirname, '..', 'cap', 'templates', 'discussion-log.md');
     assert.ok(
       fs.existsSync(templatePath),
       'discussion-log.md template must exist'

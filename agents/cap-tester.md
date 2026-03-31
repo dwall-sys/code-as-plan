@@ -163,7 +163,7 @@ After tests are written, scan implementation files for functions/methods without
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const featureTags = tags.filter(t => t.type === 'feature');
 // List all @cap-feature tagged functions

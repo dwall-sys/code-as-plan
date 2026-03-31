@@ -7,7 +7,7 @@
 始终使用 `gsd-tools.cjs commit` 处理 `.planning/` 文件 — 它会自动处理 `commit_docs` 和 gitignore 检查：
 
 ```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs({scope}): {description}" --files .planning/STATE.md .planning/ROADMAP.md
+node "$HOME/.claude/cap/bin/gsd-tools.cjs" commit "docs({scope}): {description}" --files .planning/STATE.md .planning/ROADMAP.md
 ```
 
 如果 `commit_docs` 为 `false` 或 `.planning/` 被 gitignore，CLI 会返回 `skipped`（带原因）。无需手动条件检查。
@@ -17,7 +17,7 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs({scope}): {des
 将 `.planning/` 文件变更合并到上次提交：
 
 ```bash
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "" --files .planning/codebase/*.md --amend
+node "$HOME/.claude/cap/bin/gsd-tools.cjs" commit "" --files .planning/codebase/*.md --amend
 ```
 
 ## 提交消息模式

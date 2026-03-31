@@ -24,7 +24,7 @@ const {
   getStaleLibraries,
   detectWorkspacePackages,
   batchFetchDocs,
-} = require('../get-shit-done/bin/lib/cap-stack-docs.cjs');
+} = require('../cap/bin/lib/cap-stack-docs.cjs');
 
 let tmpDir;
 
@@ -276,7 +276,7 @@ describe('resolveLibrary', () => {
   it('returns null when ctx7 is not available', () => {
     // This test verifies graceful failure when npx ctx7 is not installed
     // In CI environments without ctx7, this should return null, not throw
-    const result = require('../get-shit-done/bin/lib/cap-stack-docs.cjs').resolveLibrary(
+    const result = require('../cap/bin/lib/cap-stack-docs.cjs').resolveLibrary(
       'definitely-not-a-real-library-xyz-123'
     );
     // Either null (library not found) or an object (if ctx7 happens to be available)
@@ -286,7 +286,7 @@ describe('resolveLibrary', () => {
 
 describe('fetchDocs', () => {
   it('returns error result when ctx7 fetch fails', () => {
-    const result = require('../get-shit-done/bin/lib/cap-stack-docs.cjs').fetchDocs(
+    const result = require('../cap/bin/lib/cap-stack-docs.cjs').fetchDocs(
       tmpDir,
       '/fake/nonexistent-library-xyz',
       'test query'

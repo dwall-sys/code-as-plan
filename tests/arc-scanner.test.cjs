@@ -14,7 +14,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { createTempProject, cleanup } = require('./helpers.cjs');
-const arcScanner = require('../get-shit-done/bin/lib/arc-scanner.cjs');
+const arcScanner = require('../cap/bin/lib/arc-scanner.cjs');
 
 // ─── scanFile — basic extraction ─────────────────────────────────────────────
 

@@ -29,7 +29,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const { scanForInjection, INJECTION_PATTERNS } = require('../get-shit-done/bin/lib/security.cjs');
+const { scanForInjection, INJECTION_PATTERNS } = require('../cap/bin/lib/security.cjs');
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -39,8 +39,8 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const SCAN_DIRS = [
   'agents',
   'commands',
-  'get-shit-done/workflows',
-  'get-shit-done/bin/lib',
+  'cap/workflows',
+  'cap/bin/lib',
   'hooks',
 ];
 
@@ -49,7 +49,7 @@ const SCAN_EXTS = new Set(['.md', '.cjs', '.js', '.json']);
 
 // Files that legitimately reference injection patterns (e.g., security docs, this test)
 const ALLOWLIST = new Set([
-  'get-shit-done/bin/lib/security.cjs',        // The security module itself
+  'cap/bin/lib/security.cjs',        // The security module itself
   'hooks/gsd-prompt-guard.js',                  // The prompt guard hook
   'tests/security.test.cjs',                    // Security tests
   'tests/prompt-injection-scan.test.cjs',       // This file

@@ -45,7 +45,7 @@ Check `$ARGUMENTS` for:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const s = session.loadSession(process.cwd());
 const duration = s.startedAt ? Math.round((Date.now() - new Date(s.startedAt).getTime()) / 60000) : null;
 console.log(JSON.stringify({
@@ -68,7 +68,7 @@ Store as `session_state`.
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 const status = fm.getStatus(featureMap);
 const byState = { planned: 0, prototyped: 0, tested: 0, shipped: 0 };
@@ -102,7 +102,7 @@ Store as `fm_status`. If `feature_filter` is set, filter `fm_status.features` to
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const tags = scanner.scanDirectory(process.cwd());

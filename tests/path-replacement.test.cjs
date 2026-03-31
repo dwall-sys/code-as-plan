@@ -104,7 +104,7 @@ describe('source .md files have no quoted-tilde shell patterns', () => {
     return results;
   }
 
-  const dirsToCheck = ['commands', 'get-shit-done', 'agents'].map(d => path.join(repoRoot, d));
+  const dirsToCheck = ['commands', 'cap', 'agents'].map(d => path.join(repoRoot, d));
   const mdFiles = dirsToCheck.flatMap(collectMdFiles);
 
   test('source .md files exist', () => {
@@ -146,7 +146,7 @@ describe('installed .md files contain no resolved absolute paths', () => {
     return results;
   }
 
-  const dirsToCheck = ['commands', 'get-shit-done', 'agents'].map(d => path.join(repoRoot, d));
+  const dirsToCheck = ['commands', 'cap', 'agents'].map(d => path.join(repoRoot, d));
   const mdFiles = dirsToCheck.flatMap(collectMdFiles);
 
   test('after replacement, no .md file contains os.homedir()', () => {

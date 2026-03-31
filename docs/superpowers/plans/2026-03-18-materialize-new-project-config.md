@@ -61,9 +61,9 @@ Full config that should exist from the start:
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `get-shit-done/bin/lib/config.cjs` | Modify | Add `buildNewProjectConfig()` + `cmdConfigNewProject()` |
-| `get-shit-done/bin/gsd-tools.cjs` | Modify | Register `config-new-project` case + update usage string |
-| `get-shit-done/workflows/new-project.md` | Modify | Steps 2a + 5: replace inline JSON write with CLI call |
+| `cap/bin/lib/config.cjs` | Modify | Add `buildNewProjectConfig()` + `cmdConfigNewProject()` |
+| `cap/bin/gsd-tools.cjs` | Modify | Register `config-new-project` case + update usage string |
+| `cap/workflows/new-project.md` | Modify | Steps 2a + 5: replace inline JSON write with CLI call |
 | `tests/config.test.cjs` | Modify | Add `config-new-project` test suite |
 
 ---
@@ -72,7 +72,7 @@ Full config that should exist from the start:
 
 **Files:**
 
-- Modify: `get-shit-done/bin/lib/config.cjs`
+- Modify: `cap/bin/lib/config.cjs`
 
 - [ ] **Step 1.1: Write the failing tests first**
 
@@ -227,7 +227,7 @@ describe('config-new-project command', () => {
 - [ ] **Step 1.2: Run failing tests to confirm they fail**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
+cd /Users/diego/Dev/cap
 node --test tests/config.test.cjs 2>&1 | grep -E "config-new-project|FAIL|Error"
 ```
 
@@ -235,7 +235,7 @@ Expected: All `config-new-project` tests fail with "config-new-project is not a 
 
 - [ ] **Step 1.3: Implement `buildNewProjectConfig` and `cmdConfigNewProject` in config.cjs**
 
-In `get-shit-done/bin/lib/config.cjs`, add the following after the `validateKnownConfigKeyPath` function (around line 35) and before `ensureConfigFile`:
+In `cap/bin/lib/config.cjs`, add the following after the `validateKnownConfigKeyPath` function (around line 35) and before `ensureConfigFile`:
 
 ```js
 /**
@@ -367,7 +367,7 @@ Also add `cmdConfigNewProject` to the `module.exports` at the bottom of `config.
 - [ ] **Step 1.4: Run tests to verify they pass**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
+cd /Users/diego/Dev/cap
 node --test tests/config.test.cjs 2>&1 | tail -20
 ```
 
@@ -376,8 +376,8 @@ Expected: All `config-new-project` tests pass. Existing tests still pass.
 - [ ] **Step 1.5: Commit**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
-git add get-shit-done/bin/lib/config.cjs tests/config.test.cjs
+cd /Users/diego/Dev/cap
+git add cap/bin/lib/config.cjs tests/config.test.cjs
 git commit -m "feat: add config-new-project command for full config materialization"
 ```
 
@@ -387,7 +387,7 @@ git commit -m "feat: add config-new-project command for full config materializat
 
 **Files:**
 
-- Modify: `get-shit-done/bin/gsd-tools.cjs`
+- Modify: `cap/bin/gsd-tools.cjs`
 
 - [ ] **Step 2.1: Add the case to the switch in gsd-tools.cjs**
 
@@ -408,8 +408,8 @@ New: `...config-ensure-section, config-new-project, init`
 - [ ] **Step 2.2: Smoke-test the CLI registration**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
-node get-shit-done/bin/gsd-tools.cjs config-new-project '{"mode":"interactive","granularity":"standard"}' --cwd /tmp/gsd-smoke-$(date +%s)
+cd /Users/diego/Dev/cap
+node cap/bin/gsd-tools.cjs config-new-project '{"mode":"interactive","granularity":"standard"}' --cwd /tmp/gsd-smoke-$(date +%s)
 ```
 
 Expected: outputs `{"created":true,"path":".planning/config.json"}` (or similar).
@@ -419,7 +419,7 @@ Clean up: `rm -rf /tmp/gsd-smoke-*`
 - [ ] **Step 2.3: Run full test suite**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
+cd /Users/diego/Dev/cap
 node --test tests/config.test.cjs 2>&1 | tail -10
 ```
 
@@ -428,8 +428,8 @@ Expected: All pass.
 - [ ] **Step 2.4: Commit**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
-git add get-shit-done/bin/gsd-tools.cjs
+cd /Users/diego/Dev/cap
+git add cap/bin/gsd-tools.cjs
 git commit -m "feat: register config-new-project in gsd-tools CLI router"
 ```
 
@@ -439,7 +439,7 @@ git commit -m "feat: register config-new-project in gsd-tools CLI router"
 
 **Files:**
 
-- Modify: `get-shit-done/workflows/new-project.md`
+- Modify: `cap/workflows/new-project.md`
 
 This is the core change. Two places need updating:
 
@@ -470,7 +470,7 @@ Create `.planning/config.json` using the CLI (fills in all defaults automaticall
 
 ```bash
 mkdir -p .planning
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-new-project "$(cat <<'CHOICES'
+node "$HOME/.claude/cap/bin/gsd-tools.cjs" config-new-project "$(cat <<'CHOICES'
 {
   "mode": "yolo",
   "granularity": "[selected: coarse|standard|fine]",
@@ -516,7 +516,7 @@ Create `.planning/config.json` using the CLI (fills in all defaults automaticall
 
 ```bash
 mkdir -p .planning
-node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" config-new-project "$(cat <<'CHOICES'
+node "$HOME/.claude/cap/bin/gsd-tools.cjs" config-new-project "$(cat <<'CHOICES'
 {
   "mode": "[selected: yolo|interactive]",
   "granularity": "[selected: coarse|standard|fine]",
@@ -541,8 +541,8 @@ The command merges your selections with all runtime defaults (`search_gitignored
 - [ ] **Step 3.3: Verify the workflow file reads correctly**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
-grep -n "config-new-project\|config\.json\|CHOICES" get-shit-done/workflows/new-project.md
+cd /Users/diego/Dev/cap
+grep -n "config-new-project\|config\.json\|CHOICES" cap/workflows/new-project.md
 ```
 
 Expected: 2 occurrences of `config-new-project` (one per step), no more inline JSON templates for config creation.
@@ -550,8 +550,8 @@ Expected: 2 occurrences of `config-new-project` (one per step), no more inline J
 - [ ] **Step 3.4: Commit**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
-git add get-shit-done/workflows/new-project.md
+cd /Users/diego/Dev/cap
+git add cap/workflows/new-project.md
 git commit -m "feat: use config-new-project in new-project workflow for full config materialization"
 ```
 
@@ -562,7 +562,7 @@ git commit -m "feat: use config-new-project in new-project workflow for full con
 - [ ] **Step 4.1: Run the full test suite**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
+cd /Users/diego/Dev/cap
 node --test tests/ 2>&1 | tail -30
 ```
 
@@ -578,10 +578,10 @@ TMP=$(mktemp -d)
 cd "$TMP"
 
 # Step 1 simulation: what init new-project returns
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs init new-project --cwd "$TMP"
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs init new-project --cwd "$TMP"
 
 # Step 5 simulation: create full config
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs config-new-project '{
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs config-new-project '{
   "mode": "interactive",
   "granularity": "standard",
   "parallelization": true,
@@ -611,11 +611,11 @@ Expected output: a config.json with `mode`, `granularity`, `model_profile`, `com
 TMP=$(mktemp -d)
 CHOICES='{"mode":"yolo","granularity":"coarse"}'
 
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs config-new-project "$CHOICES" --cwd "$TMP"
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs config-new-project "$CHOICES" --cwd "$TMP"
 FIRST=$(cat "$TMP/.planning/config.json")
 
 # Second call should be no-op
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs config-new-project "$CHOICES" --cwd "$TMP"
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs config-new-project "$CHOICES" --cwd "$TMP"
 SECOND=$(cat "$TMP/.planning/config.json")
 
 [ "$FIRST" = "$SECOND" ] && echo "IDEMPOTENT: OK" || echo "IDEMPOTENT: FAIL"
@@ -628,17 +628,17 @@ Expected: `IDEMPOTENT: OK`
 
 ```bash
 TMP=$(mktemp -d)
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs config-new-project '{
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs config-new-project '{
   "mode":"yolo","granularity":"standard","parallelization":true,"commit_docs":true,
   "model_profile":"balanced",
   "workflow":{"research":true,"plan_check":false,"verifier":true,"nyquist_validation":true}
 }' --cwd "$TMP"
 
 # loadConfig should correctly read plan_check (nested as workflow.plan_check)
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs config-get workflow.plan_check --cwd "$TMP"
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs config-get workflow.plan_check --cwd "$TMP"
 # Expected: false
 
-node /Users/diego/Dev/get-shit-done/get-shit-done/bin/gsd-tools.cjs config-get git.branching_strategy --cwd "$TMP"
+node /Users/diego/Dev/cap/cap/bin/gsd-tools.cjs config-get git.branching_strategy --cwd "$TMP"
 # Expected: "none"
 
 rm -rf "$TMP"
@@ -647,7 +647,7 @@ rm -rf "$TMP"
 - [ ] **Step 4.5: Final full test suite + commit**
 
 ```bash
-cd /Users/diego/Dev/get-shit-done
+cd /Users/diego/Dev/cap
 node --test tests/ 2>&1 | grep -E "pass|fail|error" | tail -5
 ```
 

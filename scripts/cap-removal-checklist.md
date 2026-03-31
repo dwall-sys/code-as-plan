@@ -116,7 +116,7 @@ These planning artifacts shall no longer be created or referenced anywhere in th
 
 ### Files to grep and update:
 - [ ] `CLAUDE.md` -- remove all references to gsd:* commands and GSD workflow
-- [ ] `get-shit-done/references/arc-standard.md` -- update @gsd-* references to @cap-* or archive
+- [ ] `cap/references/arc-standard.md` -- update @gsd-* references to @cap-* or archive
 - [ ] Any README or documentation referencing GSD commands
 
 ---
@@ -149,7 +149,7 @@ Fallback name if `cap` is taken on npm: `code-as-plan`
 
 - [ ] Update branding strings from "GSD" / "Get Shit Done" to "CAP" / "Code As Plan"
 - [ ] Update command references from `/gsd:*` to `/cap:*`
-- [ ] Update binary name from `get-shit-done-cc` to `cap`
+- [ ] Update binary name from `cap-cc` to `cap`
 - [ ] Update repository URLs if repo is renamed
 
 ### npm files array update (AC-99)
@@ -159,7 +159,7 @@ Fallback name if `cap` is taken on npm: `code-as-plan`
   "files": [
     "bin",
     "commands/cap",
-    "get-shit-done",
+    "cap",
     "agents",
     "hooks/dist",
     "scripts"
@@ -199,4 +199,4 @@ After executing the removal:
 - This removal should be executed as a SINGLE atomic operation (one commit)
 - All tests must be updated to reference CAP instead of GSD before removal
 - The `.planning/` directory contents are NOT part of the distributed package and can remain as historical reference
-- The `get-shit-done/` directory name is a legacy artifact that may be renamed in a future pass (low priority)
+- The `cap/` directory name is a legacy artifact that may be renamed in a future pass (low priority)

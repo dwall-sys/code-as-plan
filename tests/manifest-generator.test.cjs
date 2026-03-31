@@ -19,7 +19,7 @@ const {
   formatManifestMarkdown,
   scanExports,
   extractWorkspaceDeps,
-} = require('../get-shit-done/bin/lib/manifest-generator.cjs');
+} = require('../cap/bin/lib/manifest-generator.cjs');
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -20,7 +20,7 @@ const {
   resolveWorkspaceGlobs,
   scanMonorepo,
   groupByPackage,
-} = require('../get-shit-done/bin/lib/cap-tag-scanner.cjs');
+} = require('../cap/bin/lib/cap-tag-scanner.cjs');
 
 let tmpDir;
 
@@ -717,7 +717,7 @@ describe('groupByPackage', () => {
 
 describe('zero-dep compliance', () => {
   it('cap-tag-scanner.cjs only requires node: built-ins and local modules', () => {
-    const scannerPath = path.join(__dirname, '..', 'get-shit-done', 'bin', 'lib', 'cap-tag-scanner.cjs');
+    const scannerPath = path.join(__dirname, '..', 'cap', 'bin', 'lib', 'cap-tag-scanner.cjs');
     const content = fs.readFileSync(scannerPath, 'utf8');
 
     // Extract all require() calls

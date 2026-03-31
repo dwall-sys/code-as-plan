@@ -4,7 +4,7 @@
  * Extracts YAML frontmatter, XML task bodies, and markdown sections
  * (<objective>, <execution_context>, <context>) from plan files.
  *
- * Ported from get-shit-done/bin/lib/frontmatter.cjs with TypeScript types.
+ * Ported from cap/bin/lib/frontmatter.cjs with TypeScript types.
  */
 
 import { readFile } from 'node:fs/promises';

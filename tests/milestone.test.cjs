@@ -709,7 +709,7 @@ describe('requirements mark-complete command', () => {
 
 describe('new-milestone workflow verification gate', () => {
   test('new-milestone workflow has verification step before writing PROJECT.md', () => {
-    const workflowPath = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'new-milestone.md');
+    const workflowPath = path.join(__dirname, '..', 'cap', 'workflows', 'new-milestone.md');
     const content = fs.readFileSync(workflowPath, 'utf8');
 
     // Must have a verification step between goal gathering and PROJECT.md writing
@@ -730,7 +730,7 @@ describe('new-milestone workflow verification gate', () => {
   });
 
   test('verification step uses AskUserQuestion with adjust loop', () => {
-    const workflowPath = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'new-milestone.md');
+    const workflowPath = path.join(__dirname, '..', 'cap', 'workflows', 'new-milestone.md');
     const content = fs.readFileSync(workflowPath, 'utf8');
 
     // Extract the section between 3.5 and 4

@@ -48,8 +48,8 @@ Check `$ARGUMENTS` for:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 const s = session.loadSession(process.cwd());
 console.log(JSON.stringify({
@@ -198,7 +198,7 @@ If all tests pass and `red_only` is false:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const targetIds = {JSON.stringify(target_feature_ids)};
 for (const id of targetIds) {
   const result = fm.updateFeatureState(process.cwd(), id, 'tested');
@@ -211,7 +211,7 @@ Update session:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:test',
   lastCommandTimestamp: new Date().toISOString(),

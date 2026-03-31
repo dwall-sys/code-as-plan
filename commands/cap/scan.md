@@ -114,7 +114,7 @@ If monorepo detected, scan each workspace package independently AND the root:
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -189,8 +189,8 @@ Same as base scan -- run orphan detection against FEATURE-MAP.md.
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const updated = fm.enrichFromTags(process.cwd(), tags);
 console.log(JSON.stringify({
@@ -238,7 +238,7 @@ Feature breakdown:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:scan',
   lastCommandTimestamp: new Date().toISOString()

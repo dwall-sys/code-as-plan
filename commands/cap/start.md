@@ -46,7 +46,7 @@ Log: "First run detected. Initializing .cap/ directory..."
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.initCapDirectory(process.cwd());
 console.log('initialized');
 "
@@ -62,7 +62,7 @@ If FEATURE-MAP.md does not exist, generate the template:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const template = fm.generateTemplate();
@@ -137,7 +137,7 @@ Store as `project_info`.
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const s = session.loadSession(process.cwd());
 console.log(JSON.stringify(s));
 "
@@ -149,7 +149,7 @@ Store as `session`.
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 const status = fm.getStatus(featureMap);
 console.log(JSON.stringify({
@@ -211,7 +211,7 @@ Use AskUserQuestion:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.startSession(process.cwd(), '{selected_feature_id}', 'start');
 console.log('Session updated');
 "

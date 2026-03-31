@@ -1257,7 +1257,7 @@ describe('commit command', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('websearch command', () => {
-  const { cmdWebsearch } = require('../get-shit-done/bin/lib/commands.cjs');
+  const { cmdWebsearch } = require('../cap/bin/lib/commands.cjs');
   let origFetch;
   let origApiKey;
   let origWriteSync;

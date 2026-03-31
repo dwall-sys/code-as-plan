@@ -322,7 +322,7 @@ describe('GSDTools', () => {
 
   describe('resolveGsdToolsPath()', () => {
     it('returns repo-local path when it exists', async () => {
-      const localBinDir = join(tmpDir, '.claude', 'get-shit-done', 'bin');
+      const localBinDir = join(tmpDir, '.claude', 'cap', 'bin');
       await mkdir(localBinDir, { recursive: true });
       await writeFile(join(localBinDir, 'gsd-tools.cjs'), '// stub');
 
@@ -333,12 +333,12 @@ describe('GSDTools', () => {
     it('falls back to global path when repo-local does not exist', () => {
       const result = resolveGsdToolsPath(tmpDir);
       expect(result).toBe(
-        join(homedir(), '.claude', 'get-shit-done', 'bin', 'gsd-tools.cjs'),
+        join(homedir(), '.claude', 'cap', 'bin', 'gsd-tools.cjs'),
       );
     });
 
     it('constructor uses repo-local path when available', async () => {
-      const localBinDir = join(tmpDir, '.claude', 'get-shit-done', 'bin');
+      const localBinDir = join(tmpDir, '.claude', 'cap', 'bin');
       await mkdir(localBinDir, { recursive: true });
       const scriptPath = join(localBinDir, 'gsd-tools.cjs');
       await writeFile(

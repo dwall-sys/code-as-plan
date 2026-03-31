@@ -289,7 +289,7 @@ export class GSDTools {
  * Probe order: repo-local → global home directory.
  */
 export function resolveGsdToolsPath(projectDir: string): string {
-  const localPath = join(projectDir, '.claude', 'get-shit-done', 'bin', 'gsd-tools.cjs');
+  const localPath = join(projectDir, '.claude', 'cap', 'bin', 'gsd-tools.cjs');
   if (existsSync(localPath)) return localPath;
-  return join(homedir(), '.claude', 'get-shit-done', 'bin', 'gsd-tools.cjs');
+  return join(homedir(), '.claude', 'cap', 'bin', 'gsd-tools.cjs');
 }

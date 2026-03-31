@@ -53,7 +53,7 @@ Read FEATURE-MAP.md:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 console.log(JSON.stringify({
   featureCount: featureMap.features.length,
@@ -69,7 +69,7 @@ If `resume_mode`:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const s = session.loadSession(process.cwd());
 console.log(JSON.stringify(s));
 "
@@ -197,7 +197,7 @@ Use AskUserQuestion:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 const newFeatures = {JSON.stringify(parsed_features)};
 const updated = fm.addFeatures(featureMap, newFeatures);
@@ -210,7 +210,7 @@ console.log('Written ' + newFeatures.length + ' features to FEATURE-MAP.md');
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:brainstorm',
   lastCommandTimestamp: new Date().toISOString(),

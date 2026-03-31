@@ -38,7 +38,7 @@ try {
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const sdkPromptsDir = join(__dirname, '..', 'prompts');
-const GSD_TOOLS_PATH = join(homedir(), '.claude', 'get-shit-done', 'bin', 'gsd-tools.cjs');
+const GSD_TOOLS_PATH = join(homedir(), '.claude', 'cap', 'bin', 'gsd-tools.cjs');
 
 // ─── Lifecycle step ordering for monotonicity check ──────────────────────────
 

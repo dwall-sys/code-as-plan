@@ -19,7 +19,7 @@ const {
   expandWorkspaceGlobs,
   resolvePnpmWorkspaces,
   resolveNxWorkspaces,
-} = require('../get-shit-done/bin/lib/workspace-detector.cjs');
+} = require('../cap/bin/lib/workspace-detector.cjs');
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

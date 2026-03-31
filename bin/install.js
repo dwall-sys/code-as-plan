@@ -2326,13 +2326,13 @@ function installCodexConfig(targetDir, agentsSrc) {
   const agents = [];
 
   // Compute the Codex CAP install path (absolute, so subagents with empty $HOME work — #820)
-  const codexCapPath = `${path.resolve(targetDir, 'get-shit-done').replace(/\\/g, '/')}/`;
+  const codexCapPath = `${path.resolve(targetDir, 'cap').replace(/\\/g, '/')}/`;
 
   for (const file of agentEntries) {
     let content = fs.readFileSync(path.join(agentsSrc, file), 'utf8');
-    // Replace full .claude/get-shit-done prefix so path resolves to codex CAP install
-    content = content.replace(/~\/\.claude\/get-shit-done\//g, codexCapPath);
-    content = content.replace(/\$HOME\/\.claude\/get-shit-done\//g, codexCapPath);
+    // Replace full .claude/cap prefix so path resolves to codex CAP install
+    content = content.replace(/~\/\.claude\/cap\//g, codexCapPath);
+    content = content.replace(/\$HOME\/\.claude\/cap\//g, codexCapPath);
     const { frontmatter } = extractFrontmatterAndBody(content);
     const name = extractFrontmatterField(frontmatter, 'name') || file.replace('.md', '');
     const description = extractFrontmatterField(frontmatter, 'description') || '';
@@ -3489,12 +3489,12 @@ function uninstall(isGlobal, runtime = 'claude') {
     }
   }
 
-  // 2. Remove get-shit-done directory
-  const capDir = path.join(targetDir, 'get-shit-done');
+  // 2. Remove cap directory
+  const capDir = path.join(targetDir, 'cap');
   if (fs.existsSync(capDir)) {
     fs.rmSync(capDir, { recursive: true });
     removedCount++;
-    console.log(`  ${green}✓${reset} Removed get-shit-done/`);
+    console.log(`  ${green}✓${reset} Removed cap/`);
   }
 
   // 3. Remove CAP agents (gsd-*.md files only)
@@ -3659,7 +3659,7 @@ function uninstall(isGlobal, runtime = 'claude') {
             if (config.permission[permType]) {
               const keys = Object.keys(config.permission[permType]);
               for (const key of keys) {
-                if (key.includes('get-shit-done')) {
+                if (key.includes('cap')) {
                   delete config.permission[permType][key];
                   modified = true;
                 }
@@ -3759,7 +3759,7 @@ function parseJsonc(content) {
 
 /**
  * Configure OpenCode permissions to allow reading CAP reference docs
- * This prevents permission prompts when CAP accesses the get-shit-done directory
+ * This prevents permission prompts when CAP accesses the cap directory
  * @param {boolean} isGlobal - Whether this is a global or local install
  */
 function configureOpencodePermissions(isGlobal = true) {
@@ -3798,8 +3798,8 @@ function configureOpencodePermissions(isGlobal = true) {
   // Use ~ shorthand if it's in the default location, otherwise use full path
   const defaultConfigDir = path.join(os.homedir(), '.config', 'opencode');
   const capPath = opencodeConfigDir === defaultConfigDir
-    ? '~/.config/opencode/get-shit-done/*'
-    : `${opencodeConfigDir.replace(/\\/g, '/')}/get-shit-done/*`;
+    ? '~/.config/opencode/cap/*'
+    : `${opencodeConfigDir.replace(/\\/g, '/')}/cap/*`;
   
   let modified = false;
 
@@ -3913,7 +3913,7 @@ function writeManifest(configDir, runtime = 'claude') {
   const isAntigravity = runtime === 'antigravity';
   const isCursor = runtime === 'cursor';
   const isWindsurf = runtime === 'windsurf';
-  const capDir = path.join(configDir, 'get-shit-done');
+  const capDir = path.join(configDir, 'cap');
   const commandsDir = path.join(configDir, 'commands', 'gsd');
   const opencodeCommandDir = path.join(configDir, 'command');
   const codexSkillsDir = path.join(configDir, 'skills');
@@ -3922,7 +3922,7 @@ function writeManifest(configDir, runtime = 'claude') {
 
   const capHashes = generateManifest(capDir);
   for (const [rel, hash] of Object.entries(capHashes)) {
-    manifest.files['get-shit-done/' + rel] = hash;
+    manifest.files['cap/' + rel] = hash;
   }
   if (!isOpencode && !isCodex && !isCopilot && !isAntigravity && !isCursor && !isWindsurf && fs.existsSync(commandsDir)) {
     const cmdHashes = generateManifest(commandsDir);
@@ -4065,7 +4065,7 @@ function install(isGlobal, runtime = 'claude') {
     : targetDir.replace(process.cwd(), '.');
 
   // Path prefix for file references in markdown content (e.g. gsd-tools.cjs).
-  // Replaces $HOME/.claude/ or ~/.claude/ so the result is <pathPrefix>get-shit-done/bin/...
+  // Replaces $HOME/.claude/ or ~/.claude/ so the result is <pathPrefix>cap/bin/...
   // For global installs: use $HOME/ so paths expand correctly inside double-quoted
   // shell commands (~ does NOT expand inside double quotes, causing MODULE_NOT_FOUND).
   // For local installs: use resolved absolute path (may be outside $HOME).
@@ -4185,14 +4185,14 @@ function install(isGlobal, runtime = 'claude') {
     }
   }
 
-  // Copy get-shit-done skill with path replacement
-  const skillSrc = path.join(src, 'get-shit-done');
-  const skillDest = path.join(targetDir, 'get-shit-done');
+  // Copy cap skill with path replacement
+  const skillSrc = path.join(src, 'cap');
+  const skillDest = path.join(targetDir, 'cap');
   copyWithPathReplacement(skillSrc, skillDest, pathPrefix, runtime, false, isGlobal);
-  if (verifyInstalled(skillDest, 'get-shit-done')) {
-    console.log(`  ${green}✓${reset} Installed get-shit-done`);
+  if (verifyInstalled(skillDest, 'cap')) {
+    console.log(`  ${green}✓${reset} Installed cap`);
   } else {
-    failures.push('get-shit-done');
+    failures.push('cap');
   }
 
   // Copy agents to agents directory
@@ -4252,7 +4252,7 @@ function install(isGlobal, runtime = 'claude') {
 
   // Copy CHANGELOG.md
   const changelogSrc = path.join(src, 'CHANGELOG.md');
-  const changelogDest = path.join(targetDir, 'get-shit-done', 'CHANGELOG.md');
+  const changelogDest = path.join(targetDir, 'cap', 'CHANGELOG.md');
   if (fs.existsSync(changelogSrc)) {
     fs.copyFileSync(changelogSrc, changelogDest);
     if (verifyFileInstalled(changelogDest, 'CHANGELOG.md')) {
@@ -4263,7 +4263,7 @@ function install(isGlobal, runtime = 'claude') {
   }
 
   // Write VERSION file
-  const versionDest = path.join(targetDir, 'get-shit-done', 'VERSION');
+  const versionDest = path.join(targetDir, 'cap', 'VERSION');
   fs.writeFileSync(versionDest, pkg.version);
   if (verifyFileInstalled(versionDest, 'VERSION')) {
     console.log(`  ${green}✓${reset} Wrote VERSION (${pkg.version})`);
@@ -4314,7 +4314,7 @@ function install(isGlobal, runtime = 'claude') {
   }
 
   // Clear stale update cache so next session re-evaluates hook versions
-  // targetDir is e.g. ~/.claude/get-shit-done/, parent is the config dir
+  // targetDir is e.g. ~/.claude/cap/, parent is the config dir
   const updateCacheFile = path.join(path.dirname(targetDir), 'cache', 'gsd-update-check.json');
   try { fs.unlinkSync(updateCacheFile); } catch (e) { /* cache may not exist yet */ }
 
@@ -4394,7 +4394,7 @@ function install(isGlobal, runtime = 'claude') {
       configContent = setManagedCodexHooksOwnership(codexHooksFeature.content, codexHooksFeature.ownership);
 
       // Add SessionStart hook for update checking
-      const updateCheckScript = path.resolve(targetDir, 'get-shit-done', 'hooks', 'gsd-update-check.js').replace(/\\/g, '/');
+      const updateCheckScript = path.resolve(targetDir, 'cap', 'hooks', 'gsd-update-check.js').replace(/\\/g, '/');
       const hookBlock =
         `${eol}# CAP Hooks${eol}` +
         `[[hooks]]${eol}` +
@@ -4416,7 +4416,7 @@ function install(isGlobal, runtime = 'claude') {
 
   if (isCopilot) {
     // Generate copilot-instructions.md
-    const templatePath = path.join(targetDir, 'get-shit-done', 'templates', 'copilot-instructions.md');
+    const templatePath = path.join(targetDir, 'cap', 'templates', 'copilot-instructions.md');
     const instructionsPath = path.join(targetDir, 'copilot-instructions.md');
     if (fs.existsSync(templatePath)) {
       const template = fs.readFileSync(templatePath, 'utf8');

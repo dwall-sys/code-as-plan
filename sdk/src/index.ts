@@ -261,7 +261,7 @@ export class GSD {
   private async loadAgentDefinition(): Promise<string | undefined> {
     const paths = [
       // Repo-local GSD installation
-      join(this.projectDir, '.claude', 'get-shit-done', 'agents', 'gsd-executor.md'),
+      join(this.projectDir, '.claude', 'cap', 'agents', 'gsd-executor.md'),
       // Repo-local agents directory
       join(this.projectDir, '.claude', 'agents', 'gsd-executor.md'),
       // Global home directory

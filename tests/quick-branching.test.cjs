@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 describe('quick workflow: branching support', () => {
-  const workflowPath = path.join(__dirname, '..', 'get-shit-done', 'workflows', 'quick.md');
+  const workflowPath = path.join(__dirname, '..', 'cap', 'workflows', 'quick.md');
   let content;
 
   test('workflow file exists', () => {

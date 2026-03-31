@@ -61,8 +61,8 @@ Log: "cap:prototype | mode: {mode} | features: {feature_filter or 'all'} | inter
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 const featureMap = fm.readFeatureMap(process.cwd());
 const s = session.loadSession(process.cwd());
 console.log(JSON.stringify({
@@ -143,7 +143,7 @@ conventions.hasPrettier = fs.existsSync(path.join(cwd, '.prettierrc'));
 conventions.hasTsconfig = fs.existsSync(path.join(cwd, 'tsconfig.json'));
 
 // Detect naming patterns from existing files
-const entries = fs.readdirSync(path.join(cwd, 'get-shit-done/bin/lib')).filter(f => f.endsWith('.cjs'));
+const entries = fs.readdirSync(path.join(cwd, 'cap/bin/lib')).filter(f => f.endsWith('.cjs'));
 conventions.namingPattern = entries.length > 0 ? 'kebab-case.cjs' : 'unknown';
 
 console.log(JSON.stringify(conventions));
@@ -221,7 +221,7 @@ If `mode == "PROTOTYPE"`:
 
 ```bash
 node -e "
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const targetIds = {JSON.stringify(target_feature_ids)};
 for (const id of targetIds) {
   const result = fm.updateFeatureState(process.cwd(), id, 'prototyped');
@@ -236,8 +236,8 @@ for (const id of targetIds) {
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const updated = fm.enrichFromTags(process.cwd(), tags);
 const groups = scanner.groupByFeature(tags);
@@ -253,7 +253,7 @@ console.log(JSON.stringify({
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:prototype',
   lastCommandTimestamp: new Date().toISOString(),

@@ -61,7 +61,7 @@ Check for existing tags in target path:
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const groups = scanner.groupByFeature(tags);
 console.log(JSON.stringify({
@@ -115,8 +115,8 @@ After the prototyper completes, run a scan to update Feature Map:
 
 ```bash
 node -e "
-const scanner = require('./get-shit-done/bin/lib/cap-tag-scanner.cjs');
-const fm = require('./get-shit-done/bin/lib/cap-feature-map.cjs');
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const tags = scanner.scanDirectory(process.cwd());
 const updated = fm.enrichFromTags(process.cwd(), tags);
 console.log(JSON.stringify({
@@ -153,7 +153,7 @@ Next steps:
 
 ```bash
 node -e "
-const session = require('./get-shit-done/bin/lib/cap-session.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:annotate',
   lastCommandTimestamp: new Date().toISOString(),

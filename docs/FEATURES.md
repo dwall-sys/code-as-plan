@@ -1276,7 +1276,7 @@ Test suite that scans all agent, workflow, and command files for embedded inject
 
 ### 55. Multi-Runtime Installer Selection
 
-**Part of:** `npx get-shit-done-cc`
+**Part of:** `npx cap-cc`
 
 **Purpose:** Select multiple runtimes in a single interactive install session.
 

@@ -18,7 +18,7 @@ const {
   formatDependencies,
   generateFeaturesMarkdown,
   discoverPrdFiles,
-} = require('../get-shit-done/bin/lib/feature-aggregator.cjs');
+} = require('../cap/bin/lib/feature-aggregator.cjs');
 
 // ── parsePrd ────────────────────────────────────────────────────────────────
 

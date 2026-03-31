@@ -42,7 +42,7 @@ GSD is a **meta-prompting framework** that sits between the user and AI coding a
                       │
 ┌─────────────────────▼────────────────────────────────┐
 │              WORKFLOW LAYER                           │
-│   get-shit-done/workflows/*.md — Orchestration logic  │
+│   cap/workflows/*.md — Orchestration logic  │
 │   (Reads references, spawns agents, manages state)    │
 └──────┬──────────────┬─────────────────┬──────────────┘
        │              │                 │
@@ -54,7 +54,7 @@ GSD is a **meta-prompting framework** that sits between the user and AI coding a
        │              │                 │
 ┌──────▼──────────────▼─────────────────▼──────────────┐
 │              CLI TOOLS LAYER                          │
-│   get-shit-done/bin/gsd-tools.cjs                     │
+│   cap/bin/gsd-tools.cjs                     │
 │   (State, config, phase, roadmap, verify, templates)  │
 └──────────────────────┬───────────────────────────────┘
                        │
@@ -75,7 +75,7 @@ Every agent spawned by an orchestrator gets a clean context window (up to 200K t
 
 ### 2. Thin Orchestrators
 
-Workflow files (`get-shit-done/workflows/*.md`) never do heavy lifting. They:
+Workflow files (`cap/workflows/*.md`) never do heavy lifting. They:
 - Load context via `gsd-tools.cjs init <workflow>`
 - Spawn specialized agents with focused prompts
 - Collect results and route to the next step
@@ -115,7 +115,7 @@ User-facing entry points. Each file contains YAML frontmatter (name, description
 
 **Total commands:** 44
 
-### Workflows (`get-shit-done/workflows/*.md`)
+### Workflows (`cap/workflows/*.md`)
 
 Orchestration logic that commands reference. Contains the step-by-step process including:
 - Context loading via `gsd-tools.cjs init`
@@ -136,7 +136,7 @@ Specialized agent definitions with frontmatter specifying:
 
 **Total agents:** 16
 
-### References (`get-shit-done/references/*.md`)
+### References (`cap/references/*.md`)
 
 Shared knowledge documents that workflows and agents `@-reference`:
 - `checkpoints.md` — Checkpoint type definitions and interaction patterns
@@ -148,7 +148,7 @@ Shared knowledge documents that workflows and agents `@-reference`:
 - `tdd.md` — Test-driven development integration patterns
 - `ui-brand.md` — Visual output formatting patterns
 
-### Templates (`get-shit-done/templates/`)
+### Templates (`cap/templates/`)
 
 Markdown templates for all planning artifacts. Used by `gsd-tools.cjs template fill` and `scaffold` commands to create pre-structured files:
 - `project.md`, `requirements.md`, `roadmap.md`, `state.md` — Core project files
@@ -172,7 +172,7 @@ Runtime hooks that integrate with the host AI agent:
 | `gsd-prompt-guard.js` | `PreToolUse` | Scans `.planning/` writes for prompt injection patterns (advisory) |
 | `gsd-workflow-guard.js` | `PreToolUse` | Detects file edits outside GSD workflow context (advisory, opt-in via `hooks.workflow_guard`) |
 
-### CLI Tools (`get-shit-done/bin/`)
+### CLI Tools (`cap/bin/`)
 
 Node.js CLI utility (`gsd-tools.cjs`) with 17 domain modules:
 
@@ -345,7 +345,7 @@ UI-SPEC.md (per phase) ───────────────────
 ```
 ~/.claude/                          # Claude Code (global install)
 ├── commands/gsd/*.md               # 37 slash commands
-├── get-shit-done/
+├── cap/
 │   ├── bin/gsd-tools.cjs           # CLI utility
 │   ├── bin/lib/*.cjs               # 15 domain modules
 │   ├── workflows/*.md              # 42 workflow definitions

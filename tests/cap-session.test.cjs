@@ -19,7 +19,7 @@ const {
   endSession,
   isInitialized,
   initCapDirectory,
-} = require('../get-shit-done/bin/lib/cap-session.cjs');
+} = require('../cap/bin/lib/cap-session.cjs');
 
 let tmpDir;
 

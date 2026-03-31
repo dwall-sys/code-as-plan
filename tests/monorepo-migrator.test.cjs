@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const migrator = require('../get-shit-done/bin/lib/monorepo-migrator.cjs');
+const migrator = require('../cap/bin/lib/monorepo-migrator.cjs');
 
 function createTmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-migrator-test-'));
