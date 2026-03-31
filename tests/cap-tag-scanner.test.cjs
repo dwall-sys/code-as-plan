@@ -20,6 +20,8 @@ const {
   resolveWorkspaceGlobs,
   scanMonorepo,
   groupByPackage,
+  detectLegacyTags,
+  LEGACY_TAG_RE,
 } = require('../cap/bin/lib/cap-tag-scanner.cjs');
 
 let tmpDir;
@@ -707,6 +709,112 @@ describe('groupByPackage', () => {
     const groups = groupByPackage([], ['packages/core']);
     assert.strictEqual(groups['(root)'].length, 0);
     assert.strictEqual(groups['packages/core'].length, 0);
+  });
+});
+
+// --- detectLegacyTags ---
+
+describe('detectLegacyTags', () => {
+  it('detects @gsd-* tags in source files', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'app.js'),
+      '// @gsd-feature Auth module\n// @gsd-todo Fix this\nconst x = 1;\n',
+      'utf8'
+    );
+
+    const result = detectLegacyTags(tmpDir);
+    assert.strictEqual(result.count, 2);
+    assert.strictEqual(result.files.length, 1);
+    assert.strictEqual(result.files[0], 'app.js');
+    assert.ok(result.recommendation.includes('/cap:migrate'));
+  });
+
+  it('returns zero count when no @gsd-* tags exist', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'clean.js'),
+      '// @cap-feature Already migrated\nconst x = 1;\n',
+      'utf8'
+    );
+
+    const result = detectLegacyTags(tmpDir);
+    assert.strictEqual(result.count, 0);
+    assert.strictEqual(result.files.length, 0);
+    assert.strictEqual(result.recommendation, '');
+  });
+
+  it('skips node_modules and .git directories', () => {
+    fs.mkdirSync(path.join(tmpDir, 'node_modules'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'node_modules', 'dep.js'),
+      '// @gsd-feature Should not appear\n',
+      'utf8'
+    );
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'hook.js'),
+      '// @gsd-todo Should not appear\n',
+      'utf8'
+    );
+
+    const result = detectLegacyTags(tmpDir);
+    assert.strictEqual(result.count, 0);
+  });
+
+  it('detects all GSD tag types', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'full.js'),
+      [
+        '// @gsd-feature Auth',
+        '// @gsd-todo Fix this',
+        '// @gsd-risk Memory leak',
+        '// @gsd-decision Use bcrypt',
+        '// @gsd-context Scanner module',
+        '// @gsd-status done',
+        '// @gsd-depends F-001',
+        '// @gsd-pattern Anchor rule',
+        '// @gsd-api parseMetadata()',
+        '// @gsd-constraint Zero deps',
+      ].join('\n') + '\n',
+      'utf8'
+    );
+
+    const result = detectLegacyTags(tmpDir);
+    assert.strictEqual(result.count, 10);
+  });
+
+  it('scans nested directories', () => {
+    fs.mkdirSync(path.join(tmpDir, 'src', 'lib'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'src', 'lib', 'util.js'),
+      '// @gsd-todo Deep nested tag\n',
+      'utf8'
+    );
+
+    const result = detectLegacyTags(tmpDir);
+    assert.strictEqual(result.count, 1);
+    assert.strictEqual(result.files[0], path.join('src', 'lib', 'util.js'));
+  });
+});
+
+describe('LEGACY_TAG_RE', () => {
+  it('matches @gsd-feature in JS comment', () => {
+    assert.ok(LEGACY_TAG_RE.test('// @gsd-feature Auth'));
+  });
+
+  it('matches @gsd-todo in Python comment', () => {
+    assert.ok(LEGACY_TAG_RE.test('# @gsd-todo Fix this'));
+  });
+
+  it('matches @gsd-constraint with leading whitespace', () => {
+    assert.ok(LEGACY_TAG_RE.test('    // @gsd-constraint Zero deps'));
+  });
+
+  it('does not match @cap- tags', () => {
+    assert.ok(!LEGACY_TAG_RE.test('// @cap-feature Auth'));
+  });
+
+  it('does not match @gsd- in string literals', () => {
+    assert.ok(!LEGACY_TAG_RE.test('const x = "@gsd-feature not a tag"'));
   });
 });
 

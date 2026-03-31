@@ -61,7 +61,7 @@ const hasCopilot = args.includes('--copilot');
 const hasAntigravity = args.includes('--antigravity');
 const hasCursor = args.includes('--cursor');
 const hasWindsurf = args.includes('--windsurf');
-const hasSdk = args.includes('--sdk');
+// SDK install removed in CAP v2.0 — not needed
 const hasBoth = args.includes('--both'); // Legacy flag, keeps working
 const hasAll = args.includes('--all');
 const hasUninstall = args.includes('--uninstall') || args.includes('-u');
@@ -322,7 +322,7 @@ if (hasUninstall) {
 
 // Show help if requested
 if (hasHelp) {
-  console.log(`  ${yellow}Usage:${reset} npx code-as-plan [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}--sdk${reset}                     Also install CAP SDK CLI (cap-sdk)\n    ${cyan}-u, --uninstall${reset}           Uninstall CAP (remove all CAP files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx code-as-plan\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx code-as-plan --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx code-as-plan --gemini --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx code-as-plan --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx code-as-plan --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx code-as-plan --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx code-as-plan --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx code-as-plan --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx code-as-plan --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx code-as-plan --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx code-as-plan --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx code-as-plan --windsurf --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx code-as-plan --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx code-as-plan --codex --global --config-dir ~/.codex-work\n\n    ${dim}# Install to current project only${reset}\n    npx code-as-plan --claude --local\n\n    ${dim}# Uninstall CAP from Cursor globally${reset}\n    npx code-as-plan --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR environment variables.\n`);
+  console.log(`  ${yellow}Usage:${reset} npx code-as-plan [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall CAP (remove all CAP files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx code-as-plan\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx code-as-plan --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx code-as-plan --gemini --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx code-as-plan --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx code-as-plan --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx code-as-plan --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx code-as-plan --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx code-as-plan --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx code-as-plan --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx code-as-plan --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx code-as-plan --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx code-as-plan --windsurf --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx code-as-plan --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx code-as-plan --codex --global --config-dir ~/.codex-work\n\n    ${dim}# Install to current project only${reset}\n    npx code-as-plan --claude --local\n\n    ${dim}# Uninstall CAP from Cursor globally${reset}\n    npx code-as-plan --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR environment variables.\n`);
   process.exit(0);
 }
 
@@ -4692,70 +4692,6 @@ function handleStatusline(settings, isInteractive, callback) {
 }
 
 /**
- * Install the CAP SDK globally via npm.
- * @returns {boolean} true if install succeeded
- */
-function installSdk() {
-  const sdkPkg = `@gsd-build/sdk@latest`;
-  console.log(`\n  ${cyan}Installing CAP SDK...${reset}`);
-  console.log(`  ${dim}npm install -g ${sdkPkg}${reset}\n`);
-  try {
-    require('child_process').execSync(`npm install -g ${sdkPkg}`, { stdio: 'inherit' });
-    console.log(`\n  ${green}✓${reset} CAP SDK installed (${cyan}cap-sdk${reset} command available)`);
-    return true;
-  } catch (e) {
-    console.log(`\n  ${yellow}⚠${reset} SDK install failed: ${e.message}`);
-    console.log(`  ${dim}You can install it manually: npm install -g ${sdkPkg}${reset}`);
-    return false;
-  }
-}
-
-/**
- * Prompt the user to optionally install the CAP SDK.
- * Called after runtime installation completes.
- * @param {Function} callback - called with true/false
- */
-function promptSdk(callback) {
-  if (!process.stdin.isTTY) {
-    callback(false);
-    return;
-  }
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  let answered = false;
-
-  rl.on('close', () => {
-    if (!answered) {
-      answered = true;
-      callback(false);
-    }
-  });
-
-  console.log(`
-  ${yellow}Also install the CAP SDK?${reset}
-
-  The SDK provides a standalone CLI for autonomous execution:
-    ${dim}cap-sdk init @prd.md${reset}    Bootstrap a project from a PRD
-    ${dim}cap-sdk auto${reset}            Run full autonomous lifecycle
-    ${dim}cap-sdk run "prompt"${reset}    Execute a milestone from text
-
-  ${cyan}1${reset}) No
-  ${cyan}2${reset}) Yes ${dim}(runs: npm install -g @gsd-build/sdk)${reset}
-`);
-
-  rl.question(`  Choice ${dim}[1]${reset}: `, (answer) => {
-    answered = true;
-    rl.close();
-    const choice = answer.trim() || '1';
-    callback(choice === '2');
-  });
-}
-
-/**
  * Prompt for runtime selection
  */
 function promptRuntime(callback) {
@@ -4884,7 +4820,7 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
   const primaryStatuslineResult = results.find(r => statuslineRuntimes.includes(r.runtime));
 
   const finalize = (shouldInstallStatusline) => {
-    // Handle SDK installation before printing final summaries
+    // Print final summaries
     const printSummaries = () => {
       for (const result of results) {
         const useStatusline = statuslineRuntimes.includes(result.runtime) && shouldInstallStatusline;
@@ -4899,18 +4835,7 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
       }
     };
 
-    if (hasSdk) {
-      // --sdk flag: install without prompting
-      installSdk();
-      printSummaries();
-    } else if (isInteractive) {
-      promptSdk((wantsSdk) => {
-        if (wantsSdk) installSdk();
-        printSummaries();
-      });
-    } else {
-      printSummaries();
-    }
+    printSummaries();
   };
 
   if (primaryStatuslineResult) {

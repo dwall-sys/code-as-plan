@@ -439,11 +439,82 @@ function groupByPackage(tags, packages) {
   return groups;
 }
 
+// @cap-todo Detect legacy @gsd-* tags and recommend /cap:migrate
+const LEGACY_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@gsd-(feature|todo|risk|decision|context|status|depends|ref|pattern|api|constraint)/;
+
+/**
+ * Detect legacy @gsd-* tags in scanned files.
+ * Re-scans source files for @gsd-* patterns that the primary scanner ignores.
+ *
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {Object} [options]
+ * @param {string[]} [options.extensions] - File extensions to include
+ * @param {string[]} [options.exclude] - Directory names to exclude
+ * @returns {{ count: number, files: string[], recommendation: string }}
+ */
+function detectLegacyTags(projectRoot, options = {}) {
+  const extensions = options.extensions || SUPPORTED_EXTENSIONS;
+  const exclude = options.exclude || DEFAULT_EXCLUDE;
+  const result = { count: 0, files: [], recommendation: '' };
+  const fileSet = new Set();
+
+  function walk(dir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_e) {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (exclude.includes(entry.name)) continue;
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name);
+        if (!extensions.includes(ext)) continue;
+        scanFileForLegacy(fullPath);
+      }
+    }
+  }
+
+  function scanFileForLegacy(filePath) {
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch (_e) {
+      return;
+    }
+    const lines = content.split('\n');
+    let found = false;
+    for (const line of lines) {
+      if (LEGACY_TAG_RE.test(line)) {
+        result.count++;
+        found = true;
+      }
+    }
+    if (found) {
+      const relativePath = path.relative(projectRoot, filePath);
+      fileSet.add(relativePath);
+    }
+  }
+
+  walk(projectRoot);
+  result.files = Array.from(fileSet).sort();
+
+  if (result.count > 0) {
+    result.recommendation = `Found ${result.count} legacy @gsd-* tag(s) in ${result.files.length} file(s). Run /cap:migrate to convert them to @cap-* format.`;
+  }
+
+  return result;
+}
+
 module.exports = {
   CAP_TAG_TYPES,
   CAP_TAG_RE,
   SUPPORTED_EXTENSIONS,
   DEFAULT_EXCLUDE,
+  LEGACY_TAG_RE,
   scanFile,
   scanDirectory,
   extractTags,
@@ -455,4 +526,5 @@ module.exports = {
   resolveWorkspaceGlobs,
   scanMonorepo,
   groupByPackage,
+  detectLegacyTags,
 };
