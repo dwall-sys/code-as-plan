@@ -9,7 +9,7 @@ const path = require('node:path');
 
 // --- Constants ---
 
-const GSD_TAG_RE = /(@gsd-(feature|todo|risk|decision|context|status|depends|ref|pattern|api|constraint))(\([^)]*\))?\s*(.*)/;
+const GSD_TAG_RE = /(@gsd-(feature|todos?|risk|decision|context|status|depends|ref|pattern|api|constraint|placeholder|concern))(\([^)]*\))?\s*(.*)/;
 
 const SUPPORTED_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.py', '.rb', '.go', '.rs', '.sh', '.md'];
 const EXCLUDE_DIRS = ['node_modules', '.git', '.cap', 'dist', 'build', 'coverage'];
@@ -118,6 +118,27 @@ function migrateLineTag(line) {
       return {
         replaced: line.replace(fullTag + metadata + ' ', '').replace(fullTag + metadata, ''),
         action: 'plain-comment',
+      };
+
+    case 'todos':
+      // @gsd-todos (plural typo) → @cap-todo
+      return {
+        replaced: line.replace(fullTag, '@cap-todo'),
+        action: 'converted',
+      };
+
+    case 'placeholder':
+      // @gsd-placeholder → @cap-todo (placeholder is a todo variant)
+      return {
+        replaced: line.replace(fullTag, '@cap-todo'),
+        action: 'converted',
+      };
+
+    case 'concern':
+      // @gsd-concern → @cap-todo risk: (concerns are risks)
+      return {
+        replaced: line.replace(fullTag + metadata + (description ? ' ' : ''), '@cap-todo' + metadata + ' risk: ').replace(/  +/g, ' '),
+        action: 'converted',
       };
 
     default:
