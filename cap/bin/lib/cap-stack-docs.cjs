@@ -551,27 +551,73 @@ function detectWorkspacePackages(projectRoot) {
     }
   }
 
-  // Check lerna.json
-  const lernaPath = path.join(projectRoot, 'lerna.json');
-  if (!result.isMonorepo && fs.existsSync(lernaPath)) {
-    try {
-      const lerna = JSON.parse(fs.readFileSync(lernaPath, 'utf8'));
-      result.isMonorepo = true;
-      const patterns = lerna.packages || ['packages/*'];
-      for (const pattern of patterns) {
-        const baseDir = pattern.replace(/\/\*.*$/, '');
-        const fullDir = path.join(projectRoot, baseDir);
-        if (fs.existsSync(fullDir) && fs.statSync(fullDir).isDirectory()) {
-          const entries = fs.readdirSync(fullDir, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              result.packages.push(path.join(baseDir, entry.name));
-            }
+  // Helper to expand workspace patterns
+  const expandPatterns = (patterns) => {
+    for (const pattern of patterns) {
+      const baseDir = pattern.replace(/\/\*.*$/, '');
+      const fullDir = path.join(projectRoot, baseDir);
+      if (fs.existsSync(fullDir) && fs.statSync(fullDir).isDirectory()) {
+        const entries = fs.readdirSync(fullDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            result.packages.push(path.join(baseDir, entry.name));
           }
         }
       }
-    } catch (_e) {
-      // Ignore
+    }
+  };
+
+  // Check pnpm-workspace.yaml
+  if (!result.isMonorepo) {
+    const pnpmPath = path.join(projectRoot, 'pnpm-workspace.yaml');
+    if (fs.existsSync(pnpmPath)) {
+      try {
+        const content = fs.readFileSync(pnpmPath, 'utf8');
+        const packagesMatch = content.match(/packages:\s*\n((?:\s+-\s*.+\n?)*)/);
+        if (packagesMatch) {
+          result.isMonorepo = true;
+          const patterns = packagesMatch[1]
+            .split('\n')
+            .map(line => line.replace(/^\s*-\s*['"]?/, '').replace(/['"]?\s*$/, ''))
+            .filter(Boolean);
+          expandPatterns(patterns);
+        }
+      } catch (_e) {}
+    }
+  }
+
+  // Check nx.json
+  if (!result.isMonorepo) {
+    const nxPath = path.join(projectRoot, 'nx.json');
+    if (fs.existsSync(nxPath)) {
+      try {
+        const nx = JSON.parse(fs.readFileSync(nxPath, 'utf8'));
+        result.isMonorepo = true;
+        const layout = nx.workspaceLayout || {};
+        const patterns = [];
+        if (layout.appsDir) patterns.push(layout.appsDir + '/*');
+        if (layout.libsDir) patterns.push(layout.libsDir + '/*');
+        if (patterns.length === 0) {
+          for (const dir of ['apps', 'packages', 'libs']) {
+            if (fs.existsSync(path.join(projectRoot, dir))) {
+              patterns.push(dir + '/*');
+            }
+          }
+        }
+        expandPatterns(patterns);
+      } catch (_e) {}
+    }
+  }
+
+  // Check lerna.json
+  if (!result.isMonorepo) {
+    const lernaPath = path.join(projectRoot, 'lerna.json');
+    if (fs.existsSync(lernaPath)) {
+      try {
+        const lerna = JSON.parse(fs.readFileSync(lernaPath, 'utf8'));
+        result.isMonorepo = true;
+        expandPatterns(lerna.packages || ['packages/*']);
+      } catch (_e) {}
     }
   }
 

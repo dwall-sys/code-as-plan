@@ -72,6 +72,43 @@ if (fs.existsSync(pkgPath)) {
   } catch (_e) {}
 }
 
+// Check pnpm-workspace.yaml
+const pnpmPath = path.join(process.cwd(), 'pnpm-workspace.yaml');
+if (!result.isMonorepo && fs.existsSync(pnpmPath)) {
+  try {
+    const content = fs.readFileSync(pnpmPath, 'utf8');
+    const packagesMatch = content.match(/packages:\\s*\\n((?:\\s+-\\s*.+\\n?)*)/);
+    if (packagesMatch) {
+      result.isMonorepo = true;
+      result.workspaces = packagesMatch[1]
+        .split('\\n')
+        .map(line => line.replace(/^\\s*-\\s*['\"]?/, '').replace(/['\"]?\\s*$/, ''))
+        .filter(Boolean);
+    }
+  } catch (_e) {}
+}
+
+// Check nx.json
+const nxPath = path.join(process.cwd(), 'nx.json');
+if (!result.isMonorepo && fs.existsSync(nxPath)) {
+  try {
+    const nx = JSON.parse(fs.readFileSync(nxPath, 'utf8'));
+    result.isMonorepo = true;
+    const layout = nx.workspaceLayout || {};
+    const patterns = [];
+    if (layout.appsDir) patterns.push(layout.appsDir + '/*');
+    if (layout.libsDir) patterns.push(layout.libsDir + '/*');
+    if (patterns.length === 0) {
+      for (const dir of ['apps', 'packages', 'libs']) {
+        if (fs.existsSync(path.join(process.cwd(), dir))) {
+          patterns.push(dir + '/*');
+        }
+      }
+    }
+    result.workspaces = patterns;
+  } catch (_e) {}
+}
+
 // Check lerna.json
 if (!result.isMonorepo && fs.existsSync(lernaPath)) {
   try {

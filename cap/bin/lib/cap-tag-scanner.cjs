@@ -284,6 +284,60 @@ function detectWorkspaces(projectRoot) {
     }
   }
 
+  // Check pnpm-workspace.yaml
+  if (!result.isMonorepo) {
+    const pnpmPath = path.join(projectRoot, 'pnpm-workspace.yaml');
+    if (fs.existsSync(pnpmPath)) {
+      try {
+        const content = fs.readFileSync(pnpmPath, 'utf8');
+        // Simple YAML parsing for packages array — handles:
+        //   packages:
+        //     - "apps/*"
+        //     - "packages/*"
+        const packagesMatch = content.match(/packages:\s*\n((?:\s+-\s*.+\n?)*)/);
+        if (packagesMatch) {
+          result.isMonorepo = true;
+          const patterns = packagesMatch[1]
+            .split('\n')
+            .map(line => line.replace(/^\s*-\s*['"]?/, '').replace(/['"]?\s*$/, ''))
+            .filter(Boolean);
+          result.packages = resolveWorkspaceGlobs(projectRoot, patterns);
+        }
+      } catch (_e) {
+        // Malformed pnpm-workspace.yaml
+      }
+    }
+  }
+
+  // Check nx.json (NX workspace — look for project patterns or apps/packages dirs)
+  if (!result.isMonorepo) {
+    const nxPath = path.join(projectRoot, 'nx.json');
+    if (fs.existsSync(nxPath)) {
+      try {
+        const nx = JSON.parse(fs.readFileSync(nxPath, 'utf8'));
+        result.isMonorepo = true;
+        // NX may define workspaceLayout or rely on convention (apps/, packages/, libs/)
+        const layout = nx.workspaceLayout || {};
+        const patterns = [];
+        if (layout.appsDir) patterns.push(layout.appsDir + '/*');
+        if (layout.libsDir) patterns.push(layout.libsDir + '/*');
+        // Fallback: check common NX directories
+        if (patterns.length === 0) {
+          for (const dir of ['apps', 'packages', 'libs']) {
+            if (fs.existsSync(path.join(projectRoot, dir))) {
+              patterns.push(dir + '/*');
+            }
+          }
+        }
+        if (patterns.length > 0) {
+          result.packages = resolveWorkspaceGlobs(projectRoot, patterns);
+        }
+      } catch (_e) {
+        // Malformed nx.json
+      }
+    }
+  }
+
   // Check lerna.json
   if (!result.isMonorepo) {
     const lernaPath = path.join(projectRoot, 'lerna.json');
