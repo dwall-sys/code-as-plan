@@ -140,15 +140,18 @@ Green tests mean verified. No separate verification document.
 |  +-----------+     +---------------+     +-------------+          |
 |  | Feature   |     | Annotated     |     | Tag Scanner |          |
 |  | Map (MD)  |<--->| Source Code   |---->| (regex)     |          |
-|  +-----------+     +---------------+     +-------------+          |
-|       |                    |                    |                  |
-|       v                    v                    v                  |
-|  FEATURE-MAP.md    @cap-feature F-001    CODE-INVENTORY.md        |
-|                    @cap-todo ...         (auto-generated)          |
+|  +-----------+     +---------------+     +------+------+          |
+|       ^                    |                    |                  |
+|       |                    v                    v                  |
+|       +---------- @cap-feature F-001 ----------+                  |
+|                   @cap-todo ...                                   |
 |                                                                   |
-|  /cap:test  ->  Green tests = verified                            |
-|  /cap:review -> Ship when Stage 1 + Stage 2 pass                 |
-|  git tag v1.0 -> Milestone complete                               |
+|  /cap:test       ->  Green tests = verified                       |
+|  /cap:test-audit ->  Mutation score + trust score                 |
+|  /cap:review     ->  Stage 1 (ACs) + Stage 2 (quality)           |
+|                      + Stage 3 (manual checklist)                 |
+|  /cap:report     ->  Human-readable team overview                 |
+|  git tag v1.0    ->  Milestone complete                           |
 +-------------------------------------------------------------------+
 |                          Agents                                   |
 |  cap-brainstormer | cap-prototyper | cap-tester | cap-reviewer    |
