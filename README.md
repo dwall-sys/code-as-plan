@@ -380,9 +380,75 @@ Tag conversion:
 
 ---
 
-## Engineering Philosophy
+## Why Prototype-Driven Development
 
-CAP is aligned with the principles in Dave Farley's "Modern Software Engineering":
+CAP implements Prototype-Driven Development -- a methodology designed for AI-assisted engineering. It is different from TDD and Spec-Driven Development in a fundamental way.
+
+### The problem with older approaches
+
+**TDD** says: write the test first, then the code. But developers often don't know what to test until they've built something. The test becomes a guess that gets rewritten alongside the code.
+
+**Spec-Driven** says: write the specification first, then build against it. But specifications written before building are based on assumptions, not knowledge. They drift the moment code reveals what the problem actually is.
+
+Both approaches were designed for a world where building is expensive. When writing code takes hours or days, it makes sense to plan first and build later. You want to get it right the first time because iteration is costly.
+
+### AI changes the economics
+
+When AI builds a working prototype in minutes instead of hours, the calculation flips:
+
+| | Human alone | Human + AI (CAP) |
+|---|---|---|
+| Cost of a prototype | Hours | Minutes |
+| Cost of throwing it away | Painful | Trivial |
+| Cost of a wrong spec | Days of wasted work | One conversation to correct |
+| When you discover missing requirements | After building (too late) | While looking at the prototype |
+
+Building is no longer expensive. Specifying incorrectly is. This makes "build first, then understand" more rational than "understand first, then build."
+
+### How CAP uses this
+
+```
+TDD:          Test  -->  Code  -->  Refactor
+Spec-Driven:  Spec  -->  Code  -->  Verify
+CAP:          Idea  -->  Prototype  -->  Spec emerges  -->  Test  -->  Verify
+```
+
+The specification is not an input -- it is an output. You start with an idea (brainstorm), build a prototype (fast, cheap), and the specification crystallizes from what you actually built:
+
+- Feature Map entries emerge from brainstorming
+- `@cap-feature` tags emerge from implementation
+- `@cap-todo risk:` and `decision:` annotations emerge from coding experience
+- Acceptance criteria get refined as you see what works and what doesn't
+
+### Why this helps humans learn, not just ship faster
+
+**1. The prototype is a mirror.** When you look at running code and say "that's wrong," you just discovered a requirement you couldn't have written upfront. The brainstorm-prototype-iterate loop is a requirement discovery machine.
+
+**2. Fewer false assumptions.** In spec-driven workflows, teams commit to assumptions before verifying them. In CAP, you verify assumptions by building -- because building is cheap. "Does this booking flow make sense?" is answered by looking at it, not by reading a document.
+
+**3. Better communication.** Showing a colleague a working prototype ("look, this is how booking works") communicates more in 30 seconds than a spec document communicates in 30 pages.
+
+**4. Less waste.** Studies show 30-50% of upfront specifications describe features that change before they ship. Prototype-Driven avoids this by only formalizing what survives iteration.
+
+**5. Deeper understanding.** When the AI builds and you review, you engage with the problem at a concrete level. You're not reading abstractions -- you're reading code, testing flows, catching edge cases. This builds genuine understanding that no spec document provides.
+
+### What CAP takes from TDD and Spec-Driven
+
+CAP is not opposed to testing or specifications. It reorders when they happen:
+
+From **TDD**: RED-GREEN test discipline, mutation testing, tests as verification (not documents). But tests come after the prototype, not before.
+
+From **Spec-Driven**: Acceptance criteria as contracts (Feature Map ACs), traceability (tags link code to features), review against spec (Stage 1). But the spec emerges from building, it is not written in isolation.
+
+### In one sentence
+
+> TDD and Spec-Driven optimize for executing a known plan correctly. CAP optimizes for discovering the right plan -- by building, observing, learning, and correcting.
+
+---
+
+## Farley's Principles in CAP
+
+CAP is aligned with Dave Farley's "Modern Software Engineering":
 
 **Optimize for learning.** Build a prototype to discover what you do not know. Iterate based on what the code tells you, not what a requirements document predicted.
 
