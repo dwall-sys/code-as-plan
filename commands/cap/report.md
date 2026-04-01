@@ -231,6 +231,15 @@ OPEN DECISIONS
   - {decision description in plain language}
   - ...
   {If none: "  No pending decisions."}
+
+{If .cap/MANUAL-TESTS.md exists:}
+MANUAL TESTING
+  Status: {N checked} of {M total} items verified
+  Pending:
+  - {unchecked item description}
+  - ...
+  Verified by: {name if present, or "Not yet signed off"}
+{End if}
 ```
 
 Write the complete report text to `.cap/REPORT.md`.

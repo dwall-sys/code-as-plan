@@ -248,17 +248,94 @@ session.updateSession(process.cwd(), {
 "
 ```
 
-## Step 6: Final report
+## Step 6: Generate Manual Testing Checklist
+
+After automated review passes, generate a checklist of things only a human can verify. Derive from the Feature Map ACs and implementation context.
+
+**Categories of manual tests (include all that apply):**
+
+1. **Visual/UX verification** — Does the UI look correct? Is the layout intuitive? Do transitions feel smooth?
+2. **User flow verification** — Can a real user complete the happy path end-to-end? Are error states clear?
+3. **Cross-browser/device** — Does it work on mobile? Different browsers?
+4. **Data verification** — Does real data (not test data) display correctly? Are edge cases handled (empty states, long names, special characters)?
+5. **Permission/access verification** — Can you confirm User A really cannot see User B's data? Try it manually.
+6. **Integration verification** — Do external services (Google Calendar, Zoom, Stripe) actually connect and work?
+7. **Performance perception** — Does it feel fast enough? Any visible loading delays?
+
+**Generate the checklist:**
+
+For each feature under review, analyze the ACs and implementation files to determine which manual tests are needed:
+
+```
+MANUAL TESTING CHECKLIST
+========================
+
+These tests cannot be automated. A human must verify each item
+before the feature is considered production-ready.
+
+Feature: {feature title}
+
+  Visual / UX:
+  [ ] {specific check derived from feature, e.g., "Booking form shows correct time slots for selected date"}
+  [ ] {e.g., "Error message appears when double-booking is attempted"}
+
+  User Flow:
+  [ ] {e.g., "Complete a booking from start to confirmation as a new user"}
+  [ ] {e.g., "Cancel an existing booking and verify calendar is updated"}
+
+  Permissions:
+  [ ] {e.g., "Log in as Berater A — confirm you cannot see Berater B's bookings"}
+  [ ] {e.g., "Log in as Admin — confirm you CAN see all bookings"}
+
+  External Integrations:
+  [ ] {e.g., "Connect Google Calendar — verify new booking appears in calendar"}
+  [ ] {e.g., "Connect Zoom — verify meeting link is generated"}
+
+  Edge Cases:
+  [ ] {e.g., "Book a slot at 23:50 that crosses midnight — verify correct date handling"}
+  [ ] {e.g., "Enter a name with special characters (umlauts, emojis) — verify display"}
+
+Status: [ ] All checks passed  [ ] Issues found (describe below)
+Issues: _______________________________________________
+Verified by: ________________  Date: ________________
+```
+
+Write this checklist to `.cap/MANUAL-TESTS.md` using the Write tool.
+
+Display the checklist to the user with a clear message:
+
+```
+IMPORTANT: The automated review passed, but these manual checks
+are required before shipping to production.
+
+Please work through the checklist above. It takes approximately
+{N} minutes (estimated from item count * 2 min per check).
+
+The checklist is saved at .cap/MANUAL-TESTS.md — share it with
+your team or use it as a sign-off document.
+```
+
+Use AskUserQuestion:
+> "The manual testing checklist has been generated. Would you like to go through it now, or save it for later?"
+> Options: "Go through now" / "Save for later" / "Skip manual tests"
+
+If "Go through now": Walk through each item with the user, asking them to confirm each check.
+If "Save for later": Remind them: "Run /cap:report to include manual test status in the team overview."
+If "Skip": Warn: "Manual tests skipped. Feature will be marked as shipped but .cap/MANUAL-TESTS.md remains open."
+
+## Step 7: Final report
 
 ```
 cap:review complete.
 
-Stage 1 (AC compliance): {PASS or FAIL or SKIPPED}
-Stage 2 (Code quality):  {PASS or PASS_WITH_NOTES or FAIL}
+Stage 1 (AC compliance):  {PASS or FAIL or SKIPPED}
+Stage 2 (Code quality):   {PASS or PASS_WITH_NOTES or FAIL}
+Stage 3 (Manual tests):   {PENDING — N items to verify}
 
-{If both pass:}
+{If both automated stages pass:}
 Feature state updated: {feature_ids} -> shipped
 Review report: .cap/REVIEW.md
+Manual tests:  .cap/MANUAL-TESTS.md
 
 Top 5 actions:
 {top_5_actions}
@@ -267,6 +344,8 @@ Top 5 actions:
 {If stage 2 has notes:}
 Review passed with notes. See .cap/REVIEW.md for details.
 {End if}
+
+REMINDER: {N} manual test items pending in .cap/MANUAL-TESTS.md
 ```
 
 </process>
