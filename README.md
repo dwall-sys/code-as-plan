@@ -179,7 +179,9 @@ Green tests mean verified. No separate verification document.
 | `/cap:annotate` | Retroactively add `@cap-feature` and `@cap-todo` tags to existing code |
 | `/cap:refresh-docs` | Fetch or refresh library documentation via Context7 |
 | `/cap:update` | Update CAP to the latest version with changelog display |
-| `/cap:migrate` | Migrate from GSD Code-First v1.x to CAP v2.0 |
+| `/cap:migrate` | Migrate from GSD Code-First v1.x to CAP v2.0 (supports `--rescope` for per-app Feature Maps) |
+| `/cap:test-audit` | Test quality analysis: assertion density, coverage, mutation score, spot-check guide, trust score |
+| `/cap:report` | Human-readable project overview for non-technical stakeholders (no IDs, no tag syntax) |
 
 ---
 
@@ -306,17 +308,72 @@ CAP ships five specialized agents. You do not invoke them directly -- commands s
 
 ---
 
+## Test Quality Infrastructure
+
+CAP goes beyond "tests are green" with a 6-level trust model:
+
+### /cap:test -- AI-generated tests
+
+The `cap-tester` agent writes tests with an adversarial mindset ("how do I break this?") and includes specialized templates for:
+
+- **Security tests** -- RLS policies, auth bypass, input sanitization, data leakage
+- **Contract tests** -- API schema validation between monorepo services
+- **Property-based tests** -- fast-check templates for business logic invariants
+
+### /cap:test-audit -- verify the tests themselves
+
+Because "tests are green" is not the same as "tests are trustworthy":
+
+```
+Test Audit — apps/booking
+=========================
+
+ASSERTIONS:      142 total, 0 empty tests
+COVERAGE:        73% lines, 68% branches
+MUTATION SCORE:  8/10 caught (80%)
+
+SPOT-CHECK GUIDE (for human review):
+  1. auth.test.ts:42 — "rejects expired token"
+     Break: Delete token check in auth.ts:18
+     Expected: Test turns RED
+     [ ] Verified  [ ] Suspect
+
+ANTI-PATTERNS:   3 weak assertions flagged
+TRUST SCORE:     87/100
+```
+
+**Mutation testing** is the strongest automated check: the engine introduces deliberate bugs (flip `===` to `!==`, negate conditions, remove returns) and verifies the tests catch them. A mutation score above 80% means your tests are genuinely testing behavior.
+
+**Spot-checks** guide human reviewers to the 3 most critical tests. Five minutes of human attention at the right places provides more confidence than reading every test file.
+
+### /cap:report -- for your team
+
+Generates a plain-language project overview without feature IDs, tag syntax, or technical jargon. Written so non-technical colleagues can understand what's built, what's in progress, and what's at risk.
+
+---
+
 ## Migration from GSD
 
 If you have an existing GSD Code-First v1.x project:
 
 ```bash
-/cap:migrate               # full migration: tags, artifacts, session format
-/cap:migrate --tags-only   # convert @gsd-* tags to @cap-* tags only
-/cap:migrate --rescope     # re-scope planning artifacts to .cap/ directory
+/cap:migrate --dry-run     # preview what would change (safe)
+/cap:migrate --tags-only   # convert @gsd-* tags to @cap-* only
+/cap:migrate               # full migration: tags + artifacts + session
+/cap:migrate --rescope     # split root Feature Map into per-app Feature Maps (monorepo)
 ```
 
-The migration converts `@gsd-context`, `@gsd-decision`, `@gsd-todo`, and other GSD tags to their CAP equivalents, moves planning artifacts from `.planning/` to `.cap/`, and updates session configuration.
+Tag conversion:
+
+| GSD tag | CAP equivalent |
+|---------|---------------|
+| `@gsd-feature` | `@cap-feature` |
+| `@gsd-todo` | `@cap-todo` |
+| `@gsd-risk` | `@cap-todo risk:` |
+| `@gsd-decision` | `@cap-todo decision:` |
+| `@gsd-context` | Plain comment (tag removed) |
+| `@gsd-status` | Removed (status lives in Feature Map) |
+| `@gsd-depends` | Removed (derived from import graph) |
 
 ---
 
@@ -338,12 +395,18 @@ CAP is aligned with the principles in Dave Farley's "Modern Software Engineering
 
 **Zero runtime dependencies.** CAP uses only Node.js built-in modules. No third-party code runs in your project at runtime. This eliminates supply chain attack surface from transitive dependencies.
 
-**Provenance attestation.** Published npm packages include provenance signatures, allowing you to verify that the package was built from the public source repository.
-
-**Safe installation.**
+**Provenance attestation.** Every npm release is signed via GitHub Actions OIDC, proving the package was built from the public source repository. Verify with:
 
 ```bash
-npm ci --ignore-scripts    # install without running lifecycle scripts
+npm audit signatures
+```
+
+**Safe CI pipeline.** Packages are published exclusively through GitHub Actions with `npm ci --ignore-scripts` -- lockfile-pinned dependencies, no post-install script execution.
+
+**Verify your install.**
+
+```bash
+npm view code-as-plan dist.attestations   # check provenance exists
 ```
 
 ---
