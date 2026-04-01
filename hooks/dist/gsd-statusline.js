@@ -91,8 +91,9 @@ process.stdin.on('end', () => {
       }
     }
 
-    // CAP update available?
+    // GSD update available?
     let capUpdate = '';
+    // Check both cache file names (cap- for v2.0+, gsd- for legacy)
     const capCacheFile = path.join(claudeDir, 'cache', 'cap-update-check.json');
     const gsdCacheFile = path.join(claudeDir, 'cache', 'gsd-update-check.json');
     const cacheFile = fs.existsSync(capCacheFile) ? capCacheFile : gsdCacheFile;
