@@ -37,6 +37,10 @@ jobs:
             echo "Version unchanged ($LOCAL), skipping publish."
           fi
 
+      - name: Install dev dependencies (locked)
+        if: steps.version.outputs.changed == 'true'
+        run: npm ci --ignore-scripts
+
       - name: Build hooks
         if: steps.version.outputs.changed == 'true'
         run: npm run build:hooks
