@@ -291,6 +291,30 @@ Next steps:
   /cap:refresh-docs  -- manually refresh stack documentation
 ```
 
+## Step 8b: Lightweight doctor check
+
+Run a quick check for optional tool availability (especially ctx7 since init depends on it):
+
+```bash
+node -e "
+const doctor = require('./cap/bin/lib/cap-doctor.cjs');
+const report = doctor.runDoctor();
+const missing = report.tools.filter(t => !t.ok && !t.required);
+if (missing.length > 0) {
+  console.log('Optional tools not found:');
+  for (const t of missing) {
+    console.log('  - ' + t.name + ': ' + t.purpose);
+    console.log('    Install: ' + t.installHint);
+  }
+  console.log('\nRun /cap:doctor for a full environment check.');
+} else {
+  console.log('All optional tools available.');
+}
+"
+```
+
+If missing tools are reported, display the output as an informational note (not a blocking error).
+
 ## Step 9: Update session
 
 ```bash
