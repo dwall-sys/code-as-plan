@@ -4811,41 +4811,158 @@ function promptLocation(runtimes) {
 /**
  * Install CAP for all selected runtimes
  */
-function installAllRuntimes(runtimes, isGlobal, isInteractive) {
-  const results = [];
+/**
+ * Detect and optionally clean up legacy GSD files from a previous installation.
+ * @param {string} targetDir - The config directory to check
+ * @param {boolean} isInteractive - Whether we can prompt the user
+ * @param {Function} callback - Called when cleanup is done (or skipped)
+ */
+function detectAndCleanupGSD(targetDir, isInteractive, callback) {
+  const gsdAgents = [];
+  const gsdDirs = [];
 
-  for (const runtime of runtimes) {
-    const result = install(isGlobal, runtime);
-    results.push(result);
+  // Check for gsd-* agent files
+  const agentsDir = path.join(targetDir, 'agents');
+  if (fs.existsSync(agentsDir)) {
+    try {
+      const files = fs.readdirSync(agentsDir).filter(f => f.startsWith('gsd-') && f.endsWith('.md'));
+      gsdAgents.push(...files);
+    } catch (_e) {}
   }
 
-  const statuslineRuntimes = ['claude', 'gemini'];
-  const primaryStatuslineResult = results.find(r => statuslineRuntimes.includes(r.runtime));
+  // Check for legacy directories
+  const legacyPaths = [
+    { rel: 'get-shit-done', label: 'get-shit-done/ (old GSD runtime)' },
+    { rel: path.join('commands', 'gsd'), label: 'commands/gsd/ (old GSD commands)' },
+    { rel: path.join('cap', 'workflows'), label: 'cap/workflows/ (old GSD workflows)' },
+  ];
+  for (const lp of legacyPaths) {
+    const fullPath = path.join(targetDir, lp.rel);
+    if (fs.existsSync(fullPath)) {
+      gsdDirs.push(lp);
+    }
+  }
 
-  const finalize = (shouldInstallStatusline) => {
-    // Print final summaries
-    const printSummaries = () => {
-      for (const result of results) {
-        const useStatusline = statuslineRuntimes.includes(result.runtime) && shouldInstallStatusline;
-        finishInstall(
-          result.settingsPath,
-          result.settings,
-          result.statuslineCommand,
-          useStatusline,
-          result.runtime,
-          isGlobal
-        );
-      }
-    };
+  // Nothing to clean
+  if (gsdAgents.length === 0 && gsdDirs.length === 0) {
+    callback();
+    return;
+  }
 
-    printSummaries();
+  console.log(`
+  ${yellow}Existing GSD installation detected${reset}
+
+  CAP (Code as Plan) replaces GSD entirely. The old GSD files are no
+  longer needed and may cause conflicts (duplicate agents, outdated
+  commands referencing removed workflows).
+
+  Found:
+${gsdAgents.length > 0 ? `    ${cyan}${gsdAgents.length}${reset} GSD agent files (gsd-*.md)\n` : ''}${gsdDirs.map(d => `    ${cyan}${d.label}${reset}\n`).join('')}
+  Removing these is safe — all functionality is covered by CAP.
+  Your project files and custom configurations are NOT affected.
+`);
+
+  const doCleanup = () => {
+    let removed = 0;
+
+    // Remove gsd-* agents
+    for (const file of gsdAgents) {
+      try {
+        fs.unlinkSync(path.join(agentsDir, file));
+        removed++;
+      } catch (_e) {}
+    }
+    if (gsdAgents.length > 0) {
+      console.log(`  ${green}✓${reset} Removed ${gsdAgents.length} GSD agent files`);
+    }
+
+    // Remove legacy directories
+    for (const lp of gsdDirs) {
+      const fullPath = path.join(targetDir, lp.rel);
+      try {
+        fs.rmSync(fullPath, { recursive: true });
+        removed++;
+        console.log(`  ${green}✓${reset} Removed ${lp.label}`);
+      } catch (_e) {}
+    }
+
+    console.log(`  ${green}✓${reset} GSD cleanup complete (${removed} items removed)\n`);
+    callback();
   };
 
-  if (primaryStatuslineResult) {
-    handleStatusline(primaryStatuslineResult.settings, isInteractive, finalize);
-  } else {
-    finalize(false);
+  if (!isInteractive) {
+    // Non-interactive: clean up automatically
+    doCleanup();
+    return;
   }
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let answered = false;
+
+  rl.on('close', () => {
+    if (!answered) { answered = true; callback(); }
+  });
+
+  console.log(`  ${cyan}1${reset}) Yes, remove old GSD files ${dim}(recommended)${reset}`);
+  console.log(`  ${cyan}2${reset}) No, keep them\n`);
+
+  rl.question(`  Choice ${dim}[1]${reset}: `, (answer) => {
+    answered = true;
+    rl.close();
+    const choice = answer.trim() || '1';
+    if (choice === '1') {
+      doCleanup();
+    } else {
+      console.log(`  ${dim}Skipped GSD cleanup. You can remove manually later:${reset}`);
+      console.log(`  ${dim}rm -f ~/.claude/agents/gsd-*.md && rm -rf ~/.claude/get-shit-done${reset}\n`);
+      callback();
+    }
+  });
+}
+
+function installAllRuntimes(runtimes, isGlobal, isInteractive) {
+  // Check first runtime's target dir for GSD leftovers
+  const firstRuntime = runtimes[0] || 'claude';
+  const dirName = getDirName(firstRuntime);
+  const checkDir = isGlobal
+    ? getGlobalDir(firstRuntime, explicitConfigDir)
+    : path.join(process.cwd(), dirName);
+
+  detectAndCleanupGSD(checkDir, isInteractive, () => {
+    const results = [];
+
+    for (const runtime of runtimes) {
+      const result = install(isGlobal, runtime);
+      results.push(result);
+    }
+
+    const statuslineRuntimes = ['claude', 'gemini'];
+    const primaryStatuslineResult = results.find(r => statuslineRuntimes.includes(r.runtime));
+
+    const finalize = (shouldInstallStatusline) => {
+      const printSummaries = () => {
+        for (const result of results) {
+          const useStatusline = statuslineRuntimes.includes(result.runtime) && shouldInstallStatusline;
+          finishInstall(
+            result.settingsPath,
+            result.settings,
+            result.statuslineCommand,
+            useStatusline,
+            result.runtime,
+            isGlobal
+          );
+        }
+      };
+
+      printSummaries();
+    };
+
+    if (primaryStatuslineResult) {
+      handleStatusline(primaryStatuslineResult.settings, isInteractive, finalize);
+    } else {
+      finalize(false);
+    }
+  }); // end detectAndCleanupGSD callback
 }
 
 // Test-only exports — skip main logic when loaded as a module for testing
