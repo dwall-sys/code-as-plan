@@ -4634,7 +4634,10 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
   if (runtime === 'antigravity') command = '/cap-new-project';
   if (runtime === 'cursor') command = 'cap-new-project (mention the skill name)';
   console.log(`
-  ${green}Done!${reset} Open a blank directory in ${program} and run ${cyan}${command}${reset}.
+  ${green}Done!${reset} Open a directory in ${program} and run ${cyan}/cap:init${reset} to get started.
+
+  ${dim}Note: The first /cap:init will fetch library docs via Context7 (npx ctx7@latest).
+  This may take a few seconds on first run — results are cached in .cap/stack-docs/.${reset}
 
   ${cyan}Join the community:${reset} https://discord.gg/code-as-plan
 `);
