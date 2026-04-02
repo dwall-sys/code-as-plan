@@ -1,6 +1,7 @@
 /**
  * Roadmap — Roadmap parsing and update operations
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — roadmap parsing and update operations
 
 const fs = require('fs');
 const path = require('path');

@@ -9,23 +9,23 @@ allowed-tools:
   - Grep
 ---
 
-<!-- @gsd-context CAP v2.0 init command (final pass) -- adds mandatory Context7 integration and brownfield detection on top of the base init flow. -->
-<!-- @gsd-decision Context7 fetch is mandatory at init time per AC-81. If unreachable, warning is emitted but init continues with explicit marker in SESSION.json. -->
-<!-- @gsd-decision Brownfield analysis is ephemeral -- results are used as context for /cap:annotate suggestion, NOT persisted as a separate document (AC-87). -->
-<!-- @gsd-decision No /cap:map command exists. Codebase analysis is part of /cap:init only (AC-90). -->
-<!-- @gsd-constraint No prompts, wizards, or configuration forms. Init completes in a single invocation (AC-4, AC-5). -->
+<!-- @cap-context CAP v2.0 init command (final pass) -- adds mandatory Context7 integration and brownfield detection on top of the base init flow. -->
+<!-- @cap-decision Context7 fetch is mandatory at init time per AC-81. If unreachable, warning is emitted but init continues with explicit marker in SESSION.json. -->
+<!-- @cap-decision Brownfield analysis is ephemeral -- results are used as context for /cap:annotate suggestion, NOT persisted as a separate document (AC-87). -->
+<!-- @cap-decision No /cap:map command exists. Codebase analysis is part of /cap:init only (AC-90). -->
+<!-- @cap-constraint No prompts, wizards, or configuration forms. Init completes in a single invocation (AC-4, AC-5). -->
 
-<!-- @gsd-todo(ref:AC-81) Detect all dependencies from package.json / requirements.txt / Cargo.toml / go.mod and fetch docs via Context7 -->
-<!-- @gsd-todo(ref:AC-82) Store fetched stack docs in .cap/stack-docs/{library-name}.md compressed to API surface, config, breaking changes -->
-<!-- @gsd-todo(ref:AC-83) Agents receive .cap/stack-docs/ as context input on every invocation -->
-<!-- @gsd-todo(ref:AC-84) Stack-docs carry freshness marker (fetch date). Docs older than 7 days auto-refreshed. Manual refresh via /cap:refresh-docs -->
-<!-- @gsd-todo(ref:AC-85) Context7 fetching is MANDATORY at init. If unreachable, warning emitted and init continues with explicit marker -->
-<!-- @gsd-todo(ref:AC-86) Brownfield init performs one-time codebase analysis: architecture detection, convention detection, test setup detection -->
-<!-- @gsd-todo(ref:AC-87) Brownfield analysis result NOT persisted as separate document -- used as init context for /cap:annotate suggestion -->
-<!-- @gsd-todo(ref:AC-88) After brownfield init, suggest /cap:annotate to retroactively annotate existing code -->
-<!-- @gsd-todo(ref:AC-90) No /cap:map command. Codebase analysis is part of /cap:init -->
-<!-- @gsd-todo(ref:AC-91) To refresh codebase information: /cap:annotate + /cap:refresh-docs -->
-<!-- @gsd-todo(ref:AC-92) The 7 documents from .planning/codebase/ shall NOT be generated in v2.0 -->
+<!-- @cap-todo(ref:AC-81) Detect all dependencies from package.json / requirements.txt / Cargo.toml / go.mod and fetch docs via Context7 -->
+<!-- @cap-todo(ref:AC-82) Store fetched stack docs in .cap/stack-docs/{library-name}.md compressed to API surface, config, breaking changes -->
+<!-- @cap-todo(ref:AC-83) Agents receive .cap/stack-docs/ as context input on every invocation -->
+<!-- @cap-todo(ref:AC-84) Stack-docs carry freshness marker (fetch date). Docs older than 7 days auto-refreshed. Manual refresh via /cap:refresh-docs -->
+<!-- @cap-todo(ref:AC-85) Context7 fetching is MANDATORY at init. If unreachable, warning emitted and init continues with explicit marker -->
+<!-- @cap-todo(ref:AC-86) Brownfield init performs one-time codebase analysis: architecture detection, convention detection, test setup detection -->
+<!-- @cap-todo(ref:AC-87) Brownfield analysis result NOT persisted as separate document -- used as init context for /cap:annotate suggestion -->
+<!-- @cap-todo(ref:AC-88) After brownfield init, suggest /cap:annotate to retroactively annotate existing code -->
+<!-- @cap-todo(ref:AC-90) No /cap:map command. Codebase analysis is part of /cap:init -->
+<!-- @cap-todo(ref:AC-91) To refresh codebase information: /cap:annotate + /cap:refresh-docs -->
+<!-- @cap-todo(ref:AC-92) The 7 documents from .planning/codebase/ shall NOT be generated in v2.0 -->
 
 <objective>
 Initialize the CAP project structure with mandatory Context7 stack documentation fetch and brownfield codebase analysis. This command:
@@ -150,7 +150,7 @@ If `created === 0`: Log: "All apps already have FEATURE-MAP.md (or no source fil
 
 ## Step 6: Mandatory Context7 dependency fetch
 
-<!-- @gsd-decision Multi-language dependency detection runs in priority order: package.json first, then requirements.txt, then Cargo.toml, then go.mod. First match sets project type. -->
+<!-- @cap-decision Multi-language dependency detection runs in priority order: package.json first, then requirements.txt, then Cargo.toml, then go.mod. First match sets project type. -->
 
 ### 6a: Detect dependencies
 
@@ -206,7 +206,7 @@ If some fetches succeeded:
 
 ## Step 7: Brownfield codebase analysis
 
-<!-- @gsd-decision Brownfield analysis detects 3 things: (1) architecture pattern, (2) coding conventions, (3) test setup. Results are ephemeral -- used only for the /cap:annotate suggestion. -->
+<!-- @cap-decision Brownfield analysis detects 3 things: (1) architecture pattern, (2) coding conventions, (3) test setup. Results are ephemeral -- used only for the /cap:annotate suggestion. -->
 
 ### 7a: Check for existing source code
 

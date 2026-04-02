@@ -1,3 +1,4 @@
+// @cap-feature(feature:F-014) Developer Profiling — profile rendering and artifact generation
 /**
  * Profile Output — profile rendering, questionnaire, and artifact generation
  *

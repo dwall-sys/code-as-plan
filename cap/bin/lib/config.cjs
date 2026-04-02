@@ -1,6 +1,7 @@
 /**
  * Config — Planning config CRUD operations
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — planning config CRUD operations
 
 const fs = require('fs');
 const path = require('path');
@@ -63,7 +64,7 @@ function validateKnownConfigKeyPath(keyPath) {
  *
  * Merges (increasing priority):
  *   1. Hardcoded defaults — every key that loadConfig() resolves, plus mode/granularity
- *   2. User-level defaults from ~/.gsd/defaults.json (if present)
+ *   2. User-level defaults from ~/.cap/defaults.json (if present)
  *   3. userChoices — the settings the user explicitly selected during /gsd:new-project
  *
  * Uses the canonical `git` namespace for branching keys (consistent with VALID_CONFIG_KEYS
@@ -84,7 +85,7 @@ function buildNewProjectConfig(userChoices) {
   const exaKeyFile = path.join(homedir, '.gsd', 'exa_api_key');
   const hasExaSearch = !!(process.env.EXA_API_KEY || fs.existsSync(exaKeyFile));
 
-  // Load user-level defaults from ~/.gsd/defaults.json if available
+  // Load user-level defaults from ~/.cap/defaults.json if available
   const globalDefaultsPath = path.join(homedir, '.gsd', 'defaults.json');
   let userDefaults = {};
   try {
@@ -139,7 +140,7 @@ function buildNewProjectConfig(userChoices) {
     agent_skills: {},
     arc: {
       enabled: true,
-      tag_prefix: '@gsd-',
+      tag_prefix: '@cap-',
       comment_anchors: ['//', '#', '/*', '--'],
     },
     phase_modes: {},
@@ -190,7 +191,7 @@ function buildNewProjectConfig(userChoices) {
  *
  * Accepts user-chosen settings as a JSON string (the keys the user explicitly
  * configured during /gsd:new-project). All remaining keys are filled from
- * hardcoded defaults and optional ~/.gsd/defaults.json.
+ * hardcoded defaults and optional ~/.cap/defaults.json.
  *
  * Idempotent: if config.json already exists, returns { created: false }.
  */

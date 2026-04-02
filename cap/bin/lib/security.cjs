@@ -15,6 +15,8 @@
  */
 'use strict';
 
+// @cap-feature(feature:F-011) Legacy GSD Modules — security: path traversal, prompt injection, shell metachar guards
+
 const fs = require('fs');
 const path = require('path');
 

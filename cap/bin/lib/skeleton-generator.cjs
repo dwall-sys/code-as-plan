@@ -1,14 +1,16 @@
-// @gsd-context(phase:11) Skeleton generator -- produces directory tree and file list for architecture mode confirmation gate
-// @gsd-decision This is a utility that generates the PLAN (tree display), not the files themselves. The agent creates files via Write tool after user confirms the plan.
-// @gsd-ref(ref:ARCH-01) Supports skeleton generation with folder structure, config, and typed interfaces
-// @gsd-ref(ref:ARCH-04) Generates preview for confirmation gate -- no files written until approved
+// @cap-context(phase:11) Skeleton generator -- produces directory tree and file list for architecture mode confirmation gate
+// @cap-decision This is a utility that generates the PLAN (tree display), not the files themselves. The agent creates files via Write tool after user confirms the plan.
+// @cap-ref(ref:ARCH-01) Supports skeleton generation with folder structure, config, and typed interfaces
+// @cap-ref(ref:ARCH-04) Generates preview for confirmation gate -- no files written until approved
 
 'use strict';
 
+// @cap-feature(feature:F-013) Convention & Skeleton Generation — architecture mode skeleton plan generator
+
 const path = require('node:path');
 
-// @gsd-api generateSkeletonPlan(conventions, modules) -- returns SkeletonPlan with tree string and file list
-// @gsd-pattern Skeleton plans are data structures, not side-effectful -- file writing is done by the agent after user approval
+// @cap-api generateSkeletonPlan(conventions, modules) -- returns SkeletonPlan with tree string and file list
+// @cap-pattern Skeleton plans are data structures, not side-effectful -- file writing is done by the agent after user approval
 
 /**
  * @typedef {Object} SkeletonFile
@@ -35,13 +37,13 @@ const path = require('node:path');
  * @returns {SkeletonPlan}
  */
 function generateSkeletonPlan(conventions, moduleNames) {
-  // @gsd-todo(ref:AC-1) Implement skeleton plan generation that produces folder structure, config files, and typed interfaces based on discovered conventions
-  // @gsd-constraint Generated skeleton must contain zero feature implementation code -- only structure and interfaces
+  // @cap-todo(ref:AC-1) Implement skeleton plan generation that produces folder structure, config files, and typed interfaces based on discovered conventions
+  // @cap-constraint Generated skeleton must contain zero feature implementation code -- only structure and interfaces
 
   const files = [];
   const isEsm = conventions.moduleType === 'esm';
 
-  // @gsd-decision Config files are generated first in the plan because they define project-wide conventions that module files depend on
+  // @cap-decision Config files are generated first in the plan because they define project-wide conventions that module files depend on
   files.push({
     relativePath: 'package.json',
     type: 'config',
@@ -56,7 +58,7 @@ function generateSkeletonPlan(conventions, moduleNames) {
     });
   }
 
-  // @gsd-decision Entry point is src/index with extension matching module type (.mjs for ESM, .cjs for CJS, .js as default)
+  // @cap-decision Entry point is src/index with extension matching module type (.mjs for ESM, .cjs for CJS, .js as default)
   const ext = isEsm ? '.js' : '.cjs';
   files.push({
     relativePath: `src/index${ext}`,
@@ -71,10 +73,10 @@ function generateSkeletonPlan(conventions, moduleNames) {
     purpose: 'Shared type definitions used across module boundaries',
   });
 
-  // @gsd-pattern Each module gets exactly three files: barrel (index), types, and a single stub
-  // @gsd-decision Three-file module template keeps boundaries consistent and predictable across the codebase
+  // @cap-pattern Each module gets exactly three files: barrel (index), types, and a single stub
+  // @cap-decision Three-file module template keeps boundaries consistent and predictable across the codebase
   for (const moduleName of moduleNames) {
-    // @gsd-context Module naming follows discovered convention (kebab-case, camelCase, etc.)
+    // @cap-context Module naming follows discovered convention (kebab-case, camelCase, etc.)
     const dirName = applyNamingConvention(moduleName, conventions.namingConvention);
 
     files.push({
@@ -97,7 +99,7 @@ function generateSkeletonPlan(conventions, moduleNames) {
   }
 
   // Test structure
-  // @gsd-decision Test directory structure matches discovered convention -- colocated or separate
+  // @cap-decision Test directory structure matches discovered convention -- colocated or separate
   if (conventions.testPattern === 'separate-dir') {
     files.push({
       relativePath: 'tests/.gitkeep',
@@ -125,7 +127,7 @@ function generateSkeletonPlan(conventions, moduleNames) {
  * @returns {string}
  */
 function applyNamingConvention(name, convention) {
-  // @gsd-todo Implement naming convention transformations (kebab-case, camelCase, PascalCase, snake_case)
+  // @cap-todo Implement naming convention transformations (kebab-case, camelCase, PascalCase, snake_case)
   const normalized = name.toLowerCase().replace(/\s+/g, '-');
   switch (convention) {
     case 'kebab-case':
@@ -147,7 +149,7 @@ function applyNamingConvention(name, convention) {
  * @returns {string}
  */
 function buildTreeString(files) {
-  // @gsd-todo Implement tree string builder with proper indentation and box-drawing characters
+  // @cap-todo Implement tree string builder with proper indentation and box-drawing characters
   // Stub: returns a simple flat listing
   const lines = ['project-root/'];
   for (const file of files) {
@@ -173,5 +175,5 @@ function countUniqueDirectories(files) {
   return dirs.size;
 }
 
-// @gsd-api Exports: generateSkeletonPlan, applyNamingConvention (for testing)
+// @cap-api Exports: generateSkeletonPlan, applyNamingConvention (for testing)
 module.exports = { generateSkeletonPlan, applyNamingConvention, buildTreeString };

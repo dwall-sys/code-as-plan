@@ -13,12 +13,12 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 review command -- orchestrates two-stage code review. Collects test results, reads Feature Map ACs, spawns cap-reviewer agent. -->
-<!-- @gsd-decision Stage 2 only runs if Stage 1 passes -- prevents wasted review cycles on code that does not meet spec. -->
-<!-- @gsd-decision Review output goes to .cap/REVIEW.md -- centralized under .cap/ runtime directory. -->
+<!-- @cap-context CAP v2.0 review command -- orchestrates two-stage code review. Collects test results, reads Feature Map ACs, spawns cap-reviewer agent. -->
+<!-- @cap-decision Stage 2 only runs if Stage 1 passes -- prevents wasted review cycles on code that does not meet spec. -->
+<!-- @cap-decision Review output goes to .cap/REVIEW.md -- centralized under .cap/ runtime directory. -->
 
 <objective>
-<!-- @gsd-todo(ref:AC-58) /cap:review shall invoke the cap-reviewer agent for two-stage review. -->
+<!-- @cap-todo(ref:AC-58) /cap:review shall invoke the cap-reviewer agent for two-stage review. -->
 
 Runs two-stage code review:
 1. Stage 1: Check Feature Map AC compliance (does the code implement what was promised?)
@@ -58,7 +58,7 @@ Store output as `test_output` and exit code as `test_exit_code`.
 
 ## Step 2: Read Feature Map ACs for review scope
 
-<!-- @gsd-todo(ref:AC-59) Stage 1: cap-reviewer shall verify that the implementation satisfies all acceptance criteria listed in the Feature Map entry. -->
+<!-- @cap-todo(ref:AC-59) Stage 1: cap-reviewer shall verify that the implementation satisfies all acceptance criteria listed in the Feature Map entry. -->
 
 ```bash
 node -e "
@@ -92,7 +92,7 @@ Store as `review_features`.
 
 ## Step 3: Spawn cap-reviewer for Stage 1 (AC compliance)
 
-<!-- @gsd-todo(ref:AC-61) cap-reviewer shall check that all code implementing the feature has appropriate @cap-feature annotations. -->
+<!-- @cap-todo(ref:AC-61) cap-reviewer shall check that all code implementing the feature has appropriate @cap-feature annotations. -->
 
 **Skip Stage 1 if `stage2_only`.**
 
@@ -164,7 +164,7 @@ Run /cap:iterate to address gaps, then re-run /cap:review.
 
 ## Step 4: Spawn cap-reviewer for Stage 2 (code quality)
 
-<!-- @gsd-todo(ref:AC-60) Stage 2: cap-reviewer shall perform code quality review (naming, structure, complexity, test coverage, tag completeness). -->
+<!-- @cap-todo(ref:AC-60) Stage 2: cap-reviewer shall perform code quality review (naming, structure, complexity, test coverage, tag completeness). -->
 
 Spawn `cap-reviewer` via Task tool:
 
@@ -206,7 +206,7 @@ Parse Stage 2 results.
 
 ## Step 5: Update Feature Map status
 
-<!-- @gsd-todo(ref:AC-62) cap-reviewer shall update the feature state in FEATURE-MAP.md from tested to shipped upon passing both review stages. -->
+<!-- @cap-todo(ref:AC-62) cap-reviewer shall update the feature state in FEATURE-MAP.md from tested to shipped upon passing both review stages. -->
 
 If both stages pass (or Stage 1 skipped with `stage2_only` and Stage 2 passes):
 

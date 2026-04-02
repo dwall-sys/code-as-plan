@@ -1,3 +1,4 @@
+// @cap-feature(feature:F-014) Developer Profiling — session scanning, message extraction, and behavioral sampling
 /**
  * Profile Pipeline — session scanning, message extraction, and sampling
  *

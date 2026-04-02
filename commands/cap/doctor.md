@@ -7,8 +7,8 @@ allowed-tools:
   - Read
 ---
 
-<!-- @gsd-context CAP v2.0 doctor command -- checks all external dependencies CAP needs at runtime and reports health status. -->
-<!-- @gsd-decision Doctor is read-only -- it checks tool availability but never installs anything. Safe to run at any time. -->
+<!-- @cap-context CAP v2.0 doctor command -- checks all external dependencies CAP needs at runtime and reports health status. -->
+<!-- @cap-decision Doctor is read-only -- it checks tool availability but never installs anything. Safe to run at any time. -->
 
 <objective>
 Check that all required and optional external tools for CAP are installed and working. Reports health status with version info and install hints for missing tools.

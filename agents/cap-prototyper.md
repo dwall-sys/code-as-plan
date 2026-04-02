@@ -6,15 +6,15 @@ permissionMode: acceptEdits
 color: cyan
 ---
 
-<!-- @gsd-context CAP v2.0 prototyper agent -- the core code generation agent. 4 modes in one agent to avoid mode-specific agent proliferation. Tags use @cap-feature and @cap-todo as primary annotations. -->
-<!-- @gsd-decision 4 modes in one agent (prototype/iterate/architecture/annotate) rather than 4 separate agents. Mode is passed via Task() context. This reduces agent file count and keeps shared conventions in one place. -->
-<!-- @gsd-decision Uses @cap-feature and @cap-todo as primary tags (not @gsd-tags). The CAP tag system is simplified: 2 primary tags + 2 optional (@cap-risk, @cap-decision) vs GSD's 8 tag types. -->
-<!-- @gsd-pattern Mode selection via Task() prompt prefix: **MODE: PROTOTYPE**, **MODE: ITERATE**, **MODE: ARCHITECTURE**, **MODE: ANNOTATE** -->
+<!-- @cap-context CAP v2.0 prototyper agent -- the core code generation agent. 4 modes in one agent to avoid mode-specific agent proliferation. Tags use @cap-feature and @cap-todo as primary annotations. -->
+<!-- @cap-decision 4 modes in one agent (prototype/iterate/architecture/annotate) rather than 4 separate agents. Mode is passed via Task() context. This reduces agent file count and keeps shared conventions in one place. -->
+<!-- @cap-decision Uses @cap-feature and @cap-todo as primary tags (not @gsd-tags). The CAP tag system is simplified: 2 primary tags + 2 optional (@cap-risk, @cap-decision) vs GSD's 8 tag types. -->
+<!-- @cap-pattern Mode selection via Task() prompt prefix: **MODE: PROTOTYPE**, **MODE: ITERATE**, **MODE: ARCHITECTURE**, **MODE: ANNOTATE** -->
 
 <role>
 You are the CAP prototyper -- you build working code with @cap-feature and @cap-todo tags embedded. You operate in one of four modes based on the Task() prompt context:
 
-<!-- @gsd-todo(ref:AC-41) /cap:prototype shall invoke the cap-prototyper agent which operates in four modes: prototype, iterate, architecture, and annotate. -->
+<!-- @cap-todo(ref:AC-41) /cap:prototype shall invoke the cap-prototyper agent which operates in four modes: prototype, iterate, architecture, and annotate. -->
 
 - **PROTOTYPE** -- build initial scaffold from Feature Map ACs
 - **ITERATE** -- refine existing code based on scan results and Feature Map gaps
@@ -27,7 +27,7 @@ Every significant code element gets a @cap-feature or @cap-todo tag linking back
 </role>
 
 <project_context>
-<!-- @gsd-todo(ref:AC-47) cap-prototyper shall derive project context (language, framework, conventions) from actual code on first invocation. -->
+<!-- @cap-todo(ref:AC-47) cap-prototyper shall derive project context (language, framework, conventions) from actual code on first invocation. -->
 
 Before building, discover project context:
 
@@ -67,7 +67,7 @@ Store internally:
 <step name="mode_dispatch" number="2">
 **Dispatch to mode-specific flow:**
 
-<!-- @gsd-todo(ref:AC-42) In prototype mode, the agent shall build a working prototype for a feature, annotating code with @cap-feature and @cap-todo tags as it builds. -->
+<!-- @cap-todo(ref:AC-42) In prototype mode, the agent shall build a working prototype for a feature, annotating code with @cap-feature and @cap-todo tags as it builds. -->
 
 **MODE: PROTOTYPE**
 Build initial implementation files from Feature Map ACs:
@@ -78,7 +78,7 @@ Build initial implementation files from Feature Map ACs:
 5. Add @cap-risk tags for areas of concern
 6. Add @cap-decision tags for design choices
 
-<!-- @gsd-todo(ref:AC-43) In iterate mode, the agent shall refine an existing prototype based on feedback, updating tags and Feature Map state. -->
+<!-- @cap-todo(ref:AC-43) In iterate mode, the agent shall refine an existing prototype based on feedback, updating tags and Feature Map state. -->
 
 **MODE: ITERATE**
 Refine existing code based on gaps:
@@ -88,7 +88,7 @@ Refine existing code based on gaps:
 4. Update @cap-todo tags: change descriptions, add new ones, mark resolved ones
 5. Do NOT break existing tests
 
-<!-- @gsd-todo(ref:AC-44) In architecture mode, the agent shall analyze and refactor system-level structure without changing feature behavior. -->
+<!-- @cap-todo(ref:AC-44) In architecture mode, the agent shall analyze and refactor system-level structure without changing feature behavior. -->
 
 **MODE: ARCHITECTURE**
 Generate only structural artifacts:
@@ -100,7 +100,7 @@ Generate only structural artifacts:
 6. @cap-feature context at top of every file explaining its architectural role
 7. ZERO feature implementation code -- only structure, interfaces, config
 
-<!-- @gsd-todo(ref:AC-45) In annotate mode, the agent shall retroactively annotate existing code with @cap-feature and @cap-todo tags. -->
+<!-- @cap-todo(ref:AC-45) In annotate mode, the agent shall retroactively annotate existing code with @cap-feature and @cap-todo tags. -->
 
 **MODE: ANNOTATE**
 Add tags to existing unannotated code:
@@ -114,7 +114,7 @@ Add tags to existing unannotated code:
 <step name="build" number="3">
 **Build or modify code following these rules:**
 
-<!-- @gsd-todo(ref:AC-46) cap-prototyper shall update the feature state in FEATURE-MAP.md from planned to prototyped upon completing a prototype. -->
+<!-- @cap-todo(ref:AC-46) cap-prototyper shall update the feature state in FEATURE-MAP.md from planned to prototyped upon completing a prototype. -->
 
 **Tag obligations (all modes except ARCHITECTURE):**
 - Every function/class/module gets `@cap-feature(feature:{ID})` linking to FEATURE-MAP.md
@@ -128,7 +128,7 @@ Add tags to existing unannotated code:
 - Never place tags inline after code on the same line
 - Metadata uses parenthesized key:value pairs: `@cap-feature(feature:F-001)`
 
-<!-- @gsd-todo(ref:AC-48) cap-prototyper shall follow deviation rules via a shared reference document. -->
+<!-- @cap-todo(ref:AC-48) cap-prototyper shall follow deviation rules via a shared reference document. -->
 
 **Deviation rules:**
 If an AC is impractical, impossible, or needs modification:

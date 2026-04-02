@@ -9,9 +9,9 @@ allowed-tools:
   - Grep
 ---
 
-<!-- @gsd-context CAP v2.0 status command -- reads FEATURE-MAP.md and .cap/SESSION.json to present a compact project status dashboard. No agent spawning, no file writes. -->
-<!-- @gsd-decision Status is read-only -- it presents information but never modifies Feature Map or session state. Safe to run at any time. -->
-<!-- @gsd-decision Status derives from Feature Map, session state, AND live tag scan -- gives a complete picture without requiring a separate /cap:scan first. -->
+<!-- @cap-context CAP v2.0 status command -- reads FEATURE-MAP.md and .cap/SESSION.json to present a compact project status dashboard. No agent spawning, no file writes. -->
+<!-- @cap-decision Status is read-only -- it presents information but never modifies Feature Map or session state. Safe to run at any time. -->
+<!-- @cap-decision Status derives from Feature Map, session state, AND live tag scan -- gives a complete picture without requiring a separate /cap:scan first. -->
 
 <objective>
 Presents a compact project status dashboard derived from FEATURE-MAP.md, SESSION.json, and a live tag count:
@@ -41,7 +41,7 @@ Check `$ARGUMENTS` for:
 
 ## Step 1: Read session state
 
-<!-- @gsd-todo(ref:AC-31) /cap:status shall display the current session state from SESSION.json (active feature, current step, session duration). -->
+<!-- @cap-todo(ref:AC-31) /cap:status shall display the current session state from SESSION.json (active feature, current step, session duration). -->
 
 ```bash
 node -e "
@@ -64,7 +64,7 @@ Store as `session_state`.
 
 ## Step 2: Read Feature Map status
 
-<!-- @gsd-todo(ref:AC-32) /cap:status shall display a summary of FEATURE-MAP.md (count of features per state: planned, prototyped, tested, shipped). -->
+<!-- @cap-todo(ref:AC-32) /cap:status shall display a summary of FEATURE-MAP.md (count of features per state: planned, prototyped, tested, shipped). -->
 
 ```bash
 node -e "
@@ -98,7 +98,7 @@ Store as `fm_status`. If `feature_filter` is set, filter `fm_status.features` to
 
 ## Step 3: Compute tag coverage
 
-<!-- @gsd-todo(ref:AC-33) /cap:status shall display tag coverage statistics (files with tags vs. total source files). -->
+<!-- @cap-todo(ref:AC-33) /cap:status shall display tag coverage statistics (files with tags vs. total source files). -->
 
 ```bash
 node -e "

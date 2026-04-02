@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// cap-hook-version: {{GSD_VERSION}}
+// @cap-feature(feature:F-009) Hooks System — background update checker (SessionStart hook)
+// cap-hook-version: {{CAP_VERSION}}
 // Check for CAP updates in background, write result to cache
 // Called by SessionStart hook - runs once per session
 

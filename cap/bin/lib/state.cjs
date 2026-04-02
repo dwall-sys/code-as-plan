@@ -1,6 +1,7 @@
 /**
  * State — STATE.md operations and progression engine
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — STATE.md operations and progression engine
 
 const fs = require('fs');
 const path = require('path');

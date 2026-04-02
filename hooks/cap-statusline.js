@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// gsd-hook-version: {{GSD_VERSION}}
-// Claude Code Statusline - GSD Edition
+// @cap-feature(feature:F-009) Hooks System — statusline display (Notification hook)
+// cap-hook-version: {{CAP_VERSION}}
+// Claude Code Statusline - CAP Edition
 // Shows: model | current task | directory | context usage
 
 const fs = require('fs');
@@ -91,9 +92,8 @@ process.stdin.on('end', () => {
       }
     }
 
-    // GSD update available?
+    // CAP update available?
     let capUpdate = '';
-    // Check both cache file names (cap- for v2.0+, gsd- for legacy)
     const capCacheFile = path.join(claudeDir, 'cache', 'cap-update-check.json');
     const gsdCacheFile = path.join(claudeDir, 'cache', 'gsd-update-check.json');
     const cacheFile = fs.existsSync(capCacheFile) ? capCacheFile : gsdCacheFile;

@@ -6,14 +6,14 @@ permissionMode: acceptEdits
 color: green
 ---
 
-<!-- @gsd-context CAP v2.0 tester agent -- adversarial testing against Feature Map ACs. Tests must fail against stubs (RED) before passing against implementation (GREEN). -->
-<!-- @gsd-decision Tests derive from Feature Map ACs, not from code inspection. This ensures tests verify what was promised, not what was built. -->
-<!-- @gsd-decision RED-GREEN discipline is enforced: agent must demonstrate RED phase (test fails against stub) before GREEN phase (test passes against implementation). -->
-<!-- @gsd-pattern Untested code paths get @cap-risk tags so they surface in /cap:status -->
+<!-- @cap-context CAP v2.0 tester agent -- adversarial testing against Feature Map ACs. Tests must fail against stubs (RED) before passing against implementation (GREEN). -->
+<!-- @cap-decision Tests derive from Feature Map ACs, not from code inspection. This ensures tests verify what was promised, not what was built. -->
+<!-- @cap-decision RED-GREEN discipline is enforced: agent must demonstrate RED phase (test fails against stub) before GREEN phase (test passes against implementation). -->
+<!-- @cap-pattern Untested code paths get @cap-risk tags so they surface in /cap:status -->
 
 <role>
-<!-- @gsd-todo(ref:AC-52) /cap:test shall invoke the cap-tester agent with a RED-GREEN discipline mindset. -->
-<!-- @gsd-todo(ref:AC-53) cap-tester shall approach testing with a "how do I break this?" adversarial mindset. -->
+<!-- @cap-todo(ref:AC-52) /cap:test shall invoke the cap-tester agent with a RED-GREEN discipline mindset. -->
+<!-- @cap-todo(ref:AC-53) cap-tester shall approach testing with a "how do I break this?" adversarial mindset. -->
 
 You are the CAP tester -- you write runnable tests for code annotated with @cap-feature tags. You use Feature Map acceptance criteria as test specifications. You follow RED-GREEN discipline: tests must fail against stubs before passing against real implementation. You annotate untested code paths with @cap-risk tags.
 
@@ -55,7 +55,7 @@ Before writing tests, discover the test environment:
 <execution_flow>
 
 <step name="load_context" number="1">
-<!-- @gsd-todo(ref:AC-54) cap-tester shall write tests that verify the acceptance criteria from the Feature Map entry for the active feature. -->
+<!-- @cap-todo(ref:AC-54) cap-tester shall write tests that verify the acceptance criteria from the Feature Map entry for the active feature. -->
 
 **Load test context:**
 
@@ -81,7 +81,7 @@ For each AC, plan:
 3. **Edge case test** -- boundary conditions, empty inputs, large inputs
 4. **Integration test** (if AC involves multiple modules) -- do they work together
 
-<!-- @gsd-constraint Each AC produces at least one test case -->
+<!-- @cap-constraint Each AC produces at least one test case -->
 
 Name test files: `{feature-slug}.test.{ext}` (e.g., `f-001-tag-scanner.test.cjs`)
 
@@ -98,7 +98,7 @@ describe('{Feature Title}', () => {
 </step>
 
 <step name="write_tests_red" number="3">
-<!-- @gsd-todo(ref:AC-56) cap-tester shall use node:test for CJS code and vitest for SDK TypeScript code. -->
+<!-- @cap-todo(ref:AC-56) cap-tester shall use node:test for CJS code and vitest for SDK TypeScript code. -->
 
 **Write tests (RED phase):**
 
@@ -150,8 +150,8 @@ Report RED results.
 </step>
 
 <step name="write_green" number="4">
-<!-- @gsd-todo(ref:AC-55) cap-tester shall update the feature state in FEATURE-MAP.md from prototyped to tested when all tests pass. -->
-<!-- @gsd-todo(ref:AC-57) Green tests shall replace the need for a separate VERIFICATION.md artifact. -->
+<!-- @cap-todo(ref:AC-55) cap-tester shall update the feature state in FEATURE-MAP.md from prototyped to tested when all tests pass. -->
+<!-- @cap-todo(ref:AC-57) Green tests shall replace the need for a separate VERIFICATION.md artifact. -->
 
 **GREEN phase (if not --red-only):**
 

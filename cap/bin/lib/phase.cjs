@@ -1,6 +1,7 @@
 /**
  * Phase — Phase CRUD, query, and lifecycle operations
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — phase CRUD, query, and lifecycle operations
 
 const fs = require('fs');
 const path = require('path');

@@ -1,15 +1,17 @@
-// @gsd-context Manifest generator for monorepo shared packages -- extracts public API surface and produces markdown summaries
-// @gsd-decision Scans index/barrel files and TypeScript .d.ts files rather than full AST parsing -- regex is sufficient for export extraction
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
-// @gsd-ref(ref:AC-5) Shared packages get auto-generated API manifests stored in root .planning/manifests/
-// @gsd-pattern Manifest output is markdown so it can be injected directly into agent context as lightweight reference
+// @cap-context Manifest generator for monorepo shared packages -- extracts public API surface and produces markdown summaries
+// @cap-decision Scans index/barrel files and TypeScript .d.ts files rather than full AST parsing -- regex is sufficient for export extraction
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
+// @cap-ref(ref:AC-5) Shared packages get auto-generated API manifests stored in root .planning/manifests/
+// @cap-pattern Manifest output is markdown so it can be injected directly into agent context as lightweight reference
 
 'use strict';
+
+// @cap-feature(feature:F-012) Monorepo Support — API manifest generator for shared packages
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-// @gsd-api generateManifest(packagePath, options) -- returns ManifestData object with exports, types, and description
+// @cap-api generateManifest(packagePath, options) -- returns ManifestData object with exports, types, and description
 
 /**
  * @typedef {Object} ExportEntry
@@ -54,10 +56,10 @@ function generateManifest(packageAbsPath, options) {
     generatedAt: new Date().toISOString(),
   };
 
-  // @gsd-decision Extract workspace:* dependencies to identify internal monorepo links
+  // @cap-decision Extract workspace:* dependencies to identify internal monorepo links
   manifest.dependencies = extractWorkspaceDeps(pkg);
 
-  // @gsd-context Find and scan the main entry point / barrel file for exports
+  // @cap-context Find and scan the main entry point / barrel file for exports
   const entryFile = resolveEntryFile(packageAbsPath, pkg);
   if (entryFile) {
     manifest.exports = scanExports(entryFile);
@@ -78,7 +80,7 @@ function generateManifest(packageAbsPath, options) {
  * @returns {string|null} Absolute path to entry file, or null
  */
 function resolveEntryFile(packageAbsPath, pkg) {
-  // @gsd-decision Check package.json exports/main/module fields, then fall back to index.ts/index.js convention
+  // @cap-decision Check package.json exports/main/module fields, then fall back to index.ts/index.js convention
   const candidates = [];
 
   // From package.json fields
@@ -114,8 +116,8 @@ function resolveEntryFile(packageAbsPath, pkg) {
  * @returns {ExportEntry[]}
  */
 function scanExports(filePath) {
-  // @gsd-decision Use regex to extract exports rather than AST parsing -- language-agnostic and zero-dep
-  // @gsd-risk Regex export extraction may miss complex re-export patterns like `export * from './module'` chains
+  // @cap-decision Use regex to extract exports rather than AST parsing -- language-agnostic and zero-dep
+  // @cap-risk Regex export extraction may miss complex re-export patterns like `export * from './module'` chains
   let content;
   try {
     content = fs.readFileSync(filePath, 'utf-8');
@@ -267,7 +269,7 @@ function formatManifestMarkdown(manifest) {
  * @param {string} [options.outputDir] - Override manifest output directory
  * @returns {string[]} Paths to generated manifest files
  */
-// @gsd-api generateAllManifests(rootPath, packages, options) -- writes markdown manifests to .planning/manifests/ and returns file paths
+// @cap-api generateAllManifests(rootPath, packages, options) -- writes markdown manifests to .planning/manifests/ and returns file paths
 function generateAllManifests(rootPath, packages, options) {
   options = options || {};
   const outputDir = options.outputDir || path.join(rootPath, '.planning', 'manifests');

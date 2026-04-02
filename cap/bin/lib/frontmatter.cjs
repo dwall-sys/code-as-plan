@@ -1,6 +1,7 @@
 /**
  * Frontmatter — YAML frontmatter parsing, serialization, and CRUD commands
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — YAML frontmatter parsing and serialization
 
 const fs = require('fs');
 const path = require('path');

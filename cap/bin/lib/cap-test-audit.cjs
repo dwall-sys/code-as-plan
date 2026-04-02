@@ -1,4 +1,4 @@
-// @cap-feature(feature:F-TEST-AUDIT) Test quality audit utility -- assertion analysis, coverage parsing, mutation testing, anti-pattern detection.
+// @cap-feature(feature:F-007) Test Audit — assertion analysis, coverage parsing, mutation testing, anti-pattern detection
 // @cap-decision Regex-based assertion counting -- no AST parsing needed for counting assert/expect patterns.
 // @cap-decision Simple mutation engine -- flip operators, negate conditions, remove returns. No external mutation framework.
 // @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path, child_process).

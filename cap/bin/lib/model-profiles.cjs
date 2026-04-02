@@ -1,3 +1,4 @@
+// @cap-feature(feature:F-011) Legacy GSD Modules — model profile mapping (quality/balanced/budget per agent)
 /**
  * Mapping of GSD agent to model for each profile.
  *

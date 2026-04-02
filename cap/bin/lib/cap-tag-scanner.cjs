@@ -1,28 +1,31 @@
-// @gsd-context CAP v2.0 tag scanner -- extracts @cap-feature, @cap-todo, @cap-risk, and @cap-decision tags from source files.
-// @gsd-decision Separate module from arc-scanner.cjs -- CAP tags use @cap- prefix (not @gsd-) and have different metadata semantics (feature: key instead of phase: key).
-// @gsd-decision Regex-based extraction (not AST) -- language-agnostic, zero dependencies, proven sufficient in GSD arc-scanner.cjs.
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path).
-// @gsd-pattern Same comment anchor rule as ARC: tag is only valid when first non-whitespace content on a line is a comment token.
+// @cap-context CAP v2.0 tag scanner -- extracts @cap-feature, @cap-todo, @cap-risk, and @cap-decision tags from source files.
+// @cap-decision Separate module from arc-scanner.cjs -- CAP tags use @cap- prefix (not @gsd-) and have different metadata semantics (feature: key instead of phase: key).
+// @cap-decision Regex-based extraction (not AST) -- language-agnostic, zero dependencies, proven sufficient in GSD arc-scanner.cjs.
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path).
+// @cap-pattern Same comment anchor rule as ARC: tag is only valid when first non-whitespace content on a line is a comment token.
 
 'use strict';
+
+// @cap-feature(feature:F-001) Tag Scanner — regex-based extraction of @cap-* tags from source files
+// @cap-todo decision: Migrating @gsd-* comment headers in this file to @cap-* format is blocked on F-006 migration completion
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-// @gsd-todo(ref:AC-20) Primary tags are @cap-feature and @cap-todo; risk and decision are optional standalone tags
-// @gsd-decision CAP tag types: 2 primary (feature, todo) + 2 optional (risk, decision). Simplified from GSD's 8 types.
+// @cap-todo(ref:AC-20) Primary tags are @cap-feature and @cap-todo; risk and decision are optional standalone tags
+// @cap-decision CAP tag types: 2 primary (feature, todo) + 2 optional (risk, decision). Simplified from GSD's 8 types.
 const CAP_TAG_TYPES = ['feature', 'todo', 'risk', 'decision'];
 
-// @gsd-todo(ref:AC-25) Tag scanner uses native RegExp with dotAll flag for multiline extraction
-// @gsd-pattern Tag regex anchors to comment tokens at line start -- identical approach to arc-scanner.cjs
+// @cap-todo(ref:AC-25) Tag scanner uses native RegExp with dotAll flag for multiline extraction
+// @cap-pattern Tag regex anchors to comment tokens at line start -- identical approach to arc-scanner.cjs
 const CAP_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@cap-(feature|todo|risk|decision)(?:\(([^)]*)\))?[ \t]*(.*)/;
 
-// @gsd-todo(ref:AC-26) Tag scanner is language-agnostic, operating on comment syntax patterns across JS, TS, Python, Ruby, Shell
+// @cap-todo(ref:AC-26) Tag scanner is language-agnostic, operating on comment syntax patterns across JS, TS, Python, Ruby, Shell
 const SUPPORTED_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.py', '.rb', '.sh', '.bash', '.sql', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp'];
 const DEFAULT_EXCLUDE = ['node_modules', '.git', '.cap', 'dist', 'build', 'coverage', '.planning'];
 
-// @gsd-todo(ref:AC-22) @cap-todo supports structured subtypes: risk:..., decision:...
-// @gsd-decision Subtype detection uses prefix matching on the description text (e.g., "risk: memory leak" -> subtype: "risk")
+// @cap-todo(ref:AC-22) @cap-todo supports structured subtypes: risk:..., decision:...
+// @cap-decision Subtype detection uses prefix matching on the description text (e.g., "risk: memory leak" -> subtype: "risk")
 const SUBTYPE_RE = /^(risk|decision):\s*(.*)/;
 
 /**
@@ -36,7 +39,7 @@ const SUBTYPE_RE = /^(risk|decision):\s*(.*)/;
  * @property {string|null} subtype - For @cap-todo: 'risk' or 'decision' if prefixed, else null
  */
 
-// @gsd-api parseMetadata(metadataStr) -- Parses parenthesized key:value pairs.
+// @cap-api parseMetadata(metadataStr) -- Parses parenthesized key:value pairs.
 // Returns: Object<string,string> -- flat key-value object.
 /**
  * @param {string} metadataStr - Raw metadata string without parens (e.g., "feature:auth, ac:AUTH/AC-1")
@@ -62,7 +65,7 @@ function parseMetadata(metadataStr) {
   return result;
 }
 
-// @gsd-api extractTags(content, filePath) -- Regex extraction engine supporting //, #, /* */, """ """ comment styles.
+// @cap-api extractTags(content, filePath) -- Regex extraction engine supporting //, #, /* */, """ """ comment styles.
 // Returns: CapTag[] -- array of extracted tags.
 /**
  * @param {string} content - File content to scan
@@ -82,7 +85,7 @@ function extractTags(content, filePath) {
     const description = (match[3] || '').trim();
     const metadata = parseMetadata(metadataStr);
 
-    // @gsd-todo(ref:AC-22) Detect subtypes in @cap-todo description (risk:..., decision:...)
+    // @cap-todo(ref:AC-22) Detect subtypes in @cap-todo description (risk:..., decision:...)
     let subtype = null;
     if (type === 'todo') {
       const subtypeMatch = description.match(SUBTYPE_RE);
@@ -104,7 +107,7 @@ function extractTags(content, filePath) {
   return tags;
 }
 
-// @gsd-api scanFile(filePath, projectRoot) -- Scans a single file for @cap-* tags.
+// @cap-api scanFile(filePath, projectRoot) -- Scans a single file for @cap-* tags.
 // Returns: CapTag[] -- array of extracted tags with file, line, metadata, description.
 /**
  * @param {string} filePath - Absolute path to file
@@ -112,7 +115,7 @@ function extractTags(content, filePath) {
  * @returns {CapTag[]}
  */
 function scanFile(filePath, projectRoot) {
-  // @gsd-todo(ref:AC-25) Use native RegExp for tag extraction -- no AST parsing
+  // @cap-todo(ref:AC-25) Use native RegExp for tag extraction -- no AST parsing
   let content;
   try {
     content = fs.readFileSync(filePath, 'utf8');
@@ -123,7 +126,7 @@ function scanFile(filePath, projectRoot) {
   return extractTags(content, relativePath);
 }
 
-// @gsd-api scanDirectory(dirPath, options) -- Recursively scans a directory for @cap-* tags.
+// @cap-api scanDirectory(dirPath, options) -- Recursively scans a directory for @cap-* tags.
 // Returns: CapTag[] -- aggregated tags from all matching files.
 // Options: { extensions?: string[], exclude?: string[] }
 /**
@@ -140,7 +143,7 @@ function scanDirectory(dirPath, options = {}) {
   const projectRoot = options.projectRoot || dirPath;
   const tags = [];
 
-  // @gsd-constraint Uses readdirSync (not glob) per project zero-dep constraint
+  // @cap-constraint Uses readdirSync (not glob) per project zero-dep constraint
   function walk(dir) {
     let entries;
     try {
@@ -166,7 +169,7 @@ function scanDirectory(dirPath, options = {}) {
   return tags;
 }
 
-// @gsd-api groupByFeature(tags) -- Groups tags by their feature: metadata value.
+// @cap-api groupByFeature(tags) -- Groups tags by their feature: metadata value.
 // Returns: Object<string, CapTag[]> -- map from feature name to tags.
 /**
  * @param {CapTag[]} tags - Array of extracted tags
@@ -182,9 +185,9 @@ function groupByFeature(tags) {
   return groups;
 }
 
-// @gsd-api detectOrphans(tags, featureIds) -- Compare tags against Feature Map entries, fuzzy-match hints for orphans.
+// @cap-api detectOrphans(tags, featureIds) -- Compare tags against Feature Map entries, fuzzy-match hints for orphans.
 // Returns: Array of { tag, hint } where hint is the closest matching feature ID.
-// @gsd-todo(ref:AC-15) Orphan tags flagged with fuzzy-match hint suggesting closest existing feature ID
+// @cap-todo(ref:AC-15) Orphan tags flagged with fuzzy-match hint suggesting closest existing feature ID
 /**
  * @param {CapTag[]} tags - Array of extracted tags
  * @param {string[]} featureIds - Known feature IDs from Feature Map (e.g., ['F-001', 'F-002'])
@@ -207,7 +210,7 @@ function detectOrphans(tags, featureIds) {
   return orphans;
 }
 
-// @gsd-decision Simple character-level distance for fuzzy matching -- no external library needed
+// @cap-decision Simple character-level distance for fuzzy matching -- no external library needed
 /**
  * Compute edit distance between two strings (Levenshtein).
  * @param {string} a
@@ -252,13 +255,13 @@ function findClosestMatch(target, candidates) {
   return null;
 }
 
-// @gsd-todo(ref:AC-78) /cap:scan shall traverse all packages in a monorepo
-// @gsd-todo(ref:AC-93) Zero runtime dependencies -- uses only Node.js built-ins
-// @gsd-todo(ref:AC-94) Tag scanner uses native RegExp -- no comment-parser or AST parser
-// @gsd-todo(ref:AC-95) File discovery uses fs.readdirSync with recursive walk -- no glob library
-// @gsd-todo(ref:AC-96) CLI argument parsing uses existing parseNamedArgs() pattern
+// @cap-todo(ref:AC-78) /cap:scan shall traverse all packages in a monorepo
+// @cap-todo(ref:AC-93) Zero runtime dependencies -- uses only Node.js built-ins
+// @cap-todo(ref:AC-94) Tag scanner uses native RegExp -- no comment-parser or AST parser
+// @cap-todo(ref:AC-95) File discovery uses fs.readdirSync with recursive walk -- no glob library
+// @cap-todo(ref:AC-96) CLI argument parsing uses existing parseNamedArgs() pattern
 
-// @gsd-api detectWorkspaces(projectRoot) -- Detects monorepo workspaces from package.json and lerna.json.
+// @cap-api detectWorkspaces(projectRoot) -- Detects monorepo workspaces from package.json and lerna.json.
 // Returns: { isMonorepo: boolean, packages: string[] }
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -356,8 +359,8 @@ function detectWorkspaces(projectRoot) {
   return result;
 }
 
-// @gsd-api resolveWorkspaceGlobs(projectRoot, patterns) -- Expands workspace glob patterns to actual directories.
-// @gsd-decision Uses fs.readdirSync instead of glob library for workspace pattern expansion. Handles only simple patterns (dir/* and dir/**).
+// @cap-api resolveWorkspaceGlobs(projectRoot, patterns) -- Expands workspace glob patterns to actual directories.
+// @cap-decision Uses fs.readdirSync instead of glob library for workspace pattern expansion. Handles only simple patterns (dir/* and dir/**).
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string[]} patterns - Workspace glob patterns (e.g., ["packages/*", "apps/*"])
@@ -398,9 +401,9 @@ function resolveWorkspaceGlobs(projectRoot, patterns) {
   return packages;
 }
 
-// @gsd-api scanMonorepo(projectRoot, options) -- Scans all workspace packages in a monorepo for @cap-* tags.
-// @gsd-todo(ref:AC-79) Feature Map entries support cross-package file references (e.g., packages/core/src/auth.ts)
-// @gsd-todo(ref:AC-80) Works seamlessly with single-repo projects -- returns regular scanDirectory results if not a monorepo
+// @cap-api scanMonorepo(projectRoot, options) -- Scans all workspace packages in a monorepo for @cap-* tags.
+// @cap-todo(ref:AC-79) Feature Map entries support cross-package file references (e.g., packages/core/src/auth.ts)
+// @cap-todo(ref:AC-80) Works seamlessly with single-repo projects -- returns regular scanDirectory results if not a monorepo
 /**
  * Scans a monorepo or single repo for @cap-* tags.
  * In monorepo mode: scans root + each workspace package.
@@ -464,7 +467,7 @@ function scanMonorepo(projectRoot, options = {}) {
   return { tags: allTags, isMonorepo: true, packages: workspaces.packages };
 }
 
-// @gsd-api groupByPackage(tags) -- Groups tags by their workspace package based on file path prefix.
+// @cap-api groupByPackage(tags) -- Groups tags by their workspace package based on file path prefix.
 /**
  * @param {CapTag[]} tags - Array of extracted tags
  * @param {string[]} packages - Known workspace package paths
@@ -493,7 +496,7 @@ function groupByPackage(tags, packages) {
   return groups;
 }
 
-// @gsd-api scanApp(projectRoot, appPath, options) -- Scans a single app directory plus referenced shared packages.
+// @cap-api scanApp(projectRoot, appPath, options) -- Scans a single app directory plus referenced shared packages.
 // When activeApp is set, scans only the active app and shared packages it imports.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -538,7 +541,7 @@ function scanApp(projectRoot, appPath, options = {}) {
   return { tags: allTags, scannedDirs };
 }
 
-// @gsd-api detectSharedPackages(projectRoot, appPath) -- Detects workspace packages referenced by an app's package.json.
+// @cap-api detectSharedPackages(projectRoot, appPath) -- Detects workspace packages referenced by an app's package.json.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} appPath - Relative app path

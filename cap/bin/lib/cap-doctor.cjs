@@ -1,13 +1,58 @@
-// @gsd-context CAP v2.0 doctor utility -- checks all external dependencies CAP needs at runtime.
-// @gsd-decision Checks are split into required (Node.js, npm, git) and optional (ctx7, c8, vitest, fast-check).
-// @gsd-decision Project-specific checks only run when projectRoot is provided and package.json exists.
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (child_process, fs, path).
+// @cap-context CAP v2.0 doctor utility -- checks all external dependencies CAP needs at runtime.
+// @cap-decision Checks are split into required (Node.js, npm, git) and optional (ctx7, c8, vitest, fast-check).
+// @cap-decision Project-specific checks only run when projectRoot is provided and package.json exists.
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (child_process, fs, path, os).
 
 'use strict';
+
+// @cap-feature(feature:F-005) Doctor Health Check — verify required and optional external dependencies
+// @cap-feature(feature:F-019) Module Integrity Verification — verify CAP CJS modules exist and load correctly
 
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+
+// @cap-todo(ac:F-019/AC-5) Module manifest — authoritative list of expected CAP modules
+// @cap-decision Manifest is a flat array of filenames maintained manually. When a new module is added to
+// cap/bin/lib/, it must be added here. This is intentional: an explicit manifest catches accidental deletions.
+const CAP_MODULE_MANIFEST = [
+  'arc-scanner.cjs',
+  'cap-doctor.cjs',
+  'cap-feature-map.cjs',
+  'cap-loader.cjs',
+  'cap-migrate.cjs',
+  'cap-session.cjs',
+  'cap-stack-docs.cjs',
+  'cap-tag-scanner.cjs',
+  'cap-test-audit.cjs',
+  'commands.cjs',
+  'config.cjs',
+  'convention-reader.cjs',
+  'core.cjs',
+  'feature-aggregator.cjs',
+  'frontmatter.cjs',
+  'init.cjs',
+  'manifest-generator.cjs',
+  'milestone.cjs',
+  'model-profiles.cjs',
+  'monorepo-context.cjs',
+  'monorepo-migrator.cjs',
+  'phase.cjs',
+  'profile-output.cjs',
+  'profile-pipeline.cjs',
+  'roadmap.cjs',
+  'security.cjs',
+  'session-manager.cjs',
+  'skeleton-generator.cjs',
+  'state.cjs',
+  'template.cjs',
+  'test-detector.cjs',
+  'uat.cjs',
+  'verify.cjs',
+  'workspace-detector.cjs',
+  'workstream.cjs',
+];
 
 /**
  * @typedef {Object} ToolCheck
@@ -28,6 +73,32 @@ const path = require('node:path');
  * @property {number} optionalTotal - Total optional tools
  * @property {boolean} healthy - True if all required tools are OK
  * @property {string[]} installCommands - Commands to install missing tools
+ * @property {ModuleCheck[]} [modules] - Module integrity check results
+ * @property {PlatformPathCheck} [platformPaths] - Platform path resolution results
+ * @property {number} [modulesOk] - Count of modules that passed integrity check
+ * @property {number} [modulesTotal] - Total modules checked
+ */
+
+/**
+ * @typedef {Object} ModuleCheck
+ * @property {string} name - Module filename (e.g., 'cap-doctor.cjs')
+ * @property {string} fullPath - Absolute path to the module
+ * @property {boolean} exists - Whether the file exists on disk
+ * @property {boolean} loads - Whether require() succeeds
+ * @property {boolean} ok - True if both exists and loads
+ * @property {string} [error] - Error message if exists or loads failed
+ */
+
+/**
+ * @typedef {Object} PlatformPathCheck
+ * @property {string} envHome - Value of process.env.HOME
+ * @property {string} osHomedir - Value of os.homedir()
+ * @property {boolean} homeMatch - Whether envHome and osHomedir agree
+ * @property {string} installDir - Resolved install directory
+ * @property {boolean} isSymlink - Whether the install directory is a symlink
+ * @property {string} [symlinkTarget] - Real path if installDir is a symlink
+ * @property {boolean} ok - True if no discrepancies
+ * @property {string[]} warnings - Any platform path warnings
  */
 
 /**
@@ -49,6 +120,119 @@ function checkTool(command, timeout = 10000) {
   } catch (_e) {
     return { ok: false, version: 'not found' };
   }
+}
+
+/**
+ * Detect the CAP install directory.
+ * @cap-decision Auto-detection tries the global install path first ($HOME/.claude/cap/cap/bin/lib),
+ * then falls back to the directory containing this file. This handles both global npx installs
+ * and local development (running from the repo checkout).
+ * @returns {string} Absolute path to the cap/bin/lib directory
+ */
+function detectInstallDir() {
+  // Global install path: $HOME/.claude/cap/cap/bin/lib/
+  const homeDir = process.env.HOME || os.homedir();
+  const globalDir = path.join(homeDir, '.claude', 'cap', 'cap', 'bin', 'lib');
+  if (fs.existsSync(globalDir)) {
+    return globalDir;
+  }
+  // Fallback: this file's own directory (local dev / repo checkout)
+  return __dirname;
+}
+
+// @cap-todo(ac:F-019/AC-1) Verify every required CJS module exists at the expected install path
+// @cap-todo(ac:F-019/AC-2) Attempt require() on each module and report load failures
+// @cap-todo(ac:F-019/AC-3) Report clear PASS/FAIL summary per module with error reason
+/**
+ * Check integrity of all CAP CJS modules.
+ * Verifies each module in the manifest exists on disk and can be loaded via require().
+ * @param {string} [installDir] - Directory containing the CJS modules (auto-detected if omitted)
+ * @returns {{ modules: ModuleCheck[], modulesOk: number, modulesTotal: number }}
+ */
+function checkModuleIntegrity(installDir) {
+  const dir = installDir || detectInstallDir();
+  const modules = [];
+
+  for (const name of CAP_MODULE_MANIFEST) {
+    const fullPath = path.join(dir, name);
+    const check = { name, fullPath, exists: false, loads: false, ok: false };
+
+    // Step 1: Check file existence
+    if (!fs.existsSync(fullPath)) {
+      check.error = `File not found: ${fullPath}`;
+      modules.push(check);
+      continue;
+    }
+    check.exists = true;
+
+    // Step 2: Attempt require() to verify the module parses and loads
+    try {
+      require(path.resolve(fullPath));
+      check.loads = true;
+      check.ok = true;
+    } catch (err) {
+      check.error = `Load error: ${err.message.split('\n')[0]}`;
+    }
+
+    modules.push(check);
+  }
+
+  return {
+    modules,
+    modulesOk: modules.filter(m => m.ok).length,
+    modulesTotal: modules.length,
+  };
+}
+
+// @cap-todo(ac:F-019/AC-6) Test platform-specific path resolution (Linux vs macOS, symlinks)
+/**
+ * Check platform-specific path resolution for the CAP install directory.
+ * Compares process.env.HOME with os.homedir() and checks for symlinks.
+ * @param {string} [installDir] - Directory to check (auto-detected if omitted)
+ * @returns {PlatformPathCheck}
+ */
+function checkPlatformPaths(installDir) {
+  const dir = installDir || detectInstallDir();
+  const envHome = process.env.HOME || '';
+  const osHome = os.homedir();
+  const warnings = [];
+
+  // Check HOME consistency
+  const homeMatch = envHome === osHome;
+  if (!homeMatch) {
+    warnings.push(
+      `$HOME (${envHome}) differs from os.homedir() (${osHome}). ` +
+      'This can happen under sudo, in Docker containers, or with nvm. ' +
+      'CAP uses $HOME for install paths — ensure it points to the correct user directory.'
+    );
+  }
+
+  // Check if install dir is a symlink
+  let isSymlink = false;
+  let symlinkTarget;
+  try {
+    const stat = fs.lstatSync(dir);
+    isSymlink = stat.isSymbolicLink();
+    if (isSymlink) {
+      symlinkTarget = fs.realpathSync(dir);
+      warnings.push(
+        `Install directory is a symlink: ${dir} -> ${symlinkTarget}`
+      );
+    }
+  } catch (_e) {
+    // Directory doesn't exist — the module integrity check will catch this
+  }
+
+  return {
+    envHome,
+    osHomedir: osHome,
+    homeMatch,
+    installDir: dir,
+    isSymlink,
+    symlinkTarget,
+    ok: warnings.length === 0,
+    warnings,
+  };
 }
 
 /**
@@ -152,6 +336,10 @@ function runDoctor(projectRoot) {
     }
   }
 
+  // @cap-todo(ac:F-019/AC-4) Module integrity check runs automatically as part of /cap:doctor
+  const moduleResult = checkModuleIntegrity();
+  const platformResult = checkPlatformPaths();
+
   // Compute summary
   const requiredTools = tools.filter(t => t.required);
   const optionalTools = tools.filter(t => !t.required);
@@ -162,8 +350,12 @@ function runDoctor(projectRoot) {
     requiredTotal: requiredTools.length,
     optionalOk: optionalTools.filter(t => t.ok).length,
     optionalTotal: optionalTools.length,
-    healthy: requiredTools.every(t => t.ok),
+    healthy: requiredTools.every(t => t.ok) && moduleResult.modulesOk === moduleResult.modulesTotal,
     installCommands: [],
+    modules: moduleResult.modules,
+    modulesOk: moduleResult.modulesOk,
+    modulesTotal: moduleResult.modulesTotal,
+    platformPaths: platformResult,
   };
 
   // Build install commands for missing tools
@@ -211,13 +403,54 @@ function formatReport(report) {
     lines.push(`  ${icon} ${t.name}${pad}${t.version}${hint}`);
   }
 
+  // Module integrity section
+  if (report.modules && report.modules.length > 0) {
+    lines.push('');
+    lines.push('  Module Integrity:');
+    const failedModules = report.modules.filter(m => !m.ok);
+    const passedCount = report.modulesOk || 0;
+    const totalCount = report.modulesTotal || 0;
+
+    if (failedModules.length === 0) {
+      lines.push(`    ✓ All ${totalCount} CAP modules verified (exist + loadable)`);
+    } else {
+      lines.push(`    ${passedCount}/${totalCount} modules OK — ${failedModules.length} failed:`);
+      for (const m of failedModules) {
+        lines.push(`    ✗ ${m.name}  ← ${m.error}`);
+      }
+    }
+  }
+
+  // Platform path section
+  if (report.platformPaths) {
+    const pp = report.platformPaths;
+    if (!pp.ok) {
+      lines.push('');
+      lines.push('  Platform Paths:');
+      for (const w of pp.warnings) {
+        lines.push(`    ⚠ ${w}`);
+      }
+    }
+  }
+
   lines.push('');
   lines.push(`  Required:  ${report.requiredOk}/${report.requiredTotal} OK`);
   lines.push(`  Optional:  ${report.optionalOk}/${report.optionalTotal} OK`);
+  if (report.modulesTotal != null) {
+    lines.push(`  Modules:   ${report.modulesOk}/${report.modulesTotal} OK`);
+  }
 
   if (!report.healthy) {
     lines.push('');
-    lines.push('  ✗ UNHEALTHY — required tools missing. CAP cannot function correctly.');
+    const toolsMissing = report.requiredOk < report.requiredTotal;
+    const modulesMissing = report.modulesOk != null && report.modulesOk < report.modulesTotal;
+    if (toolsMissing && modulesMissing) {
+      lines.push('  ✗ UNHEALTHY — required tools missing and module integrity failures detected.');
+    } else if (modulesMissing) {
+      lines.push('  ✗ UNHEALTHY — module integrity failures detected. Try: npx code-as-plan@latest --force');
+    } else {
+      lines.push('  ✗ UNHEALTHY — required tools missing. CAP cannot function correctly.');
+    }
   }
 
   if (report.installCommands.length > 0) {
@@ -228,9 +461,10 @@ function formatReport(report) {
     }
   }
 
-  if (report.healthy && report.optionalOk === report.optionalTotal) {
+  const allModulesOk = report.modulesOk == null || report.modulesOk === report.modulesTotal;
+  if (report.healthy && report.optionalOk === report.optionalTotal && allModulesOk) {
     lines.push('');
-    lines.push('  All tools available. CAP is fully operational.');
+    lines.push('  All tools and modules verified. CAP is fully operational.');
   }
 
   return lines.join('\n');
@@ -240,4 +474,7 @@ module.exports = {
   checkTool,
   runDoctor,
   formatReport,
+  checkModuleIntegrity,
+  checkPlatformPaths,
+  CAP_MODULE_MANIFEST,
 };

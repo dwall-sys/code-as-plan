@@ -8,9 +8,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 start command -- session initialization at the start of a new conversation. Restores .cap/SESSION.json state, detects workspace type, and presents current Feature Map status. -->
-<!-- @gsd-decision Start reads SESSION.json to restore context from previous conversation. This is critical for cross-conversation continuity since Claude Code conversations are stateless. -->
-<!-- @gsd-decision Start auto-runs /cap:init if .cap/ directory does not exist -- first-time users get bootstrapped automatically. -->
+<!-- @cap-context CAP v2.0 start command -- session initialization at the start of a new conversation. Restores .cap/SESSION.json state, detects workspace type, and presents current Feature Map status. -->
+<!-- @cap-decision Start reads SESSION.json to restore context from previous conversation. This is critical for cross-conversation continuity since Claude Code conversations are stateless. -->
+<!-- @cap-decision Start auto-runs /cap:init if .cap/ directory does not exist -- first-time users get bootstrapped automatically. -->
 
 <objective>
 Initialize a CAP session at the start of a new conversation:
@@ -34,7 +34,7 @@ $ARGUMENTS
 
 ## Step 1: Check for .cap/ directory and auto-initialize
 
-<!-- @gsd-todo(ref:AC-34) /cap:start shall initialize a session by setting the active feature in SESSION.json and restoring context from the Feature Map. -->
+<!-- @cap-todo(ref:AC-34) /cap:start shall initialize a session by setting the active feature in SESSION.json and restoring context from the Feature Map. -->
 
 ```bash
 test -d .cap && echo "initialized" || echo "not_initialized"
@@ -130,7 +130,7 @@ The effective FEATURE-MAP.md location is:
 
 ## Step 2: Auto-detect project context
 
-<!-- @gsd-todo(ref:AC-35) /cap:start shall auto-scope to the project by deriving project information from actual code (package.json, directory structure) rather than asking questions. -->
+<!-- @cap-todo(ref:AC-35) /cap:start shall auto-scope to the project by deriving project information from actual code (package.json, directory structure) rather than asking questions. -->
 
 Detect project info from the filesystem -- no questions asked:
 

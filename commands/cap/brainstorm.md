@@ -13,15 +13,15 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 brainstorm command -- orchestrates conversational feature discovery. Spawns cap-brainstormer agent, receives structured Feature Map entries, writes to FEATURE-MAP.md after user approval. -->
-<!-- @gsd-decision Writes directly to FEATURE-MAP.md (not PRD files). Feature Map is the single source of truth in CAP. PRDs are an intermediate artifact that CAP eliminates. -->
-<!-- @gsd-decision Command layer owns all file I/O -- agent is stateless. Proven pattern from GSD brainstorm.md. -->
-<!-- @gsd-constraint No Feature Map entries are written without explicit user approval -- confirmation gate is mandatory -->
+<!-- @cap-context CAP v2.0 brainstorm command -- orchestrates conversational feature discovery. Spawns cap-brainstormer agent, receives structured Feature Map entries, writes to FEATURE-MAP.md after user approval. -->
+<!-- @cap-decision Writes directly to FEATURE-MAP.md (not PRD files). Feature Map is the single source of truth in CAP. PRDs are an intermediate artifact that CAP eliminates. -->
+<!-- @cap-decision Command layer owns all file I/O -- agent is stateless. Proven pattern from GSD brainstorm.md. -->
+<!-- @cap-constraint No Feature Map entries are written without explicit user approval -- confirmation gate is mandatory -->
 
 <objective>
 Spawns the `cap-brainstormer` agent to have a structured conversation about what needs to be built. The agent returns structured Feature Map entries. This command presents the entries for user confirmation, then writes to FEATURE-MAP.md.
 
-<!-- @gsd-todo(ref:AC-36) /cap:brainstorm shall invoke the cap-brainstormer agent for conversational feature discovery. -->
+<!-- @cap-todo(ref:AC-36) /cap:brainstorm shall invoke the cap-brainstormer agent for conversational feature discovery. -->
 
 **Arguments:**
 - `--resume` -- resume a previous brainstorm session using .cap/SESSION.json context
@@ -79,8 +79,8 @@ Store as `session_context`.
 
 ## Step 2: Spawn cap-brainstormer agent
 
-<!-- @gsd-todo(ref:AC-37) cap-brainstormer shall produce structured PRD output with numbered acceptance criteria. -->
-<!-- @gsd-todo(ref:AC-39) cap-brainstormer shall assign feature IDs in sequential format (F-001, F-002, ...). -->
+<!-- @cap-todo(ref:AC-37) cap-brainstormer shall produce structured PRD output with numbered acceptance criteria. -->
+<!-- @cap-todo(ref:AC-39) cap-brainstormer shall assign feature IDs in sequential format (F-001, F-002, ...). -->
 
 Spawn `cap-brainstormer` via the Task tool with the following context:
 
@@ -160,8 +160,8 @@ Wait for `cap-brainstormer` to complete.
 
 ## Step 3: Present features for user approval
 
-<!-- @gsd-todo(ref:AC-38) cap-brainstormer shall write discovered features directly to FEATURE-MAP.md with state planned. -->
-<!-- @gsd-todo(ref:AC-40) cap-brainstormer output shall be directly consumable by /cap:prototype without manual translation. -->
+<!-- @cap-todo(ref:AC-38) cap-brainstormer shall write discovered features directly to FEATURE-MAP.md with state planned. -->
+<!-- @cap-todo(ref:AC-40) cap-brainstormer output shall be directly consumable by /cap:prototype without manual translation. -->
 
 Display the parsed features:
 

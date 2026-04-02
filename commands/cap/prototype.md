@@ -13,13 +13,13 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 prototype command -- reads Feature Map as primary input (not PRD). Spawns cap-prototyper in one of 4 modes. Auto-runs /cap:scan on completion. -->
-<!-- @gsd-decision Feature Map replaces PRD as prototype input. Feature Map ACs become @cap-todo(ac:FEATURE/AC-N) tags in generated code. -->
-<!-- @gsd-decision Auto-chains to /cap:scan on completion -- keeps Feature Map status in sync after code generation. -->
-<!-- @gsd-pattern --features flag scopes prototype to specific Feature Map entries (replaces --phases scoping from GSD) -->
+<!-- @cap-context CAP v2.0 prototype command -- reads Feature Map as primary input (not PRD). Spawns cap-prototyper in one of 4 modes. Auto-runs /cap:scan on completion. -->
+<!-- @cap-decision Feature Map replaces PRD as prototype input. Feature Map ACs become @cap-todo(ac:FEATURE/AC-N) tags in generated code. -->
+<!-- @cap-decision Auto-chains to /cap:scan on completion -- keeps Feature Map status in sync after code generation. -->
+<!-- @cap-pattern --features flag scopes prototype to specific Feature Map entries (replaces --phases scoping from GSD) -->
 
 <objective>
-<!-- @gsd-todo(ref:AC-41) /cap:prototype shall invoke the cap-prototyper agent which operates in four modes: prototype, iterate, architecture, and annotate. -->
+<!-- @cap-todo(ref:AC-41) /cap:prototype shall invoke the cap-prototyper agent which operates in four modes: prototype, iterate, architecture, and annotate. -->
 
 Reads FEATURE-MAP.md, confirms acceptance criteria with the user, then spawns cap-prototyper in the appropriate mode to build annotated code. Each AC becomes a @cap-todo tag in the prototype.
 
@@ -91,9 +91,9 @@ If `target_features` is empty: STOP and report:
 
 **Skip if `non_interactive` or `mode == "ANNOTATE"`.**
 
-<!-- @gsd-todo(ref:AC-42) In prototype mode, the agent shall build a working prototype for a feature, annotating code with @cap-feature and @cap-todo tags as it builds. -->
-<!-- @gsd-todo(ref:AC-44) In architecture mode, the agent shall analyze and refactor system-level structure without changing feature behavior. -->
-<!-- @gsd-todo(ref:AC-45) In annotate mode, the agent shall retroactively annotate existing code with @cap-feature and @cap-todo tags. -->
+<!-- @cap-todo(ref:AC-42) In prototype mode, the agent shall build a working prototype for a feature, annotating code with @cap-feature and @cap-todo tags as it builds. -->
+<!-- @cap-todo(ref:AC-44) In architecture mode, the agent shall analyze and refactor system-level structure without changing feature behavior. -->
+<!-- @cap-todo(ref:AC-45) In annotate mode, the agent shall retroactively annotate existing code with @cap-feature and @cap-todo tags. -->
 
 Collect all ACs from target_features:
 
@@ -118,8 +118,8 @@ Use AskUserQuestion:
 
 ## Step 3: Derive project context and spawn cap-prototyper
 
-<!-- @gsd-todo(ref:AC-47) cap-prototyper shall derive project context (language, framework, conventions) from actual code on first invocation. -->
-<!-- @gsd-todo(ref:AC-48) cap-prototyper shall follow deviation rules via a shared reference document. -->
+<!-- @cap-todo(ref:AC-47) cap-prototyper shall derive project context (language, framework, conventions) from actual code on first invocation. -->
+<!-- @cap-todo(ref:AC-48) cap-prototyper shall follow deviation rules via a shared reference document. -->
 
 Detect project conventions:
 
@@ -215,7 +215,7 @@ Wait for cap-prototyper to complete.
 
 ## Step 4: Update Feature Map state
 
-<!-- @gsd-todo(ref:AC-46) cap-prototyper shall update the feature state in FEATURE-MAP.md from planned to prototyped upon completing a prototype. -->
+<!-- @cap-todo(ref:AC-46) cap-prototyper shall update the feature state in FEATURE-MAP.md from planned to prototyped upon completing a prototype. -->
 
 If `mode == "PROTOTYPE"`:
 
@@ -232,7 +232,7 @@ for (const id of targetIds) {
 
 ## Step 5: Auto-run /cap:scan
 
-<!-- @gsd-todo(ref:AC-43) In iterate mode, the agent shall refine an existing prototype based on feedback, updating tags and Feature Map state. -->
+<!-- @cap-todo(ref:AC-43) In iterate mode, the agent shall refine an existing prototype based on feedback, updating tags and Feature Map state. -->
 
 ```bash
 node -e "

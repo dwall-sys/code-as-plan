@@ -10,14 +10,14 @@ allowed-tools:
   - Grep
 ---
 
-<!-- @gsd-context CAP v2.0 scan command (final pass) -- adds monorepo workspace traversal and cross-package file references to the base scan flow. -->
-<!-- @gsd-decision Monorepo detection is automatic -- checks package.json workspaces field and lerna.json. No --monorepo flag required (AC-80). -->
-<!-- @gsd-decision Cross-package file references use full relative paths from project root (e.g., packages/core/src/auth.ts) to avoid ambiguity (AC-79). -->
-<!-- @gsd-constraint Works seamlessly with normal single-repo projects -- monorepo features are additive, not blocking (AC-80). -->
+<!-- @cap-context CAP v2.0 scan command (final pass) -- adds monorepo workspace traversal and cross-package file references to the base scan flow. -->
+<!-- @cap-decision Monorepo detection is automatic -- checks package.json workspaces field and lerna.json. No --monorepo flag required (AC-80). -->
+<!-- @cap-decision Cross-package file references use full relative paths from project root (e.g., packages/core/src/auth.ts) to avoid ambiguity (AC-79). -->
+<!-- @cap-constraint Works seamlessly with normal single-repo projects -- monorepo features are additive, not blocking (AC-80). -->
 
-<!-- @gsd-todo(ref:AC-78) /cap:scan shall traverse all packages in a monorepo -->
-<!-- @gsd-todo(ref:AC-79) Feature Map entries shall support cross-package file references -->
-<!-- @gsd-todo(ref:AC-80) CAP shall work seamlessly with normal single-repo projects with no monorepo-specific configuration required -->
+<!-- @cap-todo(ref:AC-78) /cap:scan shall traverse all packages in a monorepo -->
+<!-- @cap-todo(ref:AC-79) Feature Map entries shall support cross-package file references -->
+<!-- @cap-todo(ref:AC-80) CAP shall work seamlessly with normal single-repo projects with no monorepo-specific configuration required -->
 
 <objective>
 Scans the codebase for @cap-feature and @cap-todo tags. In monorepo projects, automatically detects and traverses all workspace packages. Cross-references against FEATURE-MAP.md, flags orphan tags, and auto-enriches Feature Map with discovered file references.
@@ -61,7 +61,7 @@ Store as `app_scope`. If `app_scope.activeApp` is set, this scan will be scoped 
 
 ## Step 1: Detect monorepo configuration
 
-<!-- @gsd-decision Monorepo detection reads package.json workspaces and lerna.json. Supports npm, yarn, pnpm workspace patterns. Glob expansion uses Bash for simplicity. -->
+<!-- @cap-decision Monorepo detection reads package.json workspaces and lerna.json. Supports npm, yarn, pnpm workspace patterns. Glob expansion uses Bash for simplicity. -->
 
 ```bash
 node -e "
@@ -256,7 +256,7 @@ Same as base scan -- run orphan detection against FEATURE-MAP.md.
 
 ## Step 5: Auto-enrich Feature Map with cross-package file references
 
-<!-- @gsd-decision Cross-package file refs are stored as full relative paths from project root. This means packages/core/src/auth.ts, not just src/auth.ts. Feature Map readers can identify the package from the path prefix. -->
+<!-- @cap-decision Cross-package file refs are stored as full relative paths from project root. This means packages/core/src/auth.ts, not just src/auth.ts. Feature Map readers can identify the package from the path prefix. -->
 
 **If app-scoped (activeApp set):** Enrich the app's FEATURE-MAP.md, not root.
 

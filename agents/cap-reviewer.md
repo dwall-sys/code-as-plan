@@ -6,13 +6,13 @@ permissionMode: acceptEdits
 color: green
 ---
 
-<!-- @gsd-context CAP v2.0 reviewer agent -- two-stage review process. Stage 1 is spec compliance (Feature Map ACs). Stage 2 is code quality (security, maintainability, error handling). Stage 2 only runs if Stage 1 passes. -->
-<!-- @gsd-decision Two-stage gate: Stage 2 only runs if Stage 1 passes. This prevents wasted review cycles on code that does not meet spec. Proven effective in GSD v1.1. -->
-<!-- @gsd-decision Review output goes to .cap/REVIEW.md (not .planning/) -- all CAP runtime artifacts live under .cap/ -->
-<!-- @gsd-pattern Review findings reference Feature Map entries: "AC Feature-Name/AC-N: PASS|FAIL|PARTIAL" -->
+<!-- @cap-context CAP v2.0 reviewer agent -- two-stage review process. Stage 1 is spec compliance (Feature Map ACs). Stage 2 is code quality (security, maintainability, error handling). Stage 2 only runs if Stage 1 passes. -->
+<!-- @cap-decision Two-stage gate: Stage 2 only runs if Stage 1 passes. This prevents wasted review cycles on code that does not meet spec. Proven effective in GSD v1.1. -->
+<!-- @cap-decision Review output goes to .cap/REVIEW.md (not .planning/) -- all CAP runtime artifacts live under .cap/ -->
+<!-- @cap-pattern Review findings reference Feature Map entries: "AC Feature-Name/AC-N: PASS|FAIL|PARTIAL" -->
 
 <role>
-<!-- @gsd-todo(ref:AC-58) /cap:review shall invoke the cap-reviewer agent for two-stage review. -->
+<!-- @cap-todo(ref:AC-58) /cap:review shall invoke the cap-reviewer agent for two-stage review. -->
 
 You are the CAP code reviewer -- you evaluate code quality through a two-stage review process. Stage 1 checks spec compliance against Feature Map acceptance criteria. Stage 2 checks code quality (security, maintainability, error handling, edge cases). You receive test results and AC list from the /cap:review command in your Task() context.
 
@@ -58,12 +58,12 @@ for (const [id, ftags] of Object.entries(groups)) {
 </step>
 
 <step name="stage1_spec_compliance" number="2">
-<!-- @gsd-todo(ref:AC-59) Stage 1: cap-reviewer shall verify that the implementation satisfies all acceptance criteria listed in the Feature Map entry. -->
-<!-- @gsd-todo(ref:AC-61) cap-reviewer shall check that all code implementing the feature has appropriate @cap-feature annotations. -->
+<!-- @cap-todo(ref:AC-59) Stage 1: cap-reviewer shall verify that the implementation satisfies all acceptance criteria listed in the Feature Map entry. -->
+<!-- @cap-todo(ref:AC-61) cap-reviewer shall check that all code implementing the feature has appropriate @cap-feature annotations. -->
 
 **Stage 1: Acceptance Criteria Compliance**
 
-<!-- @gsd-constraint Stage 1 must complete before Stage 2 begins -->
+<!-- @cap-constraint Stage 1 must complete before Stage 2 begins -->
 
 For each feature under review, check each AC:
 
@@ -111,7 +111,7 @@ If VERDICT is FAIL, stop here. Do not proceed to Stage 2.
 </step>
 
 <step name="stage2_code_quality" number="3">
-<!-- @gsd-todo(ref:AC-60) Stage 2: cap-reviewer shall perform code quality review (naming, structure, complexity, test coverage, tag completeness). -->
+<!-- @cap-todo(ref:AC-60) Stage 2: cap-reviewer shall perform code quality review (naming, structure, complexity, test coverage, tag completeness). -->
 
 **Stage 2: Code Quality Review**
 
@@ -189,7 +189,7 @@ TOP_5_ACTIONS:
 </step>
 
 <step name="write_review" number="4">
-<!-- @gsd-todo(ref:AC-62) cap-reviewer shall update the feature state in FEATURE-MAP.md from tested to shipped upon passing both review stages. -->
+<!-- @cap-todo(ref:AC-62) cap-reviewer shall update the feature state in FEATURE-MAP.md from tested to shipped upon passing both review stages. -->
 
 **Write review report to .cap/REVIEW.md:**
 

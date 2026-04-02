@@ -13,13 +13,13 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 iterate command -- the flagship code-first loop. Scan -> identify gaps -> generate code -> re-scan -> repeat. Human approval gate between each iteration unless --auto is specified. -->
-<!-- @gsd-decision Iteration loop is scan-driven: /cap:scan output determines what to build next. No upfront planning step. -->
-<!-- @gsd-decision Human approval gate between iterations by default. --auto flag enables autonomous loop with --max N safety limit. -->
-<!-- @gsd-constraint --auto mode requires --max N to prevent runaway loops. Default max is 5 if --auto specified without --max. -->
+<!-- @cap-context CAP v2.0 iterate command -- the flagship code-first loop. Scan -> identify gaps -> generate code -> re-scan -> repeat. Human approval gate between each iteration unless --auto is specified. -->
+<!-- @cap-decision Iteration loop is scan-driven: /cap:scan output determines what to build next. No upfront planning step. -->
+<!-- @cap-decision Human approval gate between iterations by default. --auto flag enables autonomous loop with --max N safety limit. -->
+<!-- @cap-constraint --auto mode requires --max N to prevent runaway loops. Default max is 5 if --auto specified without --max. -->
 
 <objective>
-<!-- @gsd-todo(ref:AC-49) /cap:iterate shall invoke cap-prototyper in iterate mode. -->
+<!-- @cap-todo(ref:AC-49) /cap:iterate shall invoke cap-prototyper in iterate mode. -->
 
 The core code-first iteration loop:
 1. Run /cap:scan to assess current Feature Map status
@@ -45,7 +45,7 @@ $ARGUMENTS
 
 ## Step 0: Parse flags
 
-<!-- @gsd-todo(ref:AC-50) /cap:iterate shall support a --auto flag for multi-iteration autonomous loops. -->
+<!-- @cap-todo(ref:AC-50) /cap:iterate shall support a --auto flag for multi-iteration autonomous loops. -->
 
 Check `$ARGUMENTS` for:
 - `--features NAME` -- if present, store as `feature_filter`
@@ -58,7 +58,7 @@ Log: "cap:iterate | mode: {auto or manual} | max: {max_iterations} | features: {
 
 ## Step 1: Load active feature from session
 
-<!-- @gsd-todo(ref:AC-51) /cap:iterate shall read the current feature from SESSION.json and refine the associated prototype. -->
+<!-- @cap-todo(ref:AC-51) /cap:iterate shall read the current feature from SESSION.json and refine the associated prototype. -->
 
 ```bash
 node -e "

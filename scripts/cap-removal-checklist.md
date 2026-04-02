@@ -1,15 +1,15 @@
 # CAP v2.0 -- GSD Removal Checklist
 
-<!-- @gsd-context This document defines the COMPLETE removal plan for transitioning from GSD to CAP. It is NOT executed during prototyping -- it documents what gets removed when the clean break is made. -->
-<!-- @gsd-decision Removal is documented as a checklist, not executed during prototype. This allows the current GSD infrastructure to keep working during development while clearly defining the target end state. -->
+<!-- @cap-context This document defines the COMPLETE removal plan for transitioning from GSD to CAP. It is NOT executed during prototyping -- it documents what gets removed when the clean break is made. -->
+<!-- @cap-decision Removal is documented as a checklist, not executed during prototype. This allows the current GSD infrastructure to keep working during development while clearly defining the target end state. -->
 
-<!-- @gsd-todo(ref:AC-71) All /gsd:* commands shall be removed from the codebase -->
-<!-- @gsd-todo(ref:AC-72) All gsd-* agent files shall be removed from the agents/ directory -->
-<!-- @gsd-todo(ref:AC-73) Explicitly killed agents: gsd-discuss, gsd-planner, gsd-milestone-*, gsd-executor, gsd-annotator, and all discuss/plan phase agents -->
-<!-- @gsd-todo(ref:AC-74) Artifacts no longer created or referenced: ROADMAP.md, REQUIREMENTS.md, STATE.md, MILESTONES.md, VERIFICATION.md, PLAN.md -->
-<!-- @gsd-todo(ref:AC-75) CODE-INVENTORY.md evolved into enriched FEATURE-MAP.md -- standalone file removed -->
-<!-- @gsd-todo(ref:AC-76) bin/install.js updated to reference CAP branding and commands -->
-<!-- @gsd-todo(ref:AC-77) package.json name updated to cap (or code-as-plan fallback) -->
+<!-- @cap-todo(ref:AC-71) All /gsd:* commands shall be removed from the codebase -->
+<!-- @cap-todo(ref:AC-72) All gsd-* agent files shall be removed from the agents/ directory -->
+<!-- @cap-todo(ref:AC-73) Explicitly killed agents: gsd-discuss, gsd-planner, gsd-milestone-*, gsd-executor, gsd-annotator, and all discuss/plan phase agents -->
+<!-- @cap-todo(ref:AC-74) Artifacts no longer created or referenced: ROADMAP.md, REQUIREMENTS.md, STATE.md, MILESTONES.md, VERIFICATION.md, PLAN.md -->
+<!-- @cap-todo(ref:AC-75) CODE-INVENTORY.md evolved into enriched FEATURE-MAP.md -- standalone file removed -->
+<!-- @cap-todo(ref:AC-76) bin/install.js updated to reference CAP branding and commands -->
+<!-- @cap-todo(ref:AC-77) package.json name updated to cap (or code-as-plan fallback) -->
 
 ---
 

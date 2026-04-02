@@ -146,6 +146,90 @@ describe('readFeatureMap', () => {
   });
 });
 
+// --- parseFeatureMapContent alternate format tests ---
+
+describe('parseFeatureMapContent alternate formats', () => {
+  it('parses header without [state] when status is on separate line', () => {
+    const content = `# Feature Map\n\n## Features\n\n### F-001: Tag Scanner\n- **Status:** shipped\n`;
+    const result = parseFeatureMapContent(content);
+    assert.strictEqual(result.features.length, 1);
+    assert.strictEqual(result.features[0].id, 'F-001');
+    assert.strictEqual(result.features[0].title, 'Tag Scanner');
+    assert.strictEqual(result.features[0].state, 'shipped');
+  });
+
+  it('defaults to planned when header has no [state] and no status line', () => {
+    const content = `# Feature Map\n\n## Features\n\n### F-001: Tag Scanner\n`;
+    const result = parseFeatureMapContent(content);
+    assert.strictEqual(result.features[0].state, 'planned');
+  });
+
+  it('parses ACs as checkboxes', () => {
+    const content = `# Feature Map\n\n## Features\n\n### F-001: Auth [prototyped]\n- **AC:**\n  - [x] Login works\n  - [ ] Logout works\n`;
+    const result = parseFeatureMapContent(content);
+    assert.strictEqual(result.features[0].acs.length, 2);
+    assert.strictEqual(result.features[0].acs[0].id, 'AC-1');
+    assert.strictEqual(result.features[0].acs[0].description, 'Login works');
+    assert.strictEqual(result.features[0].acs[0].status, 'tested');
+    assert.strictEqual(result.features[0].acs[1].id, 'AC-2');
+    assert.strictEqual(result.features[0].acs[1].description, 'Logout works');
+    assert.strictEqual(result.features[0].acs[1].status, 'pending');
+  });
+
+  it('parses inline files on **Files:** line', () => {
+    const content = `# Feature Map\n\n## Features\n\n### F-001: Auth [planned]\n- **Files:** \`src/auth.js\`\n`;
+    const result = parseFeatureMapContent(content);
+    assert.deepStrictEqual(result.features[0].files, ['src/auth.js']);
+  });
+
+  it('parses multiple inline files separated by commas', () => {
+    const content = `# Feature Map\n\n## Features\n\n### F-001: Auth [planned]\n- **Files:** \`src/auth.js\`, \`src/auth.test.js\`\n`;
+    const result = parseFeatureMapContent(content);
+    assert.deepStrictEqual(result.features[0].files, ['src/auth.js', 'src/auth.test.js']);
+  });
+
+  it('parses dependencies with dash prefix', () => {
+    const content = `# Feature Map\n\n## Features\n\n### F-002: Profile [planned]\n- **Dependencies:** F-001\n`;
+    const result = parseFeatureMapContent(content);
+    assert.deepStrictEqual(result.features[0].dependencies, ['F-001']);
+  });
+
+  it('parses full agent-style format with all variant fields', () => {
+    const content = `# Feature Map
+
+## Features
+
+### F-001: Tag Scanner
+- **Status:** shipped
+- **Files:** \`cap/bin/lib/cap-tag-scanner.cjs\`
+- **AC:**
+  - [x] Extract @cap-feature tags from source files
+  - [x] Language-agnostic regex-based extraction
+  - [ ] Support custom tag prefixes
+
+### F-002: Feature Map Management
+- **Status:** prototyped
+- **Dependencies:** F-001
+- **AC:**
+  - [x] Read and parse FEATURE-MAP.md
+  - [ ] Write structured data back
+`;
+    const result = parseFeatureMapContent(content);
+    assert.strictEqual(result.features.length, 2);
+
+    assert.strictEqual(result.features[0].id, 'F-001');
+    assert.strictEqual(result.features[0].state, 'shipped');
+    assert.deepStrictEqual(result.features[0].files, ['cap/bin/lib/cap-tag-scanner.cjs']);
+    assert.strictEqual(result.features[0].acs.length, 3);
+    assert.strictEqual(result.features[0].acs[2].status, 'pending');
+
+    assert.strictEqual(result.features[1].id, 'F-002');
+    assert.strictEqual(result.features[1].state, 'prototyped');
+    assert.deepStrictEqual(result.features[1].dependencies, ['F-001']);
+    assert.strictEqual(result.features[1].acs.length, 2);
+  });
+});
+
 // --- writeFeatureMap / roundtrip tests ---
 
 describe('writeFeatureMap', () => {

@@ -1,6 +1,7 @@
 /**
  * Template — Template selection and fill operations
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — template selection and fill operations
 
 const fs = require('fs');
 const path = require('path');

@@ -1,12 +1,13 @@
 'use strict';
 
+// @cap-feature(feature:F-013) Convention & Skeleton Generation — test framework auto-detection
 /**
  * test-detector.cjs — Test framework auto-detection
  *
  * Reads a project's package.json to determine which test framework is in use.
  * Returns deterministic results with zero external dependencies.
  *
- * @gsd-api detectTestFramework(projectRoot: string)
+ * @cap-api detectTestFramework(projectRoot: string)
  *   Returns: { framework: string, testCommand: string, filePattern: string }
  *   Reads target project's package.json to detect test framework.
  *   Falls back to node:test when package.json is absent, invalid, or unrecognized.

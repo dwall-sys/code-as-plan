@@ -1,9 +1,11 @@
-// @gsd-context Session manager for monorepo mode -- persists and resolves the current app selection so all GSD commands auto-scope without --app flag
-// @gsd-decision Session stored in .planning/SESSION.json -- co-located with planning artifacts, not in a hidden dotfile or temp directory
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
-// @gsd-pattern All GSD commands call resolveCurrentApp() to get the effective app -- explicit --app flag overrides session, session overrides nothing
+// @cap-context Session manager for monorepo mode -- persists and resolves the current app selection so all GSD commands auto-scope without --app flag
+// @cap-decision Session stored in .planning/SESSION.json -- co-located with planning artifacts, not in a hidden dotfile or temp directory
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
+// @cap-pattern All GSD commands call resolveCurrentApp() to get the effective app -- explicit --app flag overrides session, session overrides nothing
 
 'use strict';
+
+// @cap-feature(feature:F-012) Monorepo Support — session manager for persisting current app selection
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,7 +27,7 @@ const path = require('node:path');
 // File path resolution
 // ---------------------------------------------------------------------------
 
-// @gsd-decision SESSION.json lives at root .planning/SESSION.json -- one session file for the whole monorepo, not per-app
+// @cap-decision SESSION.json lives at root .planning/SESSION.json -- one session file for the whole monorepo, not per-app
 /**
  * Get the path to SESSION.json.
  *
@@ -40,8 +42,8 @@ function getSessionPath(rootPath) {
 // Read operations
 // ---------------------------------------------------------------------------
 
-// @gsd-todo(ref:AC-13) Implement session detection at startup: when monorepo detected, present app selector if no session exists
-// @gsd-api getSession(rootPath) -- returns SessionData or null if no session file exists
+// @cap-todo(ref:AC-13) Implement session detection at startup: when monorepo detected, present app selector if no session exists
+// @cap-api getSession(rootPath) -- returns SessionData or null if no session file exists
 /**
  * Read the current session data.
  *
@@ -58,8 +60,8 @@ function getSession(rootPath) {
   }
 }
 
-// @gsd-todo(ref:AC-14) Implement auto-scoping: all GSD commands call resolveCurrentApp() so --app flag is not required after selection
-// @gsd-api getCurrentApp(rootPath) -- returns the current app path string or null (global/root scope)
+// @cap-todo(ref:AC-14) Implement auto-scoping: all GSD commands call resolveCurrentApp() so --app flag is not required after selection
+// @cap-api getCurrentApp(rootPath) -- returns the current app path string or null (global/root scope)
 /**
  * Get the currently selected app path.
  * Returns null if no session or if working at root/global scope.
@@ -75,7 +77,7 @@ function getCurrentApp(rootPath) {
   return session.current_app || null;
 }
 
-// @gsd-api resolveCurrentApp(rootPath, explicitApp) -- returns effective app path: explicit --app flag wins, then session, then null
+// @cap-api resolveCurrentApp(rootPath, explicitApp) -- returns effective app path: explicit --app flag wins, then session, then null
 /**
  * Resolve the effective current app for a command.
  * Priority: explicit --app flag > session > null (root scope).
@@ -85,7 +87,7 @@ function getCurrentApp(rootPath) {
  * @returns {string|null}
  */
 function resolveCurrentApp(rootPath, explicitApp) {
-  // @gsd-decision Explicit --app always wins over session -- escape hatch for one-off commands on a different app
+  // @cap-decision Explicit --app always wins over session -- escape hatch for one-off commands on a different app
   if (explicitApp) return explicitApp;
   return getCurrentApp(rootPath);
 }
@@ -94,8 +96,8 @@ function resolveCurrentApp(rootPath, explicitApp) {
 // Write operations
 // ---------------------------------------------------------------------------
 
-// @gsd-todo(ref:AC-15) Wire setCurrentApp to /gsd:switch-app command for mid-session app switching
-// @gsd-api setCurrentApp(rootPath, appPath, availableApps) -- writes SESSION.json with new current_app
+// @cap-todo(ref:AC-15) Wire setCurrentApp to /gsd:switch-app command for mid-session app switching
+// @cap-api setCurrentApp(rootPath, appPath, availableApps) -- writes SESSION.json with new current_app
 /**
  * Set the current app in the session.
  * Pass null for appPath to set global/root scope.
@@ -123,8 +125,8 @@ function setCurrentApp(rootPath, appPath, availableApps) {
   return session;
 }
 
-// @gsd-todo(ref:AC-16) Implement "Global" option: setCurrentApp(rootPath, null) puts session in root-level scope for cross-app work
-// @gsd-api clearSession(rootPath) -- removes SESSION.json entirely, resetting to no-session state
+// @cap-todo(ref:AC-16) Implement "Global" option: setCurrentApp(rootPath, null) puts session in root-level scope for cross-app work
+// @cap-api clearSession(rootPath) -- removes SESSION.json entirely, resetting to no-session state
 /**
  * Clear the session entirely. Removes SESSION.json.
  *
@@ -143,7 +145,7 @@ function clearSession(rootPath) {
 // Session initialization (for monorepo startup)
 // ---------------------------------------------------------------------------
 
-// @gsd-api initSession(rootPath, workspaceInfo) -- creates initial SESSION.json from workspace detection results
+// @cap-api initSession(rootPath, workspaceInfo) -- creates initial SESSION.json from workspace detection results
 /**
  * Initialize a session from workspace detection results.
  * Called by monorepo-init or at session start when a monorepo is detected.
@@ -153,7 +155,7 @@ function clearSession(rootPath) {
  * @returns {SessionData}
  */
 function initSession(rootPath, workspaceInfo) {
-  // @gsd-constraint Session init does NOT auto-select an app -- user must explicitly choose via selector or /gsd:switch-app
+  // @cap-constraint Session init does NOT auto-select an app -- user must explicitly choose via selector or /gsd:switch-app
   const availableApps = (workspaceInfo.apps || []).map(a => a.path);
 
   // Check if a default app was previously configured — auto-select it
@@ -220,7 +222,7 @@ function getDefaultApp(rootPath) {
 // Query helpers
 // ---------------------------------------------------------------------------
 
-// @gsd-api isMonorepoSession(rootPath) -- returns true if a monorepo session is active
+// @cap-api isMonorepoSession(rootPath) -- returns true if a monorepo session is active
 /**
  * Check if the current session is a monorepo session.
  *
@@ -232,7 +234,7 @@ function isMonorepoSession(rootPath) {
   return !!(session && session.workspace_type && session.workspace_type !== 'single');
 }
 
-// @gsd-api getAvailableApps(rootPath) -- returns cached list of app paths from session, or empty array
+// @cap-api getAvailableApps(rootPath) -- returns cached list of app paths from session, or empty array
 /**
  * Get the list of available apps from the session.
  *

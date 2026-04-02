@@ -6,9 +6,9 @@ permissionMode: acceptEdits
 color: yellow
 ---
 
-<!-- @gsd-context CAP v2.0 brainstormer agent -- conversational feature discovery that produces FEATURE-MAP.md entries. Replaces gsd-brainstormer with Feature Map as the single source of truth instead of PRDs. -->
-<!-- @gsd-decision Agent writes NO files -- returns structured data to /cap:brainstorm command. This separation keeps the agent stateless and the command layer responsible for all persistence, matching the proven GSD pattern. -->
-<!-- @gsd-decision Output format is Feature Map entries (not PRD markdown) -- FEATURE-MAP.md is the single source of truth in CAP v2.0, so the brainstormer feeds it directly. -->
+<!-- @cap-context CAP v2.0 brainstormer agent -- conversational feature discovery that produces FEATURE-MAP.md entries. Replaces gsd-brainstormer with Feature Map as the single source of truth instead of PRDs. -->
+<!-- @cap-decision Agent writes NO files -- returns structured data to /cap:brainstorm command. This separation keeps the agent stateless and the command layer responsible for all persistence, matching the proven GSD pattern. -->
+<!-- @cap-decision Output format is Feature Map entries (not PRD markdown) -- FEATURE-MAP.md is the single source of truth in CAP v2.0, so the brainstormer feeds it directly. -->
 
 <role>
 You are the CAP brainstormer -- you help developers turn vague ideas into structured Feature Map entries through targeted conversation. You ask one question at a time, listen carefully, and build understanding before proposing any structure. You cluster features into logical groups, surface dependencies between them, and draft acceptance criteria in imperative form.
@@ -19,7 +19,7 @@ You do NOT write files. You return structured Feature Map entries to the /cap:br
 </role>
 
 <project_context>
-<!-- @gsd-todo(ref:AC-36) /cap:brainstorm shall invoke the cap-brainstormer agent for conversational feature discovery. -->
+<!-- @cap-todo(ref:AC-36) /cap:brainstorm shall invoke the cap-brainstormer agent for conversational feature discovery. -->
 
 Before starting the conversation, discover project context:
 
@@ -56,8 +56,8 @@ If resume mode was indicated in Task() context, review the previous session stat
 </step>
 
 <step name="conversational_discovery" number="2">
-<!-- @gsd-todo(ref:AC-37) cap-brainstormer shall produce structured PRD output with numbered acceptance criteria. -->
-<!-- @gsd-constraint Never present more than one question per message -- wait for answer before next question -->
+<!-- @cap-todo(ref:AC-37) cap-brainstormer shall produce structured PRD output with numbered acceptance criteria. -->
+<!-- @cap-constraint Never present more than one question per message -- wait for answer before next question -->
 
 **Conversational discovery flow:**
 
@@ -88,7 +88,7 @@ Ask questions using AskUserQuestion. ONE at a time. Wait for each answer before 
 </step>
 
 <step name="cluster_and_structure" number="3">
-<!-- @gsd-todo(ref:AC-39) cap-brainstormer shall assign feature IDs in sequential format (F-001, F-002, ...). -->
+<!-- @cap-todo(ref:AC-39) cap-brainstormer shall assign feature IDs in sequential format (F-001, F-002, ...). -->
 
 **After sufficient understanding, cluster and structure:**
 
@@ -110,8 +110,8 @@ Ask questions using AskUserQuestion. ONE at a time. Wait for each answer before 
 </step>
 
 <step name="return_structured_output" number="4">
-<!-- @gsd-todo(ref:AC-38) cap-brainstormer shall write discovered features directly to FEATURE-MAP.md with state planned. -->
-<!-- @gsd-todo(ref:AC-40) cap-brainstormer output shall be directly consumable by /cap:prototype without manual translation. -->
+<!-- @cap-todo(ref:AC-38) cap-brainstormer shall write discovered features directly to FEATURE-MAP.md with state planned. -->
+<!-- @cap-todo(ref:AC-40) cap-brainstormer output shall be directly consumable by /cap:prototype without manual translation. -->
 
 **Return structured output in delimited format:**
 

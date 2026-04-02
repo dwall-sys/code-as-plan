@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// gsd-hook-version: {{GSD_VERSION}}
+// @cap-feature(feature:F-009) Hooks System — prompt injection guard (PreToolUse)
+// cap-hook-version: {{CAP_VERSION}}
 // GSD Prompt Injection Guard — PreToolUse hook
 // Scans file content being written to .planning/ for prompt injection patterns.
 // Defense-in-depth: catches injected instructions before they enter agent context.

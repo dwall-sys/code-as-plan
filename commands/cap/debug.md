@@ -10,12 +10,12 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 debug command -- orchestrates scientific debugging. Gathers symptoms, spawns cap-debugger agent, handles checkpoints and continuations. Debug state persists in .cap/debug/. -->
-<!-- @gsd-decision Debug state in .cap/debug/ (not .planning/debug/) -- CAP centralizes all runtime state under .cap/ -->
-<!-- @gsd-pattern Orchestrator gathers symptoms and spawns agent. Fresh context per investigation to avoid context exhaustion. -->
+<!-- @cap-context CAP v2.0 debug command -- orchestrates scientific debugging. Gathers symptoms, spawns cap-debugger agent, handles checkpoints and continuations. Debug state persists in .cap/debug/. -->
+<!-- @cap-decision Debug state in .cap/debug/ (not .planning/debug/) -- CAP centralizes all runtime state under .cap/ -->
+<!-- @cap-pattern Orchestrator gathers symptoms and spawns agent. Fresh context per investigation to avoid context exhaustion. -->
 
 <objective>
-<!-- @gsd-todo(ref:AC-63) /cap:debug shall invoke the cap-debugger agent using a scientific method approach. -->
+<!-- @cap-todo(ref:AC-63) /cap:debug shall invoke the cap-debugger agent using a scientific method approach. -->
 
 Debug issues using scientific method with subagent isolation.
 
@@ -37,7 +37,7 @@ ls .cap/debug/*.md 2>/dev/null | head -5
 
 ## Step 0: Load session and project context
 
-<!-- @gsd-todo(ref:AC-64) cap-debugger shall maintain persistent debug state across the debug session. -->
+<!-- @cap-todo(ref:AC-64) cap-debugger shall maintain persistent debug state across the debug session. -->
 
 ```bash
 node -e "
@@ -164,8 +164,8 @@ session.updateSession(process.cwd(), {
 
 ## Step 3: Spawn cap-debugger agent
 
-<!-- @gsd-todo(ref:AC-65) cap-debugger shall follow a hypothesis -> test -> verify loop, documenting each step. -->
-<!-- @gsd-todo(ref:AC-66) cap-debugger shall not modify production code without explicit developer approval. -->
+<!-- @cap-todo(ref:AC-65) cap-debugger shall follow a hypothesis -> test -> verify loop, documenting each step. -->
+<!-- @cap-todo(ref:AC-66) cap-debugger shall not modify production code without explicit developer approval. -->
 
 Identify relevant files from the active feature:
 

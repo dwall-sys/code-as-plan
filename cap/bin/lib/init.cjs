@@ -1,6 +1,7 @@
 /**
  * Init — Compound init commands for workflow bootstrapping
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — workflow initialization and bootstrapping
 
 const fs = require('fs');
 const path = require('path');

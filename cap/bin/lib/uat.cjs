@@ -1,3 +1,4 @@
+// @cap-feature(feature:F-011) Legacy GSD Modules — cross-phase UAT/verification scanner
 /**
  * UAT Audit — Cross-phase UAT/VERIFICATION scanner
  *

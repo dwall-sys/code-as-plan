@@ -7,7 +7,8 @@
 
 'use strict';
 
-// @gsd-context(phase:12) Feature aggregator — reads PRDs and CODE-INVENTORY.md to produce FEATURES.md.
+// @cap-feature(feature:F-015) Legacy ARC Scanner — feature aggregator (auto-generates FEATURES.md from PRD ACs)
+// @cap-context(phase:12) Feature aggregator — reads PRDs and CODE-INVENTORY.md to produce FEATURES.md.
 // Dual-input design: PRD ACs are authoritative, code tags refine completion status.
 
 const fs = require('fs');
@@ -16,20 +17,20 @@ const crypto = require('crypto');
 
 // ── PRD Parsing ─────────────────────────────────────────────────────────────
 
-// @gsd-pattern AC lines in PRDs follow the format: AC-N: description text
+// @cap-pattern AC lines in PRDs follow the format: AC-N: description text
 // This regex must match the exact format emitted by /gsd:brainstorm and /gsd:prototype PRD templates.
 const AC_LINE_RE = /^(?:[-*]\s*)?(?:\*\*)?AC-(\d+)(?:\*\*)?:\s*(.+)$/gm;
 
-// @gsd-pattern Feature group headings in PRDs use ## or ### markdown headers
+// @cap-pattern Feature group headings in PRDs use ## or ### markdown headers
 const FEATURE_GROUP_RE = /^#{2,3}\s+(.+)$/gm;
 
-// @gsd-pattern Dependency sections in PRDs use "## Dependencies" or "### Dependencies"
+// @cap-pattern Dependency sections in PRDs use "## Dependencies" or "### Dependencies"
 const DEPENDENCY_SECTION_RE = /^#{2,3}\s+Dependencies\s*$/im;
 
 /**
  * Parse a PRD file and extract acceptance criteria, feature groups, and dependencies.
  *
- * @gsd-api Parameters: prdContent (string) — raw PRD markdown.
+ * @cap-api Parameters: prdContent (string) — raw PRD markdown.
  * Returns: { acs: Array<{id, description, group}>, dependencies: Array<{from, to}>, groups: string[] }
  *
  * @param {string} prdContent - Raw PRD Markdown content
@@ -37,7 +38,7 @@ const DEPENDENCY_SECTION_RE = /^#{2,3}\s+Dependencies\s*$/im;
  * @returns {{ acs: Array<{id: string, description: string, group: string, prdSource: string}>, dependencies: Array<{from: string, to: string}>, groups: string[] }}
  */
 function parsePrd(prdContent, prdName) {
-  // @gsd-todo(ref:AC-1) Implement full PRD parsing — extract ACs, feature groups, and dependency sections from PRD markdown
+  // @cap-todo(ref:AC-1) Implement full PRD parsing — extract ACs, feature groups, and dependency sections from PRD markdown
   const acs = [];
   const groups = [];
   const dependencies = [];
@@ -102,30 +103,30 @@ function parsePrd(prdContent, prdName) {
 
 // ── CODE-INVENTORY Parsing ──────────────────────────────────────────────────
 
-// @gsd-pattern Open @gsd-todo tags with ref:AC-N metadata indicate incomplete ACs.
+// @cap-pattern Open @cap-todo tags with ref:AC-N metadata indicate incomplete ACs.
 // Absence of such a tag means the AC is considered done.
 const TODO_REF_RE = /ref:(AC-\d+)/;
 
 /**
- * Parse CODE-INVENTORY.md to find open @gsd-todo tags with AC references.
+ * Parse CODE-INVENTORY.md to find open @cap-todo tags with AC references.
  *
- * @gsd-api Parameters: inventoryContent (string) — raw CODE-INVENTORY.md.
+ * @cap-api Parameters: inventoryContent (string) — raw CODE-INVENTORY.md.
  * Returns: Set<string> of open AC IDs (e.g., Set(['AC-1', 'AC-3']))
  *
  * @param {string} inventoryContent - Raw CODE-INVENTORY.md content
- * @returns {Set<string>} Set of AC IDs that still have open @gsd-todo tags
+ * @returns {Set<string>} Set of AC IDs that still have open @cap-todo tags
  */
 function parseOpenTodos(inventoryContent) {
-  // @gsd-todo(ref:AC-2) Implement CODE-INVENTORY.md parsing to extract open @gsd-todo(ref:AC-N) tags and determine per-AC completion status
+  // @cap-todo(ref:AC-2) Implement CODE-INVENTORY.md parsing to extract open @cap-todo(ref:AC-N) tags and determine per-AC completion status
   const openAcIds = new Set();
   const lines = inventoryContent.split('\n');
 
-  // We look for lines in the @gsd-todo section that contain ref:AC-N metadata
+  // We look for lines in the @cap-todo section that contain ref:AC-N metadata
   let inTodoSection = false;
 
   for (const line of lines) {
-    // Detect the @gsd-todo section heading
-    if (/^###\s+@gsd-todo/.test(line)) {
+    // Detect the @cap-todo section heading
+    if (/^###\s+@cap-todo/.test(line)) {
       inTodoSection = true;
       continue;
     }
@@ -148,18 +149,18 @@ function parseOpenTodos(inventoryContent) {
 
 // ── Cross-Reference Engine ──────────────────────────────────────────────────
 
-// @gsd-decision AC completion is derived from tag presence: if a @gsd-todo with ref:AC-N
+// @cap-decision AC completion is derived from tag presence: if a @cap-todo with ref:AC-N
 // exists in CODE-INVENTORY.md, that AC is "open". If absent, it is "done".
 // This avoids needing explicit "done" markers — the absence of work IS the signal.
 
 /**
- * Cross-reference PRD ACs with open @gsd-todo tags to determine completion status.
+ * Cross-reference PRD ACs with open @cap-todo tags to determine completion status.
  *
- * @gsd-api Parameters: acs (Array), openTodoAcIds (Set<string>).
+ * @cap-api Parameters: acs (Array), openTodoAcIds (Set<string>).
  * Returns: Array of AC objects enriched with `status` field ('done' | 'open').
  *
  * @param {Array<{id: string, description: string, group: string, prdSource: string}>} acs
- * @param {Set<string>} openTodoAcIds - AC IDs that still have open @gsd-todo tags
+ * @param {Set<string>} openTodoAcIds - AC IDs that still have open @cap-todo tags
  * @returns {Array<{id: string, description: string, group: string, prdSource: string, status: string}>}
  */
 function crossReference(acs, openTodoAcIds) {
@@ -174,14 +175,14 @@ function crossReference(acs, openTodoAcIds) {
 /**
  * Extract and format dependency relationships from parsed PRD data.
  *
- * @gsd-api Parameters: dependencies (Array<{from, to}>).
+ * @cap-api Parameters: dependencies (Array<{from, to}>).
  * Returns: string — Markdown-formatted dependency visualization.
  *
  * @param {Array<{from: string, to: string}>} dependencies
  * @returns {string} Markdown dependency section content
  */
 function formatDependencies(dependencies) {
-  // @gsd-todo(ref:AC-3) Implement dependency visualization in FEATURES.md from PRD dependency sections
+  // @cap-todo(ref:AC-3) Implement dependency visualization in FEATURES.md from PRD dependency sections
   if (!dependencies || dependencies.length === 0) {
     return 'No cross-feature dependencies documented.';
   }
@@ -204,13 +205,13 @@ function formatDependencies(dependencies) {
 
 // ── FEATURES.md Generation ──────────────────────────────────────────────────
 
-// @gsd-constraint FEATURES.md is a derived read-only artifact. It must never be manually edited.
+// @cap-constraint FEATURES.md is a derived read-only artifact. It must never be manually edited.
 // The header includes last-updated and source-hash to signal this.
 
 /**
  * Generate the complete FEATURES.md content string.
  *
- * @gsd-api Parameters: enrichedAcs (Array), dependencies (Array), groups (string[]).
+ * @cap-api Parameters: enrichedAcs (Array), dependencies (Array), groups (string[]).
  * Returns: string — complete FEATURES.md Markdown content with header, status table, and dependencies.
  *
  * @param {Array<{id: string, description: string, group: string, prdSource: string, status: string}>} enrichedAcs
@@ -220,7 +221,7 @@ function formatDependencies(dependencies) {
  * @returns {string}
  */
 function generateFeaturesMarkdown(enrichedAcs, dependencies, groups, prdSources) {
-  // @gsd-todo(ref:AC-5) Generate FEATURES.md as a derived read-only artifact with last-updated timestamp and source-hash header
+  // @cap-todo(ref:AC-5) Generate FEATURES.md as a derived read-only artifact with last-updated timestamp and source-hash header
   const now = new Date().toISOString();
 
   // Compute source hash from input data for staleness detection
@@ -307,7 +308,7 @@ function generateFeaturesMarkdown(enrichedAcs, dependencies, groups, prdSources)
 
 // ── File Discovery ──────────────────────────────────────────────────────────
 
-// @gsd-decision PRD discovery uses a simple glob: .planning/PRD.md and .planning/PRD-*.md
+// @cap-decision PRD discovery uses a simple glob: .planning/PRD.md and .planning/PRD-*.md
 // No recursive search needed — PRDs live at the .planning/ root by convention.
 
 /**
@@ -333,7 +334,7 @@ function discoverPrdFiles(planningDir) {
 
 // ── CLI Entry Point ─────────────────────────────────────────────────────────
 
-// @gsd-pattern CLI entry follows arc-scanner.cjs cmdExtractTags pattern:
+// @cap-pattern CLI entry follows arc-scanner.cjs cmdExtractTags pattern:
 // accept cwd + opts, resolve paths, call pure functions, write output.
 
 /**
@@ -342,7 +343,7 @@ function discoverPrdFiles(planningDir) {
  *
  * Called by gsd-tools.cjs case 'aggregate-features'.
  *
- * @gsd-api CLI entry: cmdAggregateFeatures(cwd, opts).
+ * @cap-api CLI entry: cmdAggregateFeatures(cwd, opts).
  * opts.outputFile defaults to .planning/FEATURES.md.
  * opts.inventoryFile defaults to .planning/prototype/CODE-INVENTORY.md.
  *
@@ -352,7 +353,7 @@ function discoverPrdFiles(planningDir) {
  * @param {string} [opts.inventoryFile] - CODE-INVENTORY.md path
  */
 function cmdAggregateFeatures(cwd, opts) {
-  // @gsd-todo(ref:AC-4) Wire aggregate-features into extract-tags auto-chain so FEATURES.md regenerates on every extract-tags run
+  // @cap-todo(ref:AC-4) Wire aggregate-features into extract-tags auto-chain so FEATURES.md regenerates on every extract-tags run
   opts = opts || {};
 
   const planningDir = path.join(cwd, '.planning');
@@ -362,7 +363,7 @@ function cmdAggregateFeatures(cwd, opts) {
   // Step 1: Discover and parse PRD files
   const prdFiles = discoverPrdFiles(planningDir);
   if (prdFiles.length === 0) {
-    // @gsd-risk No PRDs found — FEATURES.md cannot be generated without at least one PRD.
+    // @cap-risk No PRDs found — FEATURES.md cannot be generated without at least one PRD.
     // This is expected for projects that have not yet run /gsd:brainstorm or created a PRD manually.
     process.stderr.write('feature-aggregator: No PRD files found in .planning/ — skipping FEATURES.md generation.\n');
     return;
@@ -386,14 +387,14 @@ function cmdAggregateFeatures(cwd, opts) {
     }
   }
 
-  // Step 2: Parse CODE-INVENTORY.md for open @gsd-todo tags
+  // Step 2: Parse CODE-INVENTORY.md for open @cap-todo tags
   let openTodoAcIds = new Set();
   try {
     const inventoryContent = fs.readFileSync(inventoryFile, 'utf-8');
     openTodoAcIds = parseOpenTodos(inventoryContent);
   } catch {
     // CODE-INVENTORY.md may not exist yet — treat all ACs as done (no open todos)
-    // @gsd-risk If CODE-INVENTORY.md is missing, all ACs appear "done" by default.
+    // @cap-risk If CODE-INVENTORY.md is missing, all ACs appear "done" by default.
     // This is intentional: no code = no open todos. But it may confuse users on first run.
   }
 

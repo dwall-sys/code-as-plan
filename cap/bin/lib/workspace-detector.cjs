@@ -1,15 +1,17 @@
-// @gsd-context Workspace detector for monorepo mode -- discovers NX, Turbo, and pnpm workspaces and enumerates apps/packages
-// @gsd-decision Regex-parses pnpm-workspace.yaml instead of adding a YAML parser -- keeps zero-dep constraint
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
-// @gsd-ref(ref:AC-1) GSD auto-detects NX/Turbo/pnpm workspaces and lists available apps and packages on project initialization
-// @gsd-pattern Workspace detection returns a structured WorkspaceInfo object that downstream modules consume uniformly
+// @cap-context Workspace detector for monorepo mode -- discovers NX, Turbo, and pnpm workspaces and enumerates apps/packages
+// @cap-decision Regex-parses pnpm-workspace.yaml instead of adding a YAML parser -- keeps zero-dep constraint
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
+// @cap-ref(ref:AC-1) GSD auto-detects NX/Turbo/pnpm workspaces and lists available apps and packages on project initialization
+// @cap-pattern Workspace detection returns a structured WorkspaceInfo object that downstream modules consume uniformly
 
 'use strict';
+
+// @cap-feature(feature:F-012) Monorepo Support — workspace detection for NX, Turbo, and pnpm workspaces
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-// @gsd-api detectWorkspace(projectRoot) -- returns WorkspaceInfo | null describing the monorepo type, apps, and packages
+// @cap-api detectWorkspace(projectRoot) -- returns WorkspaceInfo | null describing the monorepo type, apps, and packages
 
 /**
  * @typedef {Object} WorkspaceApp
@@ -42,7 +44,7 @@ const path = require('node:path');
  * @returns {WorkspaceInfo|null} Workspace info or null if not a monorepo
  */
 function detectWorkspace(projectRoot) {
-  // @gsd-decision Check nx.json first, then turbo.json, then pnpm-workspace.yaml, then package.json workspaces -- priority matches market share
+  // @cap-decision Check nx.json first, then turbo.json, then pnpm-workspace.yaml, then package.json workspaces -- priority matches market share
   const nxPath = path.join(projectRoot, 'nx.json');
   const turboPath = path.join(projectRoot, 'turbo.json');
   const pnpmWsPath = path.join(projectRoot, 'pnpm-workspace.yaml');
@@ -73,10 +75,10 @@ function detectWorkspace(projectRoot) {
 
   if (!type) return null;
 
-  // @gsd-risk Glob expansion uses simple fs.readdirSync matching, not full glob semantics -- patterns like apps/** work but complex negations do not
+  // @cap-risk Glob expansion uses simple fs.readdirSync matching, not full glob semantics -- patterns like apps/** work but complex negations do not
   const resolved = expandWorkspaceGlobs(projectRoot, workspaceGlobs);
 
-  // @gsd-decision Classify directories under apps/ or packages/ by convention -- NX/Turbo monorepos use this standard structure
+  // @cap-decision Classify directories under apps/ or packages/ by convention -- NX/Turbo monorepos use this standard structure
   const apps = [];
   const packages = [];
 
@@ -97,7 +99,7 @@ function detectWorkspace(projectRoot) {
     } else if (relPath.startsWith('packages/') || relPath.startsWith('libs/') || relPath.startsWith('packages\\') || relPath.startsWith('libs\\')) {
       packages.push({ ...item, exports });
     } else {
-      // @gsd-risk Directories not under apps/ or packages/ are classified as packages by default -- may misclassify standalone tools
+      // @cap-risk Directories not under apps/ or packages/ are classified as packages by default -- may misclassify standalone tools
       packages.push({ ...item, exports });
     }
   }
@@ -181,8 +183,8 @@ function resolveTurboWorkspaces(pkgPath) {
  * @returns {string[]}
  */
 function resolvePnpmWorkspaces(pnpmWsPath) {
-  // @gsd-decision Parse pnpm-workspace.yaml with regex -- avoids adding js-yaml dependency; works for the simple list format pnpm uses
-  // @gsd-risk Regex YAML parsing will break on complex YAML features (anchors, flow sequences) -- sufficient for pnpm-workspace.yaml which is always a simple list
+  // @cap-decision Parse pnpm-workspace.yaml with regex -- avoids adding js-yaml dependency; works for the simple list format pnpm uses
+  // @cap-risk Regex YAML parsing will break on complex YAML features (anchors, flow sequences) -- sufficient for pnpm-workspace.yaml which is always a simple list
   try {
     const content = fs.readFileSync(pnpmWsPath, 'utf-8');
     const globs = [];
@@ -218,7 +220,7 @@ function resolvePnpmWorkspaces(pnpmWsPath) {
  * @returns {Array<{relativePath: string, absolutePath: string}>}
  */
 function expandWorkspaceGlobs(rootPath, globs) {
-  // @gsd-constraint Uses readdirSync (not glob library) per project zero-dep constraint
+  // @cap-constraint Uses readdirSync (not glob library) per project zero-dep constraint
   const results = [];
   const seen = new Set();
 
@@ -316,7 +318,7 @@ function safeReadJson(filePath) {
  * @param {string} appPath - User-provided app path (e.g., 'apps/dashboard')
  * @returns {{valid: boolean, resolved: WorkspaceApp|null, error: string|null}}
  */
-// @gsd-api validateAppPath(workspace, appPath) -- returns {valid, resolved, error} for --app flag validation
+// @cap-api validateAppPath(workspace, appPath) -- returns {valid, resolved, error} for --app flag validation
 function validateAppPath(workspace, appPath) {
   if (!workspace) {
     return { valid: false, resolved: null, error: 'No workspace detected. Run monorepo-init first.' };

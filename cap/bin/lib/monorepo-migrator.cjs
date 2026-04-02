@@ -1,9 +1,11 @@
-// @gsd-context Monorepo migration module -- audits existing .planning/ directories in apps, supports archive/replace/keep per app, analyzes root .planning/ for global vs app-specific split, regenerates scoped CODE-INVENTORY.md
-// @gsd-decision Separate module from monorepo-context.cjs -- migration is a one-time destructive operation; context assembly is read-only and ongoing
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
-// @gsd-pattern Migration functions return audit/result objects -- callers (commands) handle user interaction and confirmation
+// @cap-context Monorepo migration module -- audits existing .planning/ directories in apps, supports archive/replace/keep per app, analyzes root .planning/ for global vs app-specific split, regenerates scoped CODE-INVENTORY.md
+// @cap-decision Separate module from monorepo-context.cjs -- migration is a one-time destructive operation; context assembly is read-only and ongoing
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
+// @cap-pattern Migration functions return audit/result objects -- callers (commands) handle user interaction and confirmation
 
 'use strict';
+
+// @cap-feature(feature:F-012) Monorepo Support — flat-to-monorepo planning migration
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +15,7 @@ const arcScanner = require('./arc-scanner.cjs');
 // Constants
 // ---------------------------------------------------------------------------
 
-// @gsd-decision Standard .planning/ files recognized during audit -- matches the set that monorepo-context.cjs and extract-plan produce
+// @cap-decision Standard .planning/ files recognized during audit -- matches the set that monorepo-context.cjs and extract-plan produce
 const KNOWN_PLANNING_FILES = [
   'PROJECT.md',
   'ROADMAP.md',
@@ -85,8 +87,8 @@ const KNOWN_PLANNING_DIRS = [
 // Audit functions
 // ---------------------------------------------------------------------------
 
-// @gsd-todo(ref:AC-9) Implement full audit: scan all app directories for existing .planning/ folders and report what exists where
-// @gsd-api auditAppPlanning(rootPath, apps) -- returns MigrationAudit describing existing .planning/ state across all apps
+// @cap-todo(ref:AC-9) Implement full audit: scan all app directories for existing .planning/ folders and report what exists where
+// @cap-api auditAppPlanning(rootPath, apps) -- returns MigrationAudit describing existing .planning/ state across all apps
 /**
  * Scan all app directories for existing .planning/ folders.
  * Produces a structured audit of what exists where.
@@ -153,8 +155,8 @@ function auditAppPlanning(rootPath, apps) {
 // Root analysis
 // ---------------------------------------------------------------------------
 
-// @gsd-todo(ref:AC-11) Implement root .planning/ analysis: classify files as global vs app-specific and guide user to split
-// @gsd-api analyzeRootPlanning(rootPath) -- returns RootAnalysis classifying root .planning/ contents
+// @cap-todo(ref:AC-11) Implement root .planning/ analysis: classify files as global vs app-specific and guide user to split
+// @cap-api analyzeRootPlanning(rootPath) -- returns RootAnalysis classifying root .planning/ contents
 /**
  * Analyze root .planning/ contents and classify them as global or app-specific.
  * Global: PROJECT.md, ROADMAP.md, REQUIREMENTS.md, manifests/
@@ -174,7 +176,7 @@ function analyzeRootPlanning(rootPath) {
     return { globalFiles, appSpecificFiles, ambiguousFiles, rootPlanningDir };
   }
 
-  // @gsd-decision Classify root files by name convention -- PROJECT.md, ROADMAP.md, REQUIREMENTS.md are always global; PRD.md and FEATURES.md at root are ambiguous in a monorepo
+  // @cap-decision Classify root files by name convention -- PROJECT.md, ROADMAP.md, REQUIREMENTS.md are always global; PRD.md and FEATURES.md at root are ambiguous in a monorepo
   const GLOBAL_FILES = new Set(['PROJECT.md', 'ROADMAP.md', 'REQUIREMENTS.md', 'MILESTONES.md', 'config.json']);
   const AMBIGUOUS_FILES = new Set(['PRD.md', 'FEATURES.md', 'STATE.md', 'BRAINSTORM-LEDGER.md', 'RETROSPECTIVE.md']);
 
@@ -188,7 +190,7 @@ function analyzeRootPlanning(rootPath) {
       if (name === 'manifests') {
         globalFiles.push(name + '/');
       } else if (name === 'prototype') {
-        // @gsd-risk Root prototype/ may contain monolithic CODE-INVENTORY.md that should be split per app
+        // @cap-risk Root prototype/ may contain monolithic CODE-INVENTORY.md that should be split per app
         ambiguousFiles.push(name + '/');
       } else {
         ambiguousFiles.push(name + '/');
@@ -222,7 +224,7 @@ function analyzeRootPlanning(rootPath) {
  * @returns {boolean}
  */
 function looksAppSpecific(content) {
-  // @gsd-risk Heuristic detection of app-specific content may produce false positives -- user confirmation is always required
+  // @cap-risk Heuristic detection of app-specific content may produce false positives -- user confirmation is always required
   const lines = content.split('\n').slice(0, 20);
   const appRefs = lines.filter(line => /\bapps\/\w+/.test(line));
   return appRefs.length >= 2;
@@ -232,8 +234,8 @@ function looksAppSpecific(content) {
 // Migration actions
 // ---------------------------------------------------------------------------
 
-// @gsd-todo(ref:AC-10) Implement per-app keep/archive/replace: user chooses action for each app's existing .planning/
-// @gsd-api executeAppMigration(rootPath, action) -- performs keep, archive, or replace on one app's .planning/
+// @cap-todo(ref:AC-10) Implement per-app keep/archive/replace: user chooses action for each app's existing .planning/
+// @cap-api executeAppMigration(rootPath, action) -- performs keep, archive, or replace on one app's .planning/
 /**
  * Execute a migration action on a single app's .planning/ directory.
  *
@@ -263,7 +265,7 @@ function executeAppMigration(rootPath, action) {
   }
 }
 
-// @gsd-pattern Archive uses timestamp-based directory naming (legacy-{timestamp}) -- ensures idempotent re-runs never collide
+// @cap-pattern Archive uses timestamp-based directory naming (legacy-{timestamp}) -- ensures idempotent re-runs never collide
 /**
  * Archive an app's existing .planning/ to .planning/legacy-{timestamp}/.
  *
@@ -278,7 +280,7 @@ function archiveAppPlanning(rootPath, appPath) {
     return { appPath, action: 'archive', success: true, archivePath: null, error: null };
   }
 
-  // @gsd-decision Archive to legacy-{timestamp} inside the app's .planning/ -- keeps history co-located with the app
+  // @cap-decision Archive to legacy-{timestamp} inside the app's .planning/ -- keeps history co-located with the app
   const timestamp = Date.now();
   const archiveDir = path.join(planningDir, `legacy-${timestamp}`);
   fs.mkdirSync(archiveDir, { recursive: true });
@@ -288,7 +290,7 @@ function archiveAppPlanning(rootPath, appPath) {
     if (name.startsWith('legacy-')) continue; // Don't archive previous archives
     const src = path.join(planningDir, name);
     const dest = path.join(archiveDir, name);
-    // @gsd-decision Use cpSync+rmSync instead of renameSync -- cross-device safe for monorepos spanning mounts
+    // @cap-decision Use cpSync+rmSync instead of renameSync -- cross-device safe for monorepos spanning mounts
     fs.cpSync(src, dest, { recursive: true });
     fs.rmSync(src, { recursive: true, force: true });
   }
@@ -338,8 +340,8 @@ function replaceAppPlanning(rootPath, appPath) {
 // Scoped CODE-INVENTORY regeneration
 // ---------------------------------------------------------------------------
 
-// @gsd-todo(ref:AC-12) Implement scoped CODE-INVENTORY.md regeneration per app after migration (replacing monolithic version)
-// @gsd-api regenerateScopedInventories(rootPath, apps) -- triggers extract-tags per app to produce scoped CODE-INVENTORY.md files
+// @cap-todo(ref:AC-12) Implement scoped CODE-INVENTORY.md regeneration per app after migration (replacing monolithic version)
+// @cap-api regenerateScopedInventories(rootPath, apps) -- triggers extract-tags per app to produce scoped CODE-INVENTORY.md files
 /**
  * Regenerate CODE-INVENTORY.md for each app by invoking the tag scanner
  * scoped to each app directory.
@@ -352,7 +354,7 @@ function replaceAppPlanning(rootPath, appPath) {
  * @returns {Array<{appPath: string, inventoryPath: string, success: boolean, error: string|null}>}
  */
 function regenerateScopedInventories(rootPath, apps) {
-  // @gsd-constraint Must use existing tag-scanner.cjs for extraction -- no reimplementation of scanning logic
+  // @cap-constraint Must use existing tag-scanner.cjs for extraction -- no reimplementation of scanning logic
   const results = [];
 
   for (const app of apps) {
@@ -393,7 +395,7 @@ function regenerateScopedInventories(rootPath, apps) {
 // Batch migration
 // ---------------------------------------------------------------------------
 
-// @gsd-api executeMigration(rootPath, apps, actions) -- runs all migration actions and returns aggregate results
+// @cap-api executeMigration(rootPath, apps, actions) -- runs all migration actions and returns aggregate results
 /**
  * Execute a full migration given user-selected actions per app.
  *
@@ -419,7 +421,7 @@ function executeMigration(rootPath, apps, actions) {
 // Formatting helpers (for command output)
 // ---------------------------------------------------------------------------
 
-// @gsd-api formatAuditReport(audit) -- returns human-readable string summarizing the migration audit
+// @cap-api formatAuditReport(audit) -- returns human-readable string summarizing the migration audit
 /**
  * Format the audit into a human-readable report for display.
  *

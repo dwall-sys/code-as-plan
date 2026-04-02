@@ -11,11 +11,11 @@ allowed-tools:
   - Task
 ---
 
-<!-- @gsd-context CAP v2.0 annotate command -- invokes cap-prototyper in annotate mode to add @cap-feature tags to existing unannotated code. Primary entry point after brownfield init. -->
-<!-- @gsd-decision Annotate is a thin command wrapper over cap-prototyper ANNOTATE mode. This avoids a separate agent and keeps all code generation/modification in one agent with mode dispatch. -->
-<!-- @gsd-decision Annotate targets a specific directory or defaults to project root src/. Scoped annotation prevents overwhelming the user with changes across the entire codebase at once. -->
+<!-- @cap-context CAP v2.0 annotate command -- invokes cap-prototyper in annotate mode to add @cap-feature tags to existing unannotated code. Primary entry point after brownfield init. -->
+<!-- @cap-decision Annotate is a thin command wrapper over cap-prototyper ANNOTATE mode. This avoids a separate agent and keeps all code generation/modification in one agent with mode dispatch. -->
+<!-- @cap-decision Annotate targets a specific directory or defaults to project root src/. Scoped annotation prevents overwhelming the user with changes across the entire codebase at once. -->
 
-<!-- @gsd-todo(ref:AC-89) /cap:annotate shall invoke cap-prototyper in annotate mode -->
+<!-- @cap-todo(ref:AC-89) /cap:annotate shall invoke cap-prototyper in annotate mode -->
 
 <objective>
 Add @cap-feature and @cap-todo tags to existing unannotated code by invoking cap-prototyper in ANNOTATE mode. This is the recommended next step after brownfield /cap:init.

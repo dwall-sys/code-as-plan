@@ -9,6 +9,9 @@
 
 'use strict';
 
+// @cap-feature(feature:F-015) Legacy ARC Scanner — regex-based @gsd-* tag extraction (predecessor to F-001)
+// @cap-todo risk: This module uses the old @gsd-* tag prefix; consider deprecating once F-006 migration is complete
+
 const fs = require('fs');
 const path = require('path');
 const { output, error } = require('./core.cjs');

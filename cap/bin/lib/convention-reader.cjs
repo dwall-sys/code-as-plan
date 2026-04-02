@@ -1,15 +1,17 @@
-// @gsd-context(phase:11) Convention reader utility -- discovers existing project conventions for architecture mode
-// @gsd-decision Implemented as a standalone CJS module (not inline in the agent) so it can be tested independently
-// @gsd-ref(ref:ARCH-03) gsd-prototyper reads existing project conventions before generating skeleton
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
+// @cap-context(phase:11) Convention reader utility -- discovers existing project conventions for architecture mode
+// @cap-decision Implemented as a standalone CJS module (not inline in the agent) so it can be tested independently
+// @cap-ref(ref:ARCH-03) gsd-prototyper reads existing project conventions before generating skeleton
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path)
 
 'use strict';
+
+// @cap-feature(feature:F-013) Convention & Skeleton Generation — project convention discovery
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-// @gsd-api readProjectConventions(projectRoot) -- returns ConventionReport object describing discovered patterns
-// @gsd-pattern Convention reader returns a structured report that the agent prompt can serialize into context
+// @cap-api readProjectConventions(projectRoot) -- returns ConventionReport object describing discovered patterns
+// @cap-pattern Convention reader returns a structured report that the agent prompt can serialize into context
 
 /**
  * @typedef {Object} ConventionReport
@@ -33,7 +35,7 @@ const path = require('node:path');
  * @returns {ConventionReport}
  */
 function readProjectConventions(projectRoot) {
-  // @gsd-todo(ref:AC-3) Implement full convention discovery: package.json parsing, tsconfig reading, directory pattern detection, linter config extraction
+  // @cap-todo(ref:AC-3) Implement full convention discovery: package.json parsing, tsconfig reading, directory pattern detection, linter config extraction
   const report = {
     moduleType: 'unknown',
     namingConvention: 'unknown',
@@ -47,7 +49,7 @@ function readProjectConventions(projectRoot) {
   };
 
   // --- package.json detection ---
-  // @gsd-context Reads package.json for module type, naming conventions, and dependency-based framework detection
+  // @cap-context Reads package.json for module type, naming conventions, and dependency-based framework detection
   const pkgPath = path.join(projectRoot, 'package.json');
   if (fs.existsSync(pkgPath)) {
     try {
@@ -55,7 +57,7 @@ function readProjectConventions(projectRoot) {
       report.packageJson = pkg;
       report.moduleType = pkg.type === 'module' ? 'esm' : 'cjs';
 
-      // @gsd-decision Detect test runner from devDependencies keys rather than config files -- faster and covers most cases
+      // @cap-decision Detect test runner from devDependencies keys rather than config files -- faster and covers most cases
       if (pkg.devDependencies) {
         if (pkg.devDependencies.vitest) report.testRunner = 'vitest';
         else if (pkg.devDependencies.jest) report.testRunner = 'jest';
@@ -63,7 +65,7 @@ function readProjectConventions(projectRoot) {
         else if (pkg.devDependencies.ava) report.testRunner = 'ava';
       }
 
-      // @gsd-decision Detect build tool from devDependencies -- covers esbuild, webpack, vite, rollup
+      // @cap-decision Detect build tool from devDependencies -- covers esbuild, webpack, vite, rollup
       if (pkg.devDependencies) {
         if (pkg.devDependencies.esbuild) report.buildTool = 'esbuild';
         else if (pkg.devDependencies.vite) report.buildTool = 'vite';
@@ -71,12 +73,12 @@ function readProjectConventions(projectRoot) {
         else if (pkg.devDependencies.rollup) report.buildTool = 'rollup';
       }
     } catch (_e) {
-      // @gsd-risk Malformed package.json silently ignored -- could produce incorrect convention report
+      // @cap-risk Malformed package.json silently ignored -- could produce incorrect convention report
     }
   }
 
   // --- tsconfig.json / jsconfig.json detection ---
-  // @gsd-context Reads TypeScript/JavaScript config for path aliases and module resolution
+  // @cap-context Reads TypeScript/JavaScript config for path aliases and module resolution
   const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
   const jsconfigPath = path.join(projectRoot, 'jsconfig.json');
   const configPath = fs.existsSync(tsconfigPath) ? tsconfigPath : (fs.existsSync(jsconfigPath) ? jsconfigPath : null);
@@ -96,20 +98,20 @@ function readProjectConventions(projectRoot) {
   }
 
   // --- Directory structure detection ---
-  // @gsd-context Reads directory names to detect naming convention (kebab-case vs camelCase etc.)
+  // @cap-context Reads directory names to detect naming convention (kebab-case vs camelCase etc.)
   report.existingDirs = discoverDirectories(projectRoot, 3);
   report.namingConvention = detectNamingConvention(report.existingDirs);
 
   // --- Test pattern detection ---
-  // @gsd-decision Check for tests/ or __tests__/ directory first, then fall back to checking for colocated .test. files
+  // @cap-decision Check for tests/ or __tests__/ directory first, then fall back to checking for colocated .test. files
   const hasTestsDir = report.existingDirs.some(d => d === 'tests' || d === '__tests__' || d.endsWith('/tests') || d.endsWith('/__tests__'));
   if (hasTestsDir) {
     report.testPattern = 'separate-dir';
   }
-  // @gsd-todo Detect colocated test pattern by scanning for *.test.* files alongside source files
+  // @cap-todo Detect colocated test pattern by scanning for *.test.* files alongside source files
 
   // --- Linter detection ---
-  // @gsd-context Checks for linter config files to match code style in generated skeleton
+  // @cap-context Checks for linter config files to match code style in generated skeleton
   const linterFiles = ['.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintrc.cjs', 'biome.json', 'biome.jsonc'];
   for (const f of linterFiles) {
     if (fs.existsSync(path.join(projectRoot, f))) {
@@ -129,7 +131,7 @@ function readProjectConventions(projectRoot) {
  * @returns {string[]}
  */
 function discoverDirectories(dir, maxDepth, currentDepth = 0) {
-  // @gsd-constraint Uses readdirSync (not glob) per project zero-dep constraint
+  // @cap-constraint Uses readdirSync (not glob) per project zero-dep constraint
   if (currentDepth >= maxDepth) return [];
 
   const results = [];
@@ -158,8 +160,8 @@ function discoverDirectories(dir, maxDepth, currentDepth = 0) {
  * @returns {string}
  */
 function detectNamingConvention(dirs) {
-  // @gsd-decision Simple heuristic: check if majority of directory names match a pattern
-  // @gsd-risk Heuristic may misclassify projects with mixed naming -- returns 'unknown' when ambiguous
+  // @cap-decision Simple heuristic: check if majority of directory names match a pattern
+  // @cap-risk Heuristic may misclassify projects with mixed naming -- returns 'unknown' when ambiguous
   const leafNames = dirs.map(d => path.basename(d)).filter(n => n.length > 1);
   if (leafNames.length === 0) return 'unknown';
 

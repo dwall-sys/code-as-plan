@@ -1,6 +1,7 @@
 /**
  * Core — Shared utilities, constants, and internal helpers
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — core shared utilities, path helpers, config loading, git operations
 
 const fs = require('fs');
 const path = require('path');

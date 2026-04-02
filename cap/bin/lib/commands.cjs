@@ -1,6 +1,8 @@
 /**
  * Commands — Standalone utility commands
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — standalone utility commands (slug, timestamp, context, etc.)
+
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');

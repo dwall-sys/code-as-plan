@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @cap-feature(feature:F-008) Multi-Runtime Installer — install agents, commands, and hooks for Claude/OpenCode/Gemini/Codex/Copilot/Cursor/Windsurf
 
 const fs = require('fs');
 const path = require('path');
@@ -313,6 +314,9 @@ function parseConfigDirArg() {
 const explicitConfigDir = parseConfigDirArg();
 const hasHelp = args.includes('--help') || args.includes('-h');
 const forceStatusline = args.includes('--force-statusline');
+// @cap-feature(feature:F-021) Harden Installer Upgrade Path
+// @cap-todo(ac:F-021/AC-3) --force flag for clean reinstall
+const forceReinstall = args.includes('--force');
 
 console.log(banner);
 
@@ -322,7 +326,7 @@ if (hasUninstall) {
 
 // Show help if requested
 if (hasHelp) {
-  console.log(`  ${yellow}Usage:${reset} npx code-as-plan [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall CAP (remove all CAP files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx code-as-plan\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx code-as-plan --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx code-as-plan --gemini --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx code-as-plan --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx code-as-plan --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx code-as-plan --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx code-as-plan --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx code-as-plan --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx code-as-plan --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx code-as-plan --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx code-as-plan --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx code-as-plan --windsurf --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx code-as-plan --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx code-as-plan --codex --global --config-dir ~/.codex-work\n\n    ${dim}# Install to current project only${reset}\n    npx code-as-plan --claude --local\n\n    ${dim}# Uninstall CAP from Cursor globally${reset}\n    npx code-as-plan --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR environment variables.\n`);
+  console.log(`  ${yellow}Usage:${reset} npx code-as-plan [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall CAP (remove all CAP files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force${reset}                   Clean reinstall (delete target, reinstall from scratch)\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx code-as-plan\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx code-as-plan --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx code-as-plan --gemini --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx code-as-plan --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx code-as-plan --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx code-as-plan --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx code-as-plan --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx code-as-plan --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx code-as-plan --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx code-as-plan --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx code-as-plan --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx code-as-plan --windsurf --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx code-as-plan --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx code-as-plan --codex --global --config-dir ~/.codex-work\n\n    ${dim}# Install to current project only${reset}\n    npx code-as-plan --claude --local\n\n    ${dim}# Uninstall CAP from Cursor globally${reset}\n    npx code-as-plan --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR environment variables.\n`);
   process.exit(0);
 }
 
@@ -794,7 +798,7 @@ function convertClaudeToCursorMarkdown(content) {
   converted = converted.replace(/\bAskUserQuestion\b/g, 'conversational prompting');
   // Replace subagent_type from Claude to Cursor format
   converted = converted.replace(/subagent_type="general-purpose"/g, 'subagent_type="generalPurpose"');
-  converted = converted.replace(/\$ARGUMENTS\b/g, '{{GSD_ARGS}}');
+  converted = converted.replace(/\$ARGUMENTS\b/g, '{{CAP_ARGS}}');
   // Replace project-level Claude conventions with Cursor equivalents
   converted = converted.replace(/`\.\/CLAUDE\.md`/g, '`.cursor/rules/`');
   converted = converted.replace(/\.\/CLAUDE\.md/g, '.cursor/rules/');
@@ -813,8 +817,8 @@ function getCursorSkillAdapterHeader(skillName) {
   return `<cursor_skill_adapter>
 ## A. Skill Invocation
 - This skill is invoked when the user mentions \`${skillName}\` or describes a task matching this skill.
-- Treat all user text after the skill mention as \`{{GSD_ARGS}}\`.
-- If no arguments are present, treat \`{{GSD_ARGS}}\` as empty.
+- Treat all user text after the skill mention as \`{{CAP_ARGS}}\`.
+- If no arguments are present, treat \`{{CAP_ARGS}}\` as empty.
 
 ## B. User Prompting
 When the workflow needs user input, prompt the user conversationally:
@@ -912,7 +916,7 @@ function convertClaudeToWindsurfMarkdown(content) {
   converted = converted.replace(/\bAskUserQuestion\b/g, 'conversational prompting');
   // Replace subagent_type from Claude to Windsurf format
   converted = converted.replace(/subagent_type="general-purpose"/g, 'subagent_type="generalPurpose"');
-  converted = converted.replace(/\$ARGUMENTS\b/g, '{{GSD_ARGS}}');
+  converted = converted.replace(/\$ARGUMENTS\b/g, '{{CAP_ARGS}}');
   // Replace project-level Claude conventions with Windsurf equivalents
   converted = converted.replace(/`\.\/CLAUDE\.md`/g, '`.windsurf/rules/`');
   converted = converted.replace(/\.\/CLAUDE\.md/g, '.windsurf/rules/');
@@ -931,8 +935,8 @@ function getWindsurfSkillAdapterHeader(skillName) {
   return `<windsurf_skill_adapter>
 ## A. Skill Invocation
 - This skill is invoked when the user mentions \`${skillName}\` or describes a task matching this skill.
-- Treat all user text after the skill mention as \`{{GSD_ARGS}}\`.
-- If no arguments are present, treat \`{{GSD_ARGS}}\` as empty.
+- Treat all user text after the skill mention as \`{{CAP_ARGS}}\`.
+- If no arguments are present, treat \`{{CAP_ARGS}}\` as empty.
 
 ## B. User Prompting
 When the workflow needs user input, prompt the user conversationally:
@@ -999,7 +1003,7 @@ function convertSlashCommandsToCodexSkillMentions(content) {
 
 function convertClaudeToCodexMarkdown(content) {
   let converted = convertSlashCommandsToCodexSkillMentions(content);
-  converted = converted.replace(/\$ARGUMENTS\b/g, '{{GSD_ARGS}}');
+  converted = converted.replace(/\$ARGUMENTS\b/g, '{{CAP_ARGS}}');
   // Runtime-neutral agent name replacement (#766)
   converted = neutralizeAgentReferences(converted, 'AGENTS.md');
   return converted;
@@ -1010,8 +1014,8 @@ function getCodexSkillAdapterHeader(skillName) {
   return `<codex_skill_adapter>
 ## A. Skill Invocation
 - This skill is invoked by mentioning \`${invocation}\`.
-- Treat all user text after \`${invocation}\` as \`{{GSD_ARGS}}\`.
-- If no arguments are present, treat \`{{GSD_ARGS}}\` as empty.
+- Treat all user text after \`${invocation}\` as \`{{CAP_ARGS}}\`.
+- If no arguments are present, treat \`{{CAP_ARGS}}\` as empty.
 
 ## B. AskUserQuestion → request_user_input Mapping
 CAP workflows use \`AskUserQuestion\` (Claude Code syntax). Translate to Codex \`request_user_input\`:
@@ -2735,6 +2739,8 @@ function copyFlattenedCommands(srcDir, destDir, prefix, pathPrefix, runtime) {
       content = content.replace(globalClaudeHomeRegex, pathPrefix);
       content = content.replace(localClaudeRegex, `./${getDirName(runtime)}/`);
       content = content.replace(opencodeDirRegex, pathPrefix);
+      // Replace ./cap/bin/lib/ relative paths with absolute pathPrefix
+      content = content.replace(/\.\/cap\/bin\/lib\//g, pathPrefix + 'cap/bin/lib/');
       content = processAttribution(content, getCommitAttribution(runtime));
       content = convertClaudeToOpencodeFrontmatter(content);
 
@@ -2796,6 +2802,8 @@ function copyCommandsAsCodexSkills(srcDir, skillsDir, prefix, pathPrefix, runtim
       content = content.replace(globalClaudeHomeRegex, pathPrefix);
       content = content.replace(localClaudeRegex, `./${getDirName(runtime)}/`);
       content = content.replace(codexDirRegex, pathPrefix);
+      // Replace ./cap/bin/lib/ relative paths with absolute pathPrefix
+      content = content.replace(/\.\/cap\/bin\/lib\//g, pathPrefix + 'cap/bin/lib/');
       content = processAttribution(content, getCommitAttribution(runtime));
       content = convertClaudeCommandToCodexSkill(content, skillName);
 
@@ -2849,6 +2857,8 @@ function copyCommandsAsCursorSkills(srcDir, skillsDir, prefix, pathPrefix, runti
       content = content.replace(globalClaudeHomeRegex, pathPrefix);
       content = content.replace(localClaudeRegex, `./${getDirName(runtime)}/`);
       content = content.replace(cursorDirRegex, pathPrefix);
+      // Replace ./cap/bin/lib/ relative paths with absolute pathPrefix
+      content = content.replace(/\.\/cap\/bin\/lib\//g, pathPrefix + 'cap/bin/lib/');
       content = processAttribution(content, getCommitAttribution(runtime));
       content = convertClaudeCommandToCursorSkill(content, skillName);
 
@@ -2906,6 +2916,8 @@ function copyCommandsAsWindsurfSkills(srcDir, skillsDir, prefix, pathPrefix, run
       content = content.replace(globalClaudeHomeRegex, pathPrefix);
       content = content.replace(localClaudeRegex, `./${getDirName(runtime)}/`);
       content = content.replace(windsurfDirRegex, pathPrefix);
+      // Replace ./cap/bin/lib/ relative paths with absolute pathPrefix
+      content = content.replace(/\.\/cap\/bin\/lib\//g, pathPrefix + 'cap/bin/lib/');
       content = processAttribution(content, getCommitAttribution(runtime));
       content = convertClaudeCommandToWindsurfSkill(content, skillName);
 
@@ -3062,6 +3074,8 @@ function copyWithPathReplacement(srcDir, destDir, pathPrefix, runtime, isCommand
         content = content.replace(globalClaudeHomeRegex, pathPrefix);
         content = content.replace(localClaudeRegex, `./${dirName}/`);
       }
+      // Replace ./cap/bin/lib/ relative paths with absolute pathPrefix (all runtimes)
+      content = content.replace(/\.\/cap\/bin\/lib\//g, pathPrefix + 'cap/bin/lib/');
       content = processAttribution(content, getCommitAttribution(runtime));
 
       // Convert frontmatter for opencode compatibility
@@ -3138,6 +3152,11 @@ function cleanupOrphanedFiles(configDir) {
   const orphanedFiles = [
     'hooks/gsd-notify.sh',  // Removed in v1.6.x
     'hooks/statusline.js',  // Renamed to gsd-statusline.js in v1.9.0
+    'hooks/gsd-statusline.js',  // Renamed to cap-statusline.js in v2.2.0
+    'hooks/gsd-check-update.js',  // Renamed to cap-check-update.js in v2.2.0
+    'hooks/gsd-context-monitor.js',  // Renamed to cap-context-monitor.js in v2.2.0
+    'hooks/gsd-prompt-guard.js',  // Renamed to cap-prompt-guard.js in v2.2.0
+    'hooks/gsd-workflow-guard.js',  // Renamed to cap-workflow-guard.js in v2.2.0
   ];
 
   for (const relPath of orphanedFiles) {
@@ -3159,6 +3178,11 @@ function cleanupOrphanedHooks(settings) {
     'gsd-intel-index.js',  // Removed in v1.9.2
     'gsd-intel-session.js',  // Removed in v1.9.2
     'gsd-intel-prune.js',  // Removed in v1.9.2
+    'gsd-statusline.js',  // Renamed to cap-statusline.js in v2.2.0
+    'gsd-check-update.js',  // Renamed to cap-check-update.js in v2.2.0
+    'gsd-context-monitor.js',  // Renamed to cap-context-monitor.js in v2.2.0
+    'gsd-prompt-guard.js',  // Renamed to cap-prompt-guard.js in v2.2.0
+    'gsd-workflow-guard.js',  // Renamed to cap-workflow-guard.js in v2.2.0
   ];
 
   let cleanedHooks = false;
@@ -3191,16 +3215,21 @@ function cleanupOrphanedHooks(settings) {
     console.log(`  ${green}✓${reset} Removed orphaned hook registrations`);
   }
 
-  // Fix #330: Update statusLine if it points to old CAP statusline.js path
-  // Only match the specific old CAP path pattern (hooks/statusline.js),
-  // not third-party statusline scripts that happen to contain 'statusline.js'
-  if (settings.statusLine && settings.statusLine.command &&
-      /hooks[\/\\]statusline\.js/.test(settings.statusLine.command)) {
-    settings.statusLine.command = settings.statusLine.command.replace(
-      /hooks([\/\\])statusline\.js/,
-      'hooks$1gsd-statusline.js'
-    );
-    console.log(`  ${green}✓${reset} Updated statusline path (hooks/statusline.js → hooks/gsd-statusline.js)`);
+  // Fix #330: Update statusLine if it points to old path variants
+  if (settings.statusLine && settings.statusLine.command) {
+    if (/hooks[\/\\]statusline\.js/.test(settings.statusLine.command)) {
+      settings.statusLine.command = settings.statusLine.command.replace(
+        /hooks([\/\\])statusline\.js/,
+        'hooks$1cap-statusline.js'
+      );
+      console.log(`  ${green}✓${reset} Updated statusline path (hooks/statusline.js → hooks/cap-statusline.js)`);
+    } else if (/hooks[\/\\]gsd-statusline\.js/.test(settings.statusLine.command)) {
+      settings.statusLine.command = settings.statusLine.command.replace(
+        /hooks([\/\\])gsd-statusline\.js/,
+        'hooks$1cap-statusline.js'
+      );
+      console.log(`  ${green}✓${reset} Updated statusline path (hooks/gsd-statusline.js → hooks/cap-statusline.js)`);
+    }
   }
 
   return settings;
@@ -3524,7 +3553,8 @@ function uninstall(isGlobal, runtime = 'claude') {
   // 4. Remove CAP hooks
   const hooksDir = path.join(targetDir, 'hooks');
   if (fs.existsSync(hooksDir)) {
-    const capHooks = ['gsd-statusline.js', 'gsd-check-update.js', 'gsd-check-update.sh', 'gsd-context-monitor.js', 'gsd-prompt-guard.js'];
+    const capHooks = ['cap-statusline.js', 'cap-check-update.js', 'cap-context-monitor.js', 'cap-prompt-guard.js', 'cap-workflow-guard.js',
+      'gsd-statusline.js', 'gsd-check-update.js', 'gsd-check-update.sh', 'gsd-context-monitor.js', 'gsd-prompt-guard.js', 'gsd-workflow-guard.js'];
     let hookCount = 0;
     for (const hook of capHooks) {
       const hookPath = path.join(hooksDir, hook);
@@ -3563,7 +3593,7 @@ function uninstall(isGlobal, runtime = 'claude') {
 
     // Remove CAP statusline if it references our hook
     if (settings.statusLine && settings.statusLine.command &&
-        settings.statusLine.command.includes('gsd-statusline')) {
+        (settings.statusLine.command.includes('cap-statusline') || settings.statusLine.command.includes('gsd-statusline'))) {
       delete settings.statusLine;
       settingsModified = true;
       console.log(`  ${green}✓${reset} Removed CAP statusline from settings`);
@@ -3575,10 +3605,10 @@ function uninstall(isGlobal, runtime = 'claude') {
       settings.hooks.SessionStart = settings.hooks.SessionStart.filter(entry => {
         if (entry.hooks && Array.isArray(entry.hooks)) {
           // Filter out CAP hooks
-          const hasGsdHook = entry.hooks.some(h =>
-            h.command && (h.command.includes('gsd-check-update') || h.command.includes('gsd-statusline'))
+          const hasCAPHook = entry.hooks.some(h =>
+            h.command && (h.command.includes('cap-check-update') || h.command.includes('gsd-check-update') || h.command.includes('cap-statusline') || h.command.includes('gsd-statusline'))
           );
-          return !hasGsdHook;
+          return !hasCAPHook;
         }
         return true;
       });
@@ -3598,10 +3628,10 @@ function uninstall(isGlobal, runtime = 'claude') {
         const before = settings.hooks[eventName].length;
         settings.hooks[eventName] = settings.hooks[eventName].filter(entry => {
           if (entry.hooks && Array.isArray(entry.hooks)) {
-            const hasGsdHook = entry.hooks.some(h =>
-              h.command && h.command.includes('gsd-context-monitor')
+            const hasCAPHook = entry.hooks.some(h =>
+              h.command && (h.command.includes('cap-context-monitor') || h.command.includes('gsd-context-monitor'))
             );
-            return !hasGsdHook;
+            return !hasCAPHook;
           }
           return true;
         });
@@ -3621,10 +3651,10 @@ function uninstall(isGlobal, runtime = 'claude') {
         const before = settings.hooks[eventName].length;
         settings.hooks[eventName] = settings.hooks[eventName].filter(entry => {
           if (entry.hooks && Array.isArray(entry.hooks)) {
-            const hasGsdHook = entry.hooks.some(h =>
-              h.command && h.command.includes('gsd-prompt-guard')
+            const hasCAPHook = entry.hooks.some(h =>
+              h.command && (h.command.includes('cap-prompt-guard') || h.command.includes('gsd-prompt-guard'))
             );
-            return !hasGsdHook;
+            return !hasCAPHook;
           }
           return true;
         });
@@ -3835,6 +3865,79 @@ function configureOpencodePermissions(isGlobal = true) {
   // Write config back
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   console.log(`  ${green}✓${reset} Configured read permission for CAP docs`);
+}
+
+/**
+ * Count files recursively in a directory (for install summary reporting)
+ * @cap-todo(ac:F-021/AC-5) Used to track removed file count during --force clean reinstall
+ * @param {string} dir - Directory to count files in
+ * @returns {number}
+ */
+function countFilesRecursive(dir) {
+  if (!fs.existsSync(dir)) return 0;
+  let count = 0;
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        count += countFilesRecursive(fullPath);
+      } else {
+        count++;
+      }
+    }
+  } catch (_e) { /* permission errors — skip */ }
+  return count;
+}
+
+// @cap-todo(ac:F-021/AC-2) Post-install integrity check using cap-doctor module verification
+// @cap-todo(ac:F-021/AC-6) Non-zero exit if post-install verification fails
+/**
+ * Run module integrity check after installation.
+ * Verifies all expected CJS modules are present and loadable.
+ * @param {string} targetDir - Install target directory (e.g., ~/.claude)
+ * @returns {{ ok: boolean, modulesOk: number, modulesTotal: number, failed: string[] }}
+ */
+function runPostInstallIntegrityCheck(targetDir) {
+  // @cap-todo(ac:F-021/AC-7) Cross-platform path resolution — no hardcoded paths
+  const libDir = path.join(targetDir, 'cap', 'bin', 'lib');
+  if (!fs.existsSync(libDir)) {
+    return { ok: false, modulesOk: 0, modulesTotal: 0, failed: ['cap/bin/lib/ directory not found'] };
+  }
+
+  // Load the manifest from cap-doctor if available, otherwise enumerate .cjs files
+  const doctorPath = path.join(libDir, 'cap-doctor.cjs');
+  let manifest;
+  try {
+    const doctor = require(path.resolve(doctorPath));
+    manifest = doctor.CAP_MODULE_MANIFEST;
+  } catch (_e) {
+    // cap-doctor itself is missing — report it
+    return { ok: false, modulesOk: 0, modulesTotal: 1, failed: ['cap-doctor.cjs (cannot load manifest)'] };
+  }
+
+  const failed = [];
+  let okCount = 0;
+  for (const name of manifest) {
+    const fullPath = path.join(libDir, name);
+    if (!fs.existsSync(fullPath)) {
+      failed.push(name);
+      continue;
+    }
+    try {
+      require(path.resolve(fullPath));
+      okCount++;
+    } catch (err) {
+      failed.push(`${name} (${err.message.split('\n')[0]})`);
+    }
+  }
+
+  return {
+    ok: failed.length === 0,
+    modulesOk: okCount,
+    modulesTotal: manifest.length,
+    failed,
+  };
 }
 
 /**
@@ -4096,8 +4199,29 @@ function install(isGlobal, runtime = 'claude') {
   // Track installation failures
   const failures = [];
 
+  // @cap-todo(ac:F-021/AC-5) Track install summary (files added, removed, updated)
+  const filesBefore = countFilesRecursive(targetDir);
+  const installSummary = { added: 0, removed: 0, updated: 0, errors: [] };
+
+  // @cap-todo(ac:F-021/AC-3) --force flag: delete target directory for clean reinstall
+  if (forceReinstall && fs.existsSync(targetDir)) {
+    console.log(`  ${yellow}--force${reset}: Removing ${locationLabel} for clean reinstall...`);
+    // @cap-todo(ac:F-021/AC-1) Remove stale files from previous installs
+    try {
+      const countBefore = countFilesRecursive(targetDir);
+      fs.rmSync(targetDir, { recursive: true, force: true });
+      installSummary.removed += countBefore;
+      console.log(`  ${green}✓${reset} Removed ${countBefore} files from previous install`);
+    } catch (err) {
+      console.error(`  ${yellow}✗${reset} Failed to remove ${locationLabel}: ${err.message}`);
+      installSummary.errors.push(`force-clean: ${err.message}`);
+    }
+  }
+
   // Save any locally modified CAP files before they get wiped
-  saveLocalPatches(targetDir);
+  if (!forceReinstall) {
+    saveLocalPatches(targetDir);
+  }
 
   // Clean up orphaned files from previous versions
   cleanupOrphanedFiles(targetDir);
@@ -4303,7 +4427,8 @@ function install(isGlobal, runtime = 'claude') {
           if (entry.endsWith('.js')) {
             let content = fs.readFileSync(srcFile, 'utf8');
             content = content.replace(/'\.claude'/g, configDirReplacement);
-            content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version);
+            content = content.replace(/\{\{CAP_VERSION\}\}/g, pkg.version);
+            content = content.replace(/\{\{GSD_VERSION\}\}/g, pkg.version); // backwards compat
             fs.writeFileSync(destFile, content);
             // Ensure hook files are executable (fixes #1162 — missing +x permission)
             try { fs.chmodSync(destFile, 0o755); } catch (e) { /* Windows doesn't support chmod */ }
@@ -4320,10 +4445,13 @@ function install(isGlobal, runtime = 'claude') {
     }
   }
 
-  // Clear stale update cache so next session re-evaluates hook versions
+  // @cap-todo(ac:F-021/AC-1) Clear stale update cache files from both GSD and CAP eras
+  // @cap-todo(ac:F-021/AC-4) Handle path changes between versions (gsd-update-check → cap-update-check)
   // targetDir is e.g. ~/.claude/cap/, parent is the config dir
-  const updateCacheFile = path.join(path.dirname(targetDir), 'cache', 'gsd-update-check.json');
-  try { fs.unlinkSync(updateCacheFile); } catch (e) { /* cache may not exist yet */ }
+  const cacheDir = path.join(path.dirname(targetDir), 'cache');
+  for (const cacheFile of ['gsd-update-check.json', 'cap-update-check.json']) {
+    try { fs.unlinkSync(path.join(cacheDir, cacheFile)); installSummary.removed++; } catch (_e) { /* cache may not exist */ }
+  }
 
   if (failures.length > 0) {
     console.error(`\n  ${yellow}Installation incomplete!${reset} Failed: ${failures.join(', ')}`);
@@ -4333,6 +4461,42 @@ function install(isGlobal, runtime = 'claude') {
   // Write file manifest for future modification detection
   writeManifest(targetDir, runtime);
   console.log(`  ${green}✓${reset} Wrote file manifest (${MANIFEST_NAME})`);
+
+  // @cap-todo(ac:F-021/AC-2) Post-install integrity check verifying all modules present and loadable
+  // @cap-todo(ac:F-021/AC-6) Non-zero exit if post-install verification fails
+  // @cap-decision Integrity check runs only for Claude runtime because cap/bin/lib/ modules are
+  // Claude-specific CJS files. Other runtimes (Codex, Copilot, etc.) use converted skill formats.
+  if (runtime === 'claude') {
+    const integrity = runPostInstallIntegrityCheck(targetDir);
+    if (integrity.ok) {
+      console.log(`  ${green}✓${reset} Module integrity: ${integrity.modulesOk}/${integrity.modulesTotal} modules verified`);
+    } else {
+      console.error(`\n  ${yellow}✗${reset} Module integrity check failed: ${integrity.modulesOk}/${integrity.modulesTotal} OK`);
+      for (const name of integrity.failed) {
+        console.error(`    ${yellow}✗${reset} ${name}`);
+      }
+      console.error(`\n  ${yellow}Repair:${reset} npx code-as-plan@latest --force`);
+      installSummary.errors.push(`integrity: ${integrity.failed.length} module(s) failed`);
+      process.exit(1);
+    }
+  }
+
+  // @cap-todo(ac:F-021/AC-5) Log summary of files added, removed, and updated
+  const filesAfter = countFilesRecursive(targetDir);
+  const netNew = filesAfter - (filesBefore - installSummary.removed);
+  if (netNew > 0) installSummary.added = netNew;
+  // Files that existed before and were overwritten = min(filesBefore - removed, filesAfter - added)
+  installSummary.updated = Math.max(0, filesAfter - installSummary.added);
+  {
+    const parts = [];
+    if (installSummary.added > 0) parts.push(`${installSummary.added} added`);
+    if (installSummary.updated > 0) parts.push(`${installSummary.updated} updated`);
+    if (installSummary.removed > 0) parts.push(`${installSummary.removed} removed`);
+    if (installSummary.errors.length > 0) parts.push(`${installSummary.errors.length} error(s)`);
+    if (parts.length > 0) {
+      console.log(`  ${dim}Install summary: ${parts.join(', ')}${reset}`);
+    }
+  }
 
   // Report any backed-up local patches
   reportLocalPatches(targetDir, runtime);
@@ -4450,17 +4614,17 @@ function install(isGlobal, runtime = 'claude') {
   const settingsPath = path.join(targetDir, 'settings.json');
   const settings = validateHookFields(cleanupOrphanedHooks(readSettings(settingsPath)));
   const statuslineCommand = isGlobal
-    ? buildHookCommand(targetDir, 'gsd-statusline.js')
-    : 'node ' + dirName + '/hooks/gsd-statusline.js';
+    ? buildHookCommand(targetDir, 'cap-statusline.js')
+    : 'node ' + dirName + '/hooks/cap-statusline.js';
   const updateCheckCommand = isGlobal
-    ? buildHookCommand(targetDir, 'gsd-check-update.js')
-    : 'node ' + dirName + '/hooks/gsd-check-update.js';
+    ? buildHookCommand(targetDir, 'cap-check-update.js')
+    : 'node ' + dirName + '/hooks/cap-check-update.js';
   const contextMonitorCommand = isGlobal
-    ? buildHookCommand(targetDir, 'gsd-context-monitor.js')
-    : 'node ' + dirName + '/hooks/gsd-context-monitor.js';
+    ? buildHookCommand(targetDir, 'cap-context-monitor.js')
+    : 'node ' + dirName + '/hooks/cap-context-monitor.js';
   const promptGuardCommand = isGlobal
-    ? buildHookCommand(targetDir, 'gsd-prompt-guard.js')
-    : 'node ' + dirName + '/hooks/gsd-prompt-guard.js';
+    ? buildHookCommand(targetDir, 'cap-prompt-guard.js')
+    : 'node ' + dirName + '/hooks/cap-prompt-guard.js';
 
   // Enable experimental agents for Gemini CLI (required for custom sub-agents)
   if (isGemini) {
@@ -4482,11 +4646,11 @@ function install(isGlobal, runtime = 'claude') {
       settings.hooks.SessionStart = [];
     }
 
-    const hasGsdUpdateHook = settings.hooks.SessionStart.some(entry =>
-      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-check-update'))
+    const hasUpdateHook = settings.hooks.SessionStart.some(entry =>
+      entry.hooks && entry.hooks.some(h => h.command && (h.command.includes('cap-check-update') || h.command.includes('gsd-check-update')))
     );
 
-    if (!hasGsdUpdateHook) {
+    if (!hasUpdateHook) {
       settings.hooks.SessionStart.push({
         hooks: [
           {
@@ -4504,7 +4668,7 @@ function install(isGlobal, runtime = 'claude') {
     }
 
     const hasContextMonitorHook = settings.hooks[postToolEvent].some(entry =>
-      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-context-monitor'))
+      entry.hooks && entry.hooks.some(h => h.command && (h.command.includes('cap-context-monitor') || h.command.includes('gsd-context-monitor')))
     );
 
     if (!hasContextMonitorHook) {
@@ -4522,14 +4686,14 @@ function install(isGlobal, runtime = 'claude') {
     } else {
       // Migrate existing context monitor hooks: add matcher and timeout if missing
       for (const entry of settings.hooks[postToolEvent]) {
-        if (entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-context-monitor'))) {
+        if (entry.hooks && entry.hooks.some(h => h.command && (h.command.includes('cap-context-monitor') || h.command.includes('gsd-context-monitor')))) {
           let migrated = false;
           if (!entry.matcher) {
             entry.matcher = 'Bash|Edit|Write|MultiEdit|Agent|Task';
             migrated = true;
           }
           for (const h of entry.hooks) {
-            if (h.command && h.command.includes('gsd-context-monitor') && !h.timeout) {
+            if (h.command && (h.command.includes('cap-context-monitor') || h.command.includes('gsd-context-monitor')) && !h.timeout) {
               h.timeout = 10;
               migrated = true;
             }
@@ -4549,7 +4713,7 @@ function install(isGlobal, runtime = 'claude') {
     }
 
     const hasPromptGuardHook = settings.hooks[preToolEvent].some(entry =>
-      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('gsd-prompt-guard'))
+      entry.hooks && entry.hooks.some(h => h.command && (h.command.includes('cap-prompt-guard') || h.command.includes('gsd-prompt-guard')))
     );
 
     if (!hasPromptGuardHook) {
@@ -4966,7 +5130,7 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
 }
 
 // Test-only exports — skip main logic when loaded as a module for testing
-if (process.env.GSD_TEST_MODE) {
+if (process.env.CAP_TEST_MODE || process.env.GSD_TEST_MODE) {
   module.exports = {
     yamlIdentifier,
     getCodexSkillAdapterHeader,
@@ -5009,8 +5173,8 @@ if (process.env.GSD_TEST_MODE) {
     writeManifest,
     reportLocalPatches,
     validateHookFields,
-    installSdk,
-    promptSdk,
+    countFilesRecursive,
+    runPostInstallIntegrityCheck,
   };
 } else {
 

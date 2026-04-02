@@ -1,4 +1,4 @@
-// @cap-feature(feature:F-MIGRATE) GSD-to-CAP migration utility -- converts @gsd-* tags, planning artifacts, and session format to CAP v2.0.
+// @cap-feature(feature:F-006) GSD-to-CAP Migration — convert @gsd-* tags, planning artifacts, and session format to CAP v2.0
 // @cap-todo decision: Regex-based tag replacement (not AST) -- language-agnostic, zero dependencies, handles all comment styles.
 // @cap-todo risk: Destructive file writes -- dry-run mode is the default safety net.
 

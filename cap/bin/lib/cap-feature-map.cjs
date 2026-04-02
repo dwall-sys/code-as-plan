@@ -1,17 +1,19 @@
-// @gsd-context CAP v2.0 Feature Map reader/writer -- FEATURE-MAP.md is the single source of truth for all features, ACs, status, and dependencies.
-// @gsd-decision Markdown format for Feature Map (not JSON/YAML) -- human-readable, diffable in git, editable in any text editor. Machine-readable via regex parsing of structured table rows.
-// @gsd-decision Read and write are separate operations -- no in-memory mutation API. Read returns structured data, write takes structured data and serializes to markdown.
-// @gsd-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path).
-// @gsd-pattern Feature Map is the bridge between all CAP workflows. Brainstorm writes entries, scan updates status, status reads for dashboard.
+// @cap-context CAP v2.0 Feature Map reader/writer -- FEATURE-MAP.md is the single source of truth for all features, ACs, status, and dependencies.
+// @cap-decision Markdown format for Feature Map (not JSON/YAML) -- human-readable, diffable in git, editable in any text editor. Machine-readable via regex parsing of structured table rows.
+// @cap-decision Read and write are separate operations -- no in-memory mutation API. Read returns structured data, write takes structured data and serializes to markdown.
+// @cap-constraint Zero external dependencies -- uses only Node.js built-ins (fs, path).
+// @cap-pattern Feature Map is the bridge between all CAP workflows. Brainstorm writes entries, scan updates status, status reads for dashboard.
 
 'use strict';
+
+// @cap-feature(feature:F-002) Feature Map Management — read/write/enrich FEATURE-MAP.md as single source of truth
 
 const fs = require('node:fs');
 const path = require('node:path');
 
 const FEATURE_MAP_FILE = 'FEATURE-MAP.md';
 
-// @gsd-todo(ref:AC-9) Feature state lifecycle: planned -> prototyped -> tested -> shipped
+// @cap-todo(ref:AC-9) Feature state lifecycle: planned -> prototyped -> tested -> shipped
 const VALID_STATES = ['planned', 'prototyped', 'tested', 'shipped'];
 const STATE_TRANSITIONS = {
   planned: ['prototyped'],
@@ -44,9 +46,9 @@ const STATE_TRANSITIONS = {
  * @property {string} lastScan - ISO timestamp of last scan
  */
 
-// @gsd-todo(ref:AC-7) Feature Map is a single Markdown file at the project root named FEATURE-MAP.md
+// @cap-todo(ref:AC-7) Feature Map is a single Markdown file at the project root named FEATURE-MAP.md
 
-// @gsd-todo(ref:AC-1) Generate empty FEATURE-MAP.md template with section headers (Features, Legend) and no feature entries
+// @cap-todo(ref:AC-1) Generate empty FEATURE-MAP.md template with section headers (Features, Legend) and no feature entries
 /**
  * Generate the empty FEATURE-MAP.md template for /cap:init.
  * @returns {string}
@@ -75,9 +77,9 @@ function generateTemplate() {
 `;
 }
 
-// @gsd-api readFeatureMap(projectRoot, appPath) -- Reads and parses FEATURE-MAP.md from project root or app subdirectory.
+// @cap-api readFeatureMap(projectRoot, appPath) -- Reads and parses FEATURE-MAP.md from project root or app subdirectory.
 // Returns: FeatureMap object with features and lastScan timestamp.
-// @gsd-todo(ref:AC-10) Feature Map is the single source of truth for feature identity, state, ACs, and relationships
+// @cap-todo(ref:AC-10) Feature Map is the single source of truth for feature identity, state, ACs, and relationships
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string|null} [appPath=null] - Relative app path (e.g., "apps/flow"). If null, reads from projectRoot.
@@ -94,8 +96,8 @@ function readFeatureMap(projectRoot, appPath) {
   return parseFeatureMapContent(content);
 }
 
-// @gsd-todo(ref:AC-8) Each feature entry contains: feature ID, title, state, ACs, and file references
-// @gsd-todo(ref:AC-14) Feature Map scales to 80-120 features in a single file
+// @cap-todo(ref:AC-8) Each feature entry contains: feature ID, title, state, ACs, and file references
+// @cap-todo(ref:AC-14) Feature Map scales to 80-120 features in a single file
 /**
  * Parse FEATURE-MAP.md content into structured data.
  * @param {string} content - Raw markdown content
@@ -106,36 +108,56 @@ function parseFeatureMapContent(content) {
   const lines = content.split('\n');
 
   // Match feature headers: ### F-001: Title text [state]
-  const featureHeaderRE = /^###\s+(F-\d{3}):\s+(.+?)\s+\[(\w+)\]\s*$/;
+  // Also accepts:          ### F-001: Title text          (no [state] — state comes from separate line)
+  const featureHeaderRE = /^###\s+(F-\d{3}):\s+(.+?)\s*$/;
   // Match AC rows: | AC-N | status | description |
   const acRowRE = /^\|\s*(AC-\d+)\s*\|\s*(\w+)\s*\|\s*(.+?)\s*\|/;
+  // Match AC checkboxes: - [x] description  or  - [ ] description
+  const acCheckboxRE = /^[\s]*-\s+\[(x| )\]\s+(.+)/;
   // Match file refs: - `path/to/file`
   const fileRefRE = /^-\s+`(.+?)`/;
-  // Match dependencies: **Depends on:** F-001, F-002
-  const depsRE = /^\*\*Depends on:\*\*\s*(.+)/;
+  // Match dependencies: **Depends on:** F-001, F-002  or  - **Dependencies:** F-001
+  const depsRE = /^-?\s*\*\*Depend(?:s on|encies):\*\*\s*(.+)/;
+  // Match status line: - **Status:** shipped  or  **Status:** shipped
+  const statusLineRE = /^-?\s*\*\*Status:\*\*\s*(\w+)/;
+  // File refs detected inline via regex test (not a stored RE)
+  // Match AC section header: - **AC:**
+  const acSectionRE = /^-?\s*\*\*AC:\*\*/;
   // Match lastScan in footer
   const lastScanRE = /^\*Last updated:\s*(.+?)\*$/;
 
   let currentFeature = null;
   let inAcTable = false;
+  let inAcCheckboxes = false;
   let inFileRefs = false;
+  let acCounter = 0;
   let lastScan = null;
 
   for (const line of lines) {
     const headerMatch = line.match(featureHeaderRE);
     if (headerMatch) {
       if (currentFeature) features.push(currentFeature);
+      // Extract [state] from end of title if present, otherwise state is null (set from status line)
+      let title = headerMatch[2];
+      let state = null;
+      const stateInTitle = title.match(/^(.+?)\s+\[(\w+)\]\s*$/);
+      if (stateInTitle) {
+        title = stateInTitle[1];
+        state = stateInTitle[2];
+      }
       currentFeature = {
         id: headerMatch[1],
-        title: headerMatch[2],
-        state: headerMatch[3],
+        title,
+        state: state || 'planned',
         acs: [],
         files: [],
         dependencies: [],
         metadata: {},
       };
       inAcTable = false;
+      inAcCheckboxes = false;
       inFileRefs = false;
+      acCounter = 0;
       continue;
     }
 
@@ -145,9 +167,17 @@ function parseFeatureMapContent(content) {
       continue;
     }
 
+    // Status line: - **Status:** shipped
+    const statusMatch = line.match(statusLineRE);
+    if (statusMatch) {
+      currentFeature.state = statusMatch[1].toLowerCase();
+      continue;
+    }
+
     // Detect AC table start
     if (line.startsWith('| AC') && line.includes('Status')) {
       inAcTable = true;
+      inAcCheckboxes = false;
       inFileRefs = false;
       continue;
     }
@@ -164,10 +194,41 @@ function parseFeatureMapContent(content) {
       continue;
     }
 
-    // File references section
-    if (line.startsWith('**Files:**')) {
+    // AC section header: - **AC:**
+    if (line.match(acSectionRE)) {
+      inAcCheckboxes = true;
+      inAcTable = false;
+      inFileRefs = false;
+      continue;
+    }
+
+    // AC checkboxes: - [x] description  or  - [ ] description
+    const checkboxMatch = line.match(acCheckboxRE);
+    if (checkboxMatch && (inAcCheckboxes || !inFileRefs)) {
+      acCounter++;
+      const checked = checkboxMatch[1] === 'x';
+      currentFeature.acs.push({
+        id: `AC-${acCounter}`,
+        description: checkboxMatch[2].trim(),
+        status: checked ? 'tested' : 'pending',
+      });
+      inAcCheckboxes = true;
+      inAcTable = false;
+      inFileRefs = false;
+      continue;
+    }
+
+    // File references — inline on **Files:** line or as separate section
+    // Matches: **Files:**  or  - **Files:** `path`, `path2`
+    if (/^-?\s*\*\*Files:\*\*/.test(line)) {
+      // Extract any backtick-quoted paths on this same line
+      const pathMatches = line.matchAll(/`([^`]+)`/g);
+      for (const m of pathMatches) {
+        currentFeature.files.push(m[1]);
+      }
       inFileRefs = true;
       inAcTable = false;
+      inAcCheckboxes = false;
       continue;
     }
 
@@ -197,7 +258,7 @@ function parseFeatureMapContent(content) {
   return { features, lastScan };
 }
 
-// @gsd-api writeFeatureMap(projectRoot, featureMap, appPath) -- Serializes FeatureMap to FEATURE-MAP.md.
+// @cap-api writeFeatureMap(projectRoot, featureMap, appPath) -- Serializes FeatureMap to FEATURE-MAP.md.
 // Side effect: overwrites FEATURE-MAP.md at project root or app subdirectory.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -275,7 +336,7 @@ function serializeFeatureMap(featureMap) {
   return lines.join('\n');
 }
 
-// @gsd-api addFeature(projectRoot, feature, appPath) -- Add a new feature entry to FEATURE-MAP.md.
+// @cap-api addFeature(projectRoot, feature, appPath) -- Add a new feature entry to FEATURE-MAP.md.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {{ title: string, acs?: AcceptanceCriterion[], dependencies?: string[], metadata?: Object }} feature - Feature data (ID auto-generated)
@@ -299,8 +360,8 @@ function addFeature(projectRoot, feature, appPath) {
   return newFeature;
 }
 
-// @gsd-api updateFeatureState(projectRoot, featureId, newState, appPath) -- Transition feature state.
-// @gsd-todo(ref:AC-9) Enforce valid state transitions: planned->prototyped->tested->shipped
+// @cap-api updateFeatureState(projectRoot, featureId, newState, appPath) -- Transition feature state.
+// @cap-todo(ref:AC-9) Enforce valid state transitions: planned->prototyped->tested->shipped
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} featureId - Feature ID (e.g., "F-001")
@@ -323,8 +384,8 @@ function updateFeatureState(projectRoot, featureId, newState, appPath) {
   return true;
 }
 
-// @gsd-api enrichFromTags(projectRoot, scanResults, appPath) -- Update file references from tag scan.
-// @gsd-todo(ref:AC-12) Feature Map auto-enriched from @cap-feature tags found in source code
+// @cap-api enrichFromTags(projectRoot, scanResults, appPath) -- Update file references from tag scan.
+// @cap-todo(ref:AC-12) Feature Map auto-enriched from @cap-feature tags found in source code
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {import('./cap-tag-scanner.cjs').CapTag[]} scanResults - Tags from cap-tag-scanner
@@ -352,8 +413,8 @@ function enrichFromTags(projectRoot, scanResults, appPath) {
   return featureMap;
 }
 
-// @gsd-api enrichFromDeps(projectRoot) -- Read package.json, detect imports, add dependency info to features.
-// @gsd-todo(ref:AC-13) Feature Map auto-enriched from dependency graph analysis, env vars, package.json
+// @cap-api enrichFromDeps(projectRoot) -- Read package.json, detect imports, add dependency info to features.
+// @cap-todo(ref:AC-13) Feature Map auto-enriched from dependency graph analysis, env vars, package.json
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @returns {{ dependencies: string[], devDependencies: string[], envVars: string[] }}
@@ -390,7 +451,7 @@ function enrichFromDeps(projectRoot) {
   return result;
 }
 
-// @gsd-api getNextFeatureId(features) -- Generate next F-NNN ID.
+// @cap-api getNextFeatureId(features) -- Generate next F-NNN ID.
 /**
  * @param {Feature[]} features - Existing features
  * @returns {string} - Next feature ID (e.g., "F-001")
@@ -410,7 +471,7 @@ function getNextFeatureId(features) {
   return `F-${String(maxNum + 1).padStart(3, '0')}`;
 }
 
-// @gsd-api enrichFromScan(featureMap, tags) -- Updates Feature Map status from tag scan results.
+// @cap-api enrichFromScan(featureMap, tags) -- Updates Feature Map status from tag scan results.
 // Returns: updated FeatureMap with AC statuses reflecting code annotations.
 /**
  * @param {FeatureMap} featureMap - Current feature map data
@@ -444,8 +505,8 @@ function enrichFromScan(featureMap, tags) {
   return featureMap;
 }
 
-// @gsd-api addFeatures(featureMap, newFeatures) -- Adds new features to an existing Feature Map (from brainstorm).
-// @gsd-todo(ref:AC-11) Feature Map supports auto-derivation from brainstorm output
+// @cap-api addFeatures(featureMap, newFeatures) -- Adds new features to an existing Feature Map (from brainstorm).
+// @cap-todo(ref:AC-11) Feature Map supports auto-derivation from brainstorm output
 /**
  * @param {FeatureMap} featureMap - Current feature map data
  * @param {Feature[]} newFeatures - Features to add
@@ -468,7 +529,7 @@ function addFeatures(featureMap, newFeatures) {
   return featureMap;
 }
 
-// @gsd-api getStatus(featureMap) -- Computes aggregate project status from Feature Map.
+// @cap-api getStatus(featureMap) -- Computes aggregate project status from Feature Map.
 /**
  * @param {FeatureMap} featureMap
  * @returns {{ totalFeatures: number, completedFeatures: number, totalACs: number, implementedACs: number, testedACs: number, reviewedACs: number }}
@@ -493,7 +554,7 @@ function getStatus(featureMap) {
   return { totalFeatures, completedFeatures, totalACs, implementedACs, testedACs, reviewedACs };
 }
 
-// @gsd-api initAppFeatureMap(projectRoot, appPath) -- Create FEATURE-MAP.md for a specific app in a monorepo.
+// @cap-api initAppFeatureMap(projectRoot, appPath) -- Create FEATURE-MAP.md for a specific app in a monorepo.
 // Idempotent: does not overwrite existing FEATURE-MAP.md.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -512,7 +573,7 @@ function initAppFeatureMap(projectRoot, appPath) {
   return true;
 }
 
-// @gsd-api listAppFeatureMaps(projectRoot) -- Find all FEATURE-MAP.md files in a monorepo.
+// @cap-api listAppFeatureMaps(projectRoot) -- Find all FEATURE-MAP.md files in a monorepo.
 // Returns array of relative paths to directories containing FEATURE-MAP.md.
 /**
  * @param {string} projectRoot - Absolute path to project root

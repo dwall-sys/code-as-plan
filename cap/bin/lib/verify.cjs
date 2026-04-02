@@ -1,6 +1,7 @@
 /**
  * Verify — Verification suite, consistency, and health validation
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — verification suite and health validation
 
 const fs = require('fs');
 const path = require('path');

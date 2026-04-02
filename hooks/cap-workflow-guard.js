@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// gsd-hook-version: {{GSD_VERSION}}
-// GSD Workflow Guard — PreToolUse hook
-// Detects when Claude attempts file edits outside a GSD workflow context
-// (no active /gsd: command or Task subagent) and injects an advisory warning.
+// @cap-feature(feature:F-009) Hooks System — workflow guard (PreToolUse hook)
+// cap-hook-version: {{CAP_VERSION}}
+// CAP Workflow Guard — PreToolUse hook
+// Detects when Claude attempts file edits outside a CAP workflow context
+// (no active /cap: command or Task subagent) and injects an advisory warning.
 //
 // This is a SOFT guard — it advises, not blocks. The edit still proceeds.
-// The warning nudges Claude to use /gsd:quick or /gsd:fast instead of
+// The warning nudges Claude to use /cap:prototype or /cap:iterate instead of
 // making direct edits that bypass state tracking.
 //
 // Enable via config: hooks.workflow_guard: true (default: false)
-// Only triggers on Write/Edit tool calls to non-.planning/ files.
+// Only triggers on Write/Edit tool calls to non-.cap/ files.
 
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +30,7 @@ process.stdin.on('end', () => {
       process.exit(0);
     }
 
-    // Check if we're inside a GSD workflow (Task subagent or /gsd: command)
+    // Check if we're inside a CAP workflow (Task subagent or /cap: command)
     // Subagents have a session_id that differs from the parent
     // and typically have a description field set by the orchestrator
     if (data.tool_input?.is_subagent || data.session_type === 'task') {
@@ -39,12 +40,12 @@ process.stdin.on('end', () => {
     // Check the file being edited
     const filePath = data.tool_input?.file_path || data.tool_input?.path || '';
 
-    // Allow edits to .planning/ files (GSD state management)
-    if (filePath.includes('.planning/') || filePath.includes('.planning\\')) {
+    // Allow edits to .cap/ and .planning/ files (CAP/GSD state management)
+    if (filePath.includes('.cap/') || filePath.includes('.cap\\') || filePath.includes('.planning/') || filePath.includes('.planning\\')) {
       process.exit(0);
     }
 
-    // Allow edits to common config/docs files that don't need GSD tracking
+    // Allow edits to common config/docs files that don't need CAP tracking
     const allowedPatterns = [
       /\.gitignore$/,
       /\.env/,
@@ -70,18 +71,18 @@ process.stdin.on('end', () => {
         process.exit(0);
       }
     } else {
-      process.exit(0); // No GSD project — don't guard
+      process.exit(0); // No CAP project — don't guard
     }
 
-    // If we get here: GSD project, guard enabled, file edit outside .planning/,
+    // If we get here: CAP project, guard enabled, file edit outside .cap/,
     // not in a subagent context. Inject advisory warning.
     const output = {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
-        additionalContext: `⚠️ WORKFLOW ADVISORY: You're editing ${path.basename(filePath)} directly without a GSD command. ` +
-          'This edit will not be tracked in STATE.md or produce a SUMMARY.md. ' +
-          'Consider using /gsd:fast for trivial fixes or /gsd:quick for larger changes ' +
-          'to maintain project state tracking. ' +
+        additionalContext: `⚠️ WORKFLOW ADVISORY: You're editing ${path.basename(filePath)} directly without a CAP command. ` +
+          'This edit will not be tracked by CAP. ' +
+          'Consider using /cap:prototype or /cap:iterate ' +
+          'to maintain feature tracking via @cap-feature tags. ' +
           'If this is intentional (e.g., user explicitly asked for a direct edit), proceed normally.'
       }
     };

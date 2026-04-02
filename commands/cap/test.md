@@ -13,12 +13,12 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @gsd-context CAP v2.0 test command -- orchestrates test generation against Feature Map ACs. Spawns cap-tester agent, collects test results, updates Feature Map test status. -->
-<!-- @gsd-decision Tests derive from Feature Map ACs, not from code inspection. This ensures tests verify the specification, not the implementation. -->
-<!-- @gsd-pattern --red-only flag stops after RED phase -- useful for TDD workflows where developer writes GREEN implementation manually. -->
+<!-- @cap-context CAP v2.0 test command -- orchestrates test generation against Feature Map ACs. Spawns cap-tester agent, collects test results, updates Feature Map test status. -->
+<!-- @cap-decision Tests derive from Feature Map ACs, not from code inspection. This ensures tests verify the specification, not the implementation. -->
+<!-- @cap-pattern --red-only flag stops after RED phase -- useful for TDD workflows where developer writes GREEN implementation manually. -->
 
 <objective>
-<!-- @gsd-todo(ref:AC-52) /cap:test shall invoke the cap-tester agent with a RED-GREEN discipline mindset. -->
+<!-- @cap-todo(ref:AC-52) /cap:test shall invoke the cap-tester agent with a RED-GREEN discipline mindset. -->
 
 Spawns cap-tester to write tests against Feature Map acceptance criteria. Tests must demonstrate RED (fail against stubs) before GREEN (pass against implementation).
 
@@ -44,7 +44,7 @@ Check `$ARGUMENTS` for:
 
 ## Step 1: Read Feature Map and extract ACs for test generation
 
-<!-- @gsd-todo(ref:AC-54) cap-tester shall write tests that verify the acceptance criteria from the Feature Map entry for the active feature. -->
+<!-- @cap-todo(ref:AC-54) cap-tester shall write tests that verify the acceptance criteria from the Feature Map entry for the active feature. -->
 
 ```bash
 node -e "
@@ -74,7 +74,7 @@ If `test_features` is empty: STOP and report:
 
 ## Step 2: Detect test framework
 
-<!-- @gsd-todo(ref:AC-56) cap-tester shall use node:test for CJS code and vitest for SDK TypeScript code. -->
+<!-- @cap-todo(ref:AC-56) cap-tester shall use node:test for CJS code and vitest for SDK TypeScript code. -->
 
 ```bash
 node -e "
@@ -119,8 +119,8 @@ Store as `test_config`.
 
 ## Step 3: Spawn cap-tester agent
 
-<!-- @gsd-todo(ref:AC-53) cap-tester shall approach testing with a "how do I break this?" adversarial mindset. -->
-<!-- @gsd-todo(ref:AC-57) Green tests shall replace the need for a separate VERIFICATION.md artifact. -->
+<!-- @cap-todo(ref:AC-53) cap-tester shall approach testing with a "how do I break this?" adversarial mindset. -->
+<!-- @cap-todo(ref:AC-57) Green tests shall replace the need for a separate VERIFICATION.md artifact. -->
 
 Spawn `cap-tester` via Task tool:
 
@@ -192,7 +192,7 @@ Store exit code and output.
 
 ## Step 5: Update Feature Map status
 
-<!-- @gsd-todo(ref:AC-55) cap-tester shall update the feature state in FEATURE-MAP.md from prototyped to tested when all tests pass. -->
+<!-- @cap-todo(ref:AC-55) cap-tester shall update the feature state in FEATURE-MAP.md from prototyped to tested when all tests pass. -->
 
 If all tests pass and `red_only` is false:
 

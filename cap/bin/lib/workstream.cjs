@@ -1,3 +1,4 @@
+// @cap-feature(feature:F-011) Legacy GSD Modules — workstream CRUD operations for parallel milestones
 /**
  * Workstream — CRUD operations for workstream namespacing
  *
@@ -78,7 +79,7 @@ function cmdWorkstreamCreate(cwd, name, options, raw) {
 
   const baseDir = planningRoot(cwd);
   if (!fs.existsSync(baseDir)) {
-    error('.planning/ directory not found — run /gsd:new-project first');
+    error('.planning/ directory not found — run /cap:init first');
   }
 
   const wsRoot = path.join(baseDir, 'workstreams');

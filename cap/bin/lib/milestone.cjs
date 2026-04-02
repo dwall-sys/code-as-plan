@@ -1,6 +1,7 @@
 /**
  * Milestone — Milestone and requirements lifecycle operations
  */
+// @cap-feature(feature:F-011) Legacy GSD Modules — milestone and requirements lifecycle operations
 
 const fs = require('fs');
 const path = require('path');

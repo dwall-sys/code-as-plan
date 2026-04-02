@@ -1,10 +1,12 @@
-// @gsd-context CAP v2.0 stack docs manager -- wraps Context7 CLI for library documentation fetch and caching in .cap/stack-docs/.
-// @gsd-decision Wraps npx ctx7@latest (not a direct API call) -- Context7 is already the user's standard tool per CLAUDE.md. This module provides programmatic access for agent workflows.
-// @gsd-decision Docs cached as markdown files in .cap/stack-docs/{library-name}.md -- simple, readable, committable for offline use.
-// @gsd-constraint Zero external dependencies at runtime -- Context7 is invoked via child_process.execSync (npx), not imported.
-// @gsd-risk Context7 requires network access and may hit rate limits. Module must handle failures gracefully and report to caller.
+// @cap-context CAP v2.0 stack docs manager -- wraps Context7 CLI for library documentation fetch and caching in .cap/stack-docs/.
+// @cap-decision Wraps npx ctx7@latest (not a direct API call) -- Context7 is already the user's standard tool per CLAUDE.md. This module provides programmatic access for agent workflows.
+// @cap-decision Docs cached as markdown files in .cap/stack-docs/{library-name}.md -- simple, readable, committable for offline use.
+// @cap-constraint Zero external dependencies at runtime -- Context7 is invoked via child_process.execSync (npx), not imported.
+// @cap-risk Context7 requires network access and may hit rate limits. Module must handle failures gracefully and report to caller.
 
 'use strict';
+
+// @cap-feature(feature:F-004) Stack Docs / Context7 Integration — fetch and cache library documentation via ctx7 CLI
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,7 +14,7 @@ const { execSync } = require('node:child_process');
 
 const STACK_DOCS_DIR = '.cap/stack-docs';
 
-// @gsd-todo(ref:AC-27) Tag scanner uses stack docs path for enrichment context
+// @cap-todo(ref:AC-27) Tag scanner uses stack docs path for enrichment context
 const FRESHNESS_DAYS = 7;
 const FRESHNESS_HOURS = FRESHNESS_DAYS * 24; // 168 hours default freshness window
 
@@ -37,7 +39,7 @@ const FRESHNESS_HOURS = FRESHNESS_DAYS * 24; // 168 hours default freshness wind
  * @property {string} type - Project type: 'node', 'python', 'go', 'rust', 'unknown'
  */
 
-// @gsd-api detectDependencies(projectRoot) -- Reads package.json/requirements.txt/etc to discover project dependencies.
+// @cap-api detectDependencies(projectRoot) -- Reads package.json/requirements.txt/etc to discover project dependencies.
 // Returns: DependencyInfo with categorized dependency lists and project type.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -136,7 +138,7 @@ function detectDependencies(projectRoot) {
   return result;
 }
 
-// @gsd-api resolveLibrary(libraryName, query) -- Resolves a library name to a Context7 library ID.
+// @cap-api resolveLibrary(libraryName, query) -- Resolves a library name to a Context7 library ID.
 // Returns: LibraryInfo or null if not found.
 /**
  * @param {string} libraryName - Library name (e.g., "react", "express")
@@ -176,7 +178,7 @@ function resolveLibrary(libraryName, query) {
   }
 }
 
-// @gsd-api fetchDocs(projectRoot, libraryId, query) -- Fetches library docs via Context7 and caches them.
+// @cap-api fetchDocs(projectRoot, libraryId, query) -- Fetches library docs via Context7 and caches them.
 // Returns: FetchResult with success status and cached file path.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -220,7 +222,7 @@ function fetchDocs(projectRoot, libraryId, query) {
   }
 }
 
-// @gsd-api writeDocs(projectRoot, libraryName, content) -- Writes documentation content directly to .cap/stack-docs/.
+// @cap-api writeDocs(projectRoot, libraryName, content) -- Writes documentation content directly to .cap/stack-docs/.
 // Returns: string -- path to written file.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -243,7 +245,7 @@ function writeDocs(projectRoot, libraryName, content) {
   return filePath;
 }
 
-// @gsd-api listCachedDocs(projectRoot) -- Lists all cached library docs.
+// @cap-api listCachedDocs(projectRoot) -- Lists all cached library docs.
 // Returns: Array of { libraryName, filePath, lastModified }.
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -269,7 +271,7 @@ function listCachedDocs(projectRoot) {
   }
 }
 
-// @gsd-api checkFreshness(projectRoot, libraryName, maxAgeHours) -- Checks if cached docs are still fresh.
+// @cap-api checkFreshness(projectRoot, libraryName, maxAgeHours) -- Checks if cached docs are still fresh.
 // Returns: { fresh: boolean, ageHours: number | null, filePath: string | null }
 /**
  * @param {string} projectRoot - Absolute path to project root
@@ -299,7 +301,7 @@ function checkFreshness(projectRoot, libraryName, maxAgeHours) {
   }
 }
 
-// @gsd-api getDocsPath(projectRoot, libraryName) -- Returns the expected path for a library's cached docs.
+// @cap-api getDocsPath(projectRoot, libraryName) -- Returns the expected path for a library's cached docs.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} libraryName - Library name
@@ -309,8 +311,8 @@ function getDocsPath(projectRoot, libraryName) {
   return path.join(projectRoot, STACK_DOCS_DIR, `${libraryName}.md`);
 }
 
-// @gsd-api parseFreshnessFromContent(content) -- Extracts freshness date from doc file header comment.
-// @gsd-todo(ref:AC-84) Stack-docs carry freshness marker (fetch date). Docs older than 7 days auto-refreshed.
+// @cap-api parseFreshnessFromContent(content) -- Extracts freshness date from doc file header comment.
+// @cap-todo(ref:AC-84) Stack-docs carry freshness marker (fetch date). Docs older than 7 days auto-refreshed.
 /**
  * Parse the fetch date from a stack doc file's header.
  * Looks for: <!-- Fetched: ISO_DATE --> or <!-- Written: ISO_DATE -->
@@ -323,7 +325,7 @@ function parseFreshnessFromContent(content) {
   return match ? match[1] : null;
 }
 
-// @gsd-api checkFreshnessEnhanced(projectRoot, libraryName, maxAgeDays) -- Checks freshness using embedded date marker.
+// @cap-api checkFreshnessEnhanced(projectRoot, libraryName, maxAgeDays) -- Checks freshness using embedded date marker.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} libraryName - Library name
@@ -370,8 +372,8 @@ function checkFreshnessEnhanced(projectRoot, libraryName, maxAgeDays) {
   }
 }
 
-// @gsd-api fetchDocsWithFreshness(projectRoot, libraryId, query) -- Fetches docs with embedded freshness marker.
-// @gsd-todo(ref:AC-82) Store fetched stack docs in .cap/stack-docs/{library-name}.md
+// @cap-api fetchDocsWithFreshness(projectRoot, libraryId, query) -- Fetches docs with embedded freshness marker.
+// @cap-todo(ref:AC-82) Store fetched stack docs in .cap/stack-docs/{library-name}.md
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} libraryId - Context7 library ID (e.g., "/vercel/next.js")
@@ -413,8 +415,8 @@ function fetchDocsWithFreshness(projectRoot, libraryId, query) {
   }
 }
 
-// @gsd-api batchFetchDocs(projectRoot, dependencies, options) -- Orchestrates batch fetch for /cap:init.
-// @gsd-todo(ref:AC-85) Context7 fetching is MANDATORY at init. If unreachable, warning emitted and init continues.
+// @cap-api batchFetchDocs(projectRoot, dependencies, options) -- Orchestrates batch fetch for /cap:init.
+// @cap-todo(ref:AC-85) Context7 fetching is MANDATORY at init. If unreachable, warning emitted and init continues.
 /**
  * Fetch stack docs for multiple dependencies. Skips already-fresh docs.
  *
@@ -454,7 +456,7 @@ function batchFetchDocs(projectRoot, dependencies, options = {}) {
     }
 
     // Resolve library in Context7
-    // @gsd-risk Context7 resolution may fail for less popular libraries. Graceful skip per dep.
+    // @cap-risk Context7 resolution may fail for less popular libraries. Graceful skip per dep.
     try {
       const lib = resolveLibrary(dep, 'API surface and configuration');
       if (!lib) {
@@ -485,7 +487,7 @@ function batchFetchDocs(projectRoot, dependencies, options = {}) {
   return result;
 }
 
-// @gsd-api getStaleLibraries(projectRoot) -- Returns list of libraries with stale (>7 day) docs.
+// @cap-api getStaleLibraries(projectRoot) -- Returns list of libraries with stale (>7 day) docs.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @returns {Array<{libraryName: string, ageHours: number, fetchDate: string|null}>}
@@ -515,7 +517,7 @@ function getStaleLibraries(projectRoot) {
   return stale;
 }
 
-// @gsd-api detectWorkspacePackages(projectRoot) -- Detects monorepo workspace packages for cross-package scanning.
+// @cap-api detectWorkspacePackages(projectRoot) -- Detects monorepo workspace packages for cross-package scanning.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @returns {{ isMonorepo: boolean, packages: string[] }}
