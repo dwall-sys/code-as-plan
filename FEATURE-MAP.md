@@ -341,6 +341,17 @@
 | AC-6 | pending | Debug logs inserted into code are tracked in a separate logbook section and cleaned up at end of session |
 | AC-7 | pending | User provides actual result after each deploy (pass/fail + description) — agent waits actively instead of proceeding autonomously |
 
+### F-023: Emoji-Enhanced AC Status and Human Verification Checklist [shipped]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | After /cap:prototype, display AC table with emoji status indicators: ✅ tested, 🔨 prototyped, 📋 pending, ⚠️ partial |
+| AC-2 | pending | After /cap:test, display AC table with emoji status indicators |
+| AC-3 | pending | After /cap:test, auto-generate a Human Verification Checklist with emoji categories (🔍 Manual check, 🌐 Browser test, 🔐 Permissions, ⚡ Performance) |
+| AC-4 | pending | Verification checklist items derived from ACs — each AC not fully automatable becomes a checklist item |
+| AC-5 | pending | Checklist formatted as markdown checkboxes (- [ ]) so user can check off items directly |
+| AC-6 | pending | Emoji formatting appears in terminal command output only — FEATURE-MAP.md and other stored files remain emoji-free |
+
 ## Legend
 
 | State | Meaning |
@@ -351,4 +362,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-02T12:25:11.969Z*
+*Last updated: 2026-04-02T13:26:30.967Z*

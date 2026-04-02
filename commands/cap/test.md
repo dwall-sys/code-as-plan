@@ -222,6 +222,8 @@ session.updateSession(process.cwd(), {
 
 ## Step 6: Final report
 
+<!-- @cap-feature(feature:F-023) Emoji-Enhanced AC Status and Human Verification Checklist -->
+
 ```
 cap:test complete.
 
@@ -229,22 +231,109 @@ Phase: {RED or GREEN}
 Tests written: {tests_written}
 Tests passing: {tests_passing}
 Tests failing: {tests_failing}
+```
 
+<!-- @cap-todo(ac:F-023/AC-2) Display AC table with emoji status after test -->
+<!-- @cap-todo(ac:F-023/AC-6) Emojis in terminal output only -->
+
+**Display the AC status table with emojis (terminal output only):**
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const featureMap = fm.readFeatureMap(process.cwd());
+const targetIds = {JSON.stringify(target_feature_ids)};
+for (const id of targetIds) {
+  const f = featureMap.features.find(feat => feat.id === id);
+  if (!f) continue;
+  console.log('\n  ' + f.id + ': ' + f.title + ' [' + f.state + ']');
+  for (const ac of f.acs) {
+    const emoji = ac.status === 'tested' ? '✅' : ac.status === 'prototyped' ? '🔨' : ac.status === 'partial' ? '⚠️' : '📋';
+    console.log('    ' + emoji + ' ' + ac.id + ': ' + ac.description);
+  }
+}
+"
+```
+
+```
 {If red_only:}
 RED phase complete. Tests are written and confirmed failing.
 Run /cap:iterate to implement, then re-run /cap:test without --red-only.
 {Else if all_pass:}
 GREEN phase complete. All tests pass.
 Feature state updated: {feature_ids} -> tested
-Run /cap:review to verify code quality.
 {Else:}
 Some tests failing. Fix implementation and re-run /cap:test.
 {End if}
+```
 
 {If untested_paths:}
+```
 Untested code paths flagged with @cap-risk:
 {For each path: - path}
+```
 {End if}
+
+<!-- @cap-todo(ac:F-023/AC-3) Auto-generate Human Verification Checklist after test -->
+<!-- @cap-todo(ac:F-023/AC-4) Derive checklist items from ACs that aren't fully automatable -->
+<!-- @cap-todo(ac:F-023/AC-5) Format as markdown checkboxes -->
+
+## Step 7: Human Verification Checklist
+
+**If all tests pass and NOT `red_only`:**
+
+Generate a verification checklist from the feature's ACs. For each AC, determine if it requires human verification (anything involving visual output, user flow, permissions, external services, or cross-device behavior).
+
+**Display to user (terminal output with emojis):**
+
+```
+🔍 Human Verification Checklist — {feature.id}: {feature.title}
+
+{For each target_feature:}
+  {For each AC — categorize and generate checklist items:}
+
+  {If AC involves visual/UI behavior:}
+  🌐 Browser / Visual
+  - [ ] {Derived check from AC, e.g., "Verify error message displays correctly when module is missing"}
+  {End if}
+
+  {If AC involves user interaction/flow:}
+  🔍 Manual Verification
+  - [ ] {Derived check, e.g., "Run npx code-as-plan@latest --force and verify clean install completes"}
+  {End if}
+
+  {If AC involves permissions/security:}
+  🔐 Security / Permissions
+  - [ ] {Derived check, e.g., "Verify non-root user can install without sudo"}
+  {End if}
+
+  {If AC involves performance/timing:}
+  ⚡ Performance
+  - [ ] {Derived check, e.g., "Verify install completes in under 30 seconds on cold cache"}
+  {End if}
+
+  {If AC involves cross-platform/environment:}
+  💻 Cross-Platform
+  - [ ] {Derived check, e.g., "Test on Linux with symlinked $HOME"}
+  {End if}
+
+  {If AC is purely automatable (covered by unit tests):}
+  ✅ {ac.id}: Covered by automated tests
+  {End if}
+
+{End for}
+{End for}
+
+Status: [ ] All checks passed  [ ] Issues found
+Verified by: ________________  Date: ________________
+```
+
+**Note:** The checklist is displayed in the terminal only. If the user wants to save it, they can run `/cap:review` which writes it to `.cap/MANUAL-TESTS.md`.
+
+```
+Next steps:
+  - Work through the verification checklist above
+  - Run /cap:review to verify code quality and save checklist
 ```
 
 </process>

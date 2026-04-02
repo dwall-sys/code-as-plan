@@ -266,8 +266,34 @@ session.updateSession(process.cwd(), {
 cap:prototype complete ({mode} mode).
 
 Features processed: {target_features.length}
-{For each feature: feature.id: feature.title -> {new_state}}
+```
 
+<!-- @cap-feature(feature:F-023) Emoji-Enhanced AC Status -->
+<!-- @cap-todo(ac:F-023/AC-1) Display AC table with emoji status after prototype -->
+<!-- @cap-todo(ac:F-023/AC-6) Emojis in terminal output only, not in stored files -->
+
+**Display the AC status table with emojis (terminal output only):**
+
+Load the current Feature Map and display each AC for the target features:
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const featureMap = fm.readFeatureMap(process.cwd());
+const targetIds = {JSON.stringify(target_feature_ids)};
+for (const id of targetIds) {
+  const f = featureMap.features.find(feat => feat.id === id);
+  if (!f) continue;
+  console.log('\n  ' + f.id + ': ' + f.title + ' [' + f.state + ']');
+  for (const ac of f.acs) {
+    const emoji = ac.status === 'tested' ? '✅' : ac.status === 'prototyped' ? '🔨' : ac.status === 'partial' ? '⚠️' : '📋';
+    console.log('    ' + emoji + ' ' + ac.id + ': ' + ac.description);
+  }
+}
+"
+```
+
+```
 Tag scan results:
   Total @cap-* tags: {scan_result.totalTags}
   Features with file refs: {scan_result.featuresEnriched}
