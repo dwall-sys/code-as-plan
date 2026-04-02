@@ -327,6 +327,20 @@
 - `bin/install.js`
 - `tests/install-hardening.test.cjs`
 
+### F-022: Deploy-Aware Debug Workflow [shipped]
+
+**Depends on:** F-005
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Every debug cycle starts with a hypothesis defining expected outcome and local verification step before code is changed |
+| AC-2 | pending | Verify-before-deploy gate must pass before any deploy — local test/check proving the fix makes sense |
+| AC-3 | pending | Every deploy is logged in a deploy logbook (.cap/debug/DEPLOY-LOG-{session}.md): hypothesis, changes, expected result, actual result |
+| AC-4 | pending | Debugger shall batch hypotheses — multiple fixes per deploy with individual log markers instead of one deploy per hypothesis |
+| AC-5 | pending | After a failed deploy cycle the agent must read the logbook and shall not re-pursue already-disproven hypotheses |
+| AC-6 | pending | Debug logs inserted into code are tracked in a separate logbook section and cleaned up at end of session |
+| AC-7 | pending | User provides actual result after each deploy (pass/fail + description) — agent waits actively instead of proceeding autonomously |
+
 ## Legend
 
 | State | Meaning |
@@ -337,4 +351,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-02T11:11:39.207Z*
+*Last updated: 2026-04-02T12:25:11.969Z*

@@ -1,6 +1,6 @@
 ---
 name: cap:debug
-description: Systematic debugging with persistent state across context resets. Spawns cap-debugger agent using scientific method.
+description: Systematic debugging with persistent state across context resets. Spawns cap-debugger agent using scientific method. Deploy-aware workflow minimizes deploy cycles.
 argument-hint: "[issue description]"
 allowed-tools:
   - Read
@@ -13,13 +13,21 @@ allowed-tools:
 <!-- @cap-context CAP v2.0 debug command -- orchestrates scientific debugging. Gathers symptoms, spawns cap-debugger agent, handles checkpoints and continuations. Debug state persists in .cap/debug/. -->
 <!-- @cap-decision Debug state in .cap/debug/ (not .planning/debug/) -- CAP centralizes all runtime state under .cap/ -->
 <!-- @cap-pattern Orchestrator gathers symptoms and spawns agent. Fresh context per investigation to avoid context exhaustion. -->
+<!-- @cap-feature(feature:F-022) Deploy-Aware Debug Workflow -->
 
 <objective>
 <!-- @cap-todo(ref:AC-63) /cap:debug shall invoke the cap-debugger agent using a scientific method approach. -->
 
-Debug issues using scientific method with subagent isolation.
+Debug issues using scientific method with subagent isolation and deploy-aware workflow.
 
-**Orchestrator role:** Gather symptoms, spawn cap-debugger agent, handle checkpoints, spawn continuations.
+**Orchestrator role:** Gather symptoms, spawn cap-debugger agent, manage deploy-verify cycles, handle checkpoints.
+
+**Deploy-aware:** For issues requiring deployment to verify (staging/production bugs, cross-service issues), the workflow enforces:
+1. Hypothesis with expected outcome BEFORE code changes
+2. Local verification gate BEFORE deploy
+3. Deploy logbook tracking every deploy cycle
+4. User provides actual results after each deploy
+5. Agent reads logbook to avoid repeating failed approaches
 
 **Why subagent:** Investigation burns context fast. Fresh context per investigation. Main context stays lean for user interaction.
 </objective>
@@ -83,22 +91,38 @@ if (fs.existsSync(sessionFile)) {
 "
 ```
 
+Also check for deploy logbook:
+
+```bash
+node -e "
+const fs = require('node:fs');
+const path = require('node:path');
+const logFile = path.join(process.cwd(), '.cap', 'debug', 'DEPLOY-LOG-{debug_context.activeDebugSession}.md');
+if (fs.existsSync(logFile)) {
+  console.log(fs.readFileSync(logFile, 'utf8'));
+} else {
+  console.log('NO_DEPLOY_LOG');
+}
+"
+```
+
 If active session found, display:
 
 ```
 Active debug session found: SESSION-{id}
 Status: {status}
+{If deploy log exists:} Deploy log: {N} deploys recorded
 ```
 
 Use AskUserQuestion:
 > "Resume existing debug session SESSION-{id}, or start a new investigation? [resume / new]"
 
-- If `resume`: load existing session content, proceed to Step 3 with session context
+- If `resume`: load existing session + deploy log, proceed to Step 3 with session context
 - If `new`: generate new session ID, proceed to Step 2
 
 If no active session: proceed to Step 2.
 
-## Step 2: Gather symptoms
+## Step 2: Gather symptoms and classify issue type
 
 If `$ARGUMENTS` contains an issue description, use it as initial symptoms.
 
@@ -106,6 +130,13 @@ If `$ARGUMENTS` is empty, use AskUserQuestion:
 > "Describe the issue you are investigating. Include: what you expected, what actually happened, any error messages, and when this started."
 
 Store as `symptoms`.
+
+<!-- @cap-todo(ac:F-022/AC-7) Determine if this is a deploy-dependent issue -->
+Use AskUserQuestion:
+> "Does this issue require deploying to test (staging/production), or can it be fully reproduced locally?"
+> Options: "Deploy required (staging/prod)" / "Local reproduction possible" / "Not sure yet"
+
+Store as `issue_type`. If "Deploy required" or "Not sure": enable deploy-aware workflow.
 
 Generate a new debug session ID:
 
@@ -128,6 +159,9 @@ Write `.cap/debug/SESSION-{session_id}.md` using the Write tool:
 
 ## Status: investigating
 
+## Issue Type
+{issue_type — "deploy-required" or "local"}
+
 ## Symptoms
 {symptoms}
 
@@ -141,11 +175,32 @@ Write `.cap/debug/SESSION-{session_id}.md` using the Write tool:
 ## Tests Performed
 <!-- Cap-debugger will populate this section -->
 
+## Debug Logs Inserted
+<!-- @cap-todo(ac:F-022/AC-6) Track debug logs for cleanup -->
+<!-- Cap-debugger tracks all console.log/debug statements added to code here -->
+
 ## Findings
 <!-- Cap-debugger will populate this section -->
 
 ## Resolution
 <!-- Populated when root cause is found and fix is applied -->
+```
+
+<!-- @cap-todo(ac:F-022/AC-3) Create deploy logbook for deploy-dependent issues -->
+If deploy-aware workflow is enabled, also write `.cap/debug/DEPLOY-LOG-{session_id}.md`:
+
+```markdown
+# Deploy Log: {session_id}
+
+> Every deploy is documented here. The debugger reads this before each cycle
+> to avoid repeating failed approaches.
+
+## Disproven Hypotheses
+<!-- Hypotheses that were tested via deploy and shown to be wrong -->
+
+## Deploy Cycles
+
+<!-- Each deploy cycle is recorded below -->
 ```
 
 Update session:
@@ -187,6 +242,7 @@ Spawn `cap-debugger` via Task tool:
 
 ```
 **DEBUG SESSION: {session_id}**
+**ISSUE TYPE: {issue_type}**
 
 **Symptoms:**
 {symptoms}
@@ -194,6 +250,9 @@ Spawn `cap-debugger` via Task tool:
 {If resuming:}
 **Previous session state:**
 {existing session file content}
+
+**Previous deploy log:**
+{existing deploy log content}
 {End if}
 
 **Active feature:** {feature.title or 'none'}
@@ -201,6 +260,7 @@ Spawn `cap-debugger` via Task tool:
 <files_to_read>
 {For each file in feature.files: - file}
 - .cap/debug/SESSION-{session_id}.md
+{If deploy-aware:} - .cap/debug/DEPLOY-LOG-{session_id}.md {End if}
 </files_to_read>
 
 **Instructions:**
@@ -208,17 +268,34 @@ Spawn `cap-debugger` via Task tool:
 2. Analyze symptoms and form ranked hypotheses
 3. Test each hypothesis through code reading and execution
 4. Document each step in the debug session file
-5. DO NOT modify production code -- only observe and test
-6. When root cause is found, propose a fix and wait for approval
+{If deploy-aware:}
+5. DEPLOY-AWARE MODE: Follow the deploy-aware protocol:
+   a. Define hypothesis with expected outcome BEFORE changing code
+   b. Identify local verification steps (unit test, grep, curl, log check)
+   c. Only return DEPLOY_READY when local verification passes
+   d. Read DEPLOY-LOG to avoid repeating disproven hypotheses
+   e. Batch multiple fixes per deploy when possible
+   f. Track all debug logs you insert for later cleanup
+{End if}
+6. DO NOT modify production code -- only observe and test
+7. When root cause is found, propose a fix and wait for approval
 
 **Return format:**
 === DEBUG RESULT ===
-STATUS: ROOT_CAUSE_FOUND | CHECKPOINT_REACHED | DEBUG_COMPLETE
+STATUS: ROOT_CAUSE_FOUND | DEPLOY_READY | CHECKPOINT_REACHED | DEBUG_COMPLETE
 SESSION_ID: {session_id}
 {If ROOT_CAUSE_FOUND:}
 ROOT_CAUSE: {description}
 PROPOSED_FIX: {description}
 FILES_TO_MODIFY: [list]
+{End if}
+{If DEPLOY_READY:}
+HYPOTHESIS: {what we think is wrong}
+EXPECTED_RESULT: {what should happen after deploy if hypothesis is correct}
+LOCAL_VERIFICATION: {what was checked locally and passed}
+CHANGES_MADE: [list of file:change pairs]
+DEBUG_LOGS_ADDED: [list of file:line pairs for temporary debug logging]
+DEPLOY_BATCH: {number of fixes batched in this deploy}
 {End if}
 {If CHECKPOINT_REACHED:}
 CHECKPOINT_REASON: {what user input is needed}
@@ -252,6 +329,90 @@ Use AskUserQuestion:
 - If `no`: Update session file status to `root_cause_found_pending`, end debug session.
 - If `modify: <instructions>`: Spawn cap-debugger again with modified fix instructions.
 
+<!-- @cap-todo(ac:F-022/AC-1) Hypothesis with expected outcome before code changes -->
+<!-- @cap-todo(ac:F-022/AC-2) Verify-before-deploy gate -->
+<!-- @cap-todo(ac:F-022/AC-4) Batch hypotheses into single deploy -->
+**If STATUS == DEPLOY_READY:**
+
+Display:
+```
+Ready to deploy. {DEPLOY_BATCH} fix(es) batched.
+
+Hypothesis: {hypothesis}
+Expected result: {expected_result}
+Local verification: {local_verification} ✓
+
+Changes:
+{For each change: - file: change}
+
+{If debug logs added:}
+Debug logs added (will be cleaned up):
+{For each log: - file:line}
+{End if}
+```
+
+Use AskUserQuestion:
+> "Deploy now? Review the changes above, then deploy and report the result. [deploy / abort / modify]"
+
+- If `deploy`: Proceed to Step 4a (Deploy-Verify Cycle)
+- If `abort`: Revert changes, update session file
+- If `modify`: Re-spawn agent with modifications
+
+## Step 4a: Deploy-Verify Cycle
+
+<!-- @cap-todo(ac:F-022/AC-3) Log every deploy in the deploy logbook -->
+<!-- @cap-todo(ac:F-022/AC-7) User provides actual result after deploy -->
+
+Increment deploy counter.
+
+```
+Deploy #{deploy_number} in progress.
+
+Waiting for your deploy to complete...
+```
+
+Use AskUserQuestion:
+> "Deploy #{deploy_number} complete. What happened? [pass: it works / fail: describe what went wrong]"
+
+Store user response as `deploy_result`.
+
+**Update deploy logbook** (`.cap/debug/DEPLOY-LOG-{session_id}.md`):
+
+Append to the logbook using Edit tool:
+
+```markdown
+### Deploy #{deploy_number} — {timestamp}
+
+**Hypothesis:** {hypothesis}
+**Expected:** {expected_result}
+**Actual:** {deploy_result}
+**Verdict:** {PASS or FAIL}
+**Changes:** {list of changes}
+```
+
+<!-- @cap-todo(ac:F-022/AC-5) After failed deploy, read logbook and don't repeat disproven hypotheses -->
+**If deploy_result is PASS:**
+- Update session status to `resolved`
+- Proceed to Step 5 (cleanup)
+
+**If deploy_result is FAIL:**
+- Add the hypothesis to the **Disproven Hypotheses** section of deploy logbook
+- Display:
+
+```
+Deploy #{deploy_number} failed.
+Recorded in deploy log. {total_deploys} deploy(s) so far, {disproven_count} hypothesis(es) disproven.
+
+Re-spawning debugger with updated context...
+```
+
+- Re-spawn cap-debugger (Step 3) with:
+  - The updated deploy log (so it reads what was already tried)
+  - The user's failure description
+  - Explicit instruction: "The following hypotheses have been DISPROVEN — do NOT re-pursue them: {list}"
+
+Loop back to Step 3.
+
 **If STATUS == CHECKPOINT_REACHED:**
 
 Display checkpoint reason and next steps.
@@ -265,8 +426,19 @@ Use AskUserQuestion:
 **If STATUS == DEBUG_COMPLETE:**
 
 Log: "Debug session {session_id} complete."
+Proceed to Step 5.
 
-## Step 5: Update session and report
+## Step 5: Cleanup and report
+
+<!-- @cap-todo(ac:F-022/AC-6) Clean up debug logs inserted during session -->
+
+If the session had debug logs inserted, spawn cap-debugger with `**MODE: CLEANUP_DEBUG_LOGS**`:
+
+```
+Remove all temporary debug logs tracked in the session file under "## Debug Logs Inserted".
+Read the session file, find each file:line entry, and remove the debug statement.
+Verify the code still works after removal.
+```
 
 Update debug session file with resolution (via Write tool).
 
@@ -288,9 +460,18 @@ cap:debug complete.
 Session: {session_id}
 Status: {final_status}
 Debug log: .cap/debug/SESSION-{session_id}.md
+{If deploy-aware:}
+Deploy log: .cap/debug/DEPLOY-LOG-{session_id}.md
+Total deploys: {deploy_count}
+Hypotheses tested: {hypothesis_count}
+Hypotheses disproven: {disproven_count}
+{End if}
 
 {If fix applied:}
 Fix applied and verified. Run /cap:test to confirm no regressions.
+{End if}
+{If debug logs cleaned:}
+Temporary debug logs removed.
 {End if}
 ```
 
