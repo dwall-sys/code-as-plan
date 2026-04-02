@@ -4332,10 +4332,10 @@ function install(isGlobal, runtime = 'claude') {
     const agentsDest = path.join(targetDir, 'agents');
     fs.mkdirSync(agentsDest, { recursive: true });
 
-    // Remove old CAP agents (gsd-*.md) before copying new ones
+    // Remove old agents (both gsd-*.md and cap-*.md) before copying new ones
     if (fs.existsSync(agentsDest)) {
       for (const file of fs.readdirSync(agentsDest)) {
-        if (file.startsWith('cap-') && file.endsWith('.md')) {
+        if ((file.startsWith('cap-') || file.startsWith('gsd-')) && file.endsWith('.md')) {
           fs.unlinkSync(path.join(agentsDest, file));
         }
       }
