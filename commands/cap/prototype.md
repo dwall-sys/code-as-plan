@@ -51,6 +51,7 @@ Check `$ARGUMENTS` for:
 - `--annotate` -- if present, set `mode = "ANNOTATE"`
 - `--interactive` -- if present, set `interactive_mode = true`
 - `--non-interactive` -- if present, set `non_interactive = true`
+- `--skip-research` -- if present, set `skip_research = true`
 - `path` -- target directory (defaults to `.`)
 
 If neither `--architecture` nor `--annotate`: set `mode = "PROTOTYPE"`
@@ -115,6 +116,102 @@ Use AskUserQuestion:
 
 - If `yes`: proceed to Step 3
 - If corrections: incorporate and re-display
+
+## Step 2b: Pitfall Research (unless --skip-research)
+
+<!-- @cap-feature(feature:F-024) Pre-Work Pitfall Research -->
+<!-- @cap-todo(ac:F-024/AC-1) Detect technologies/services from package.json, ACs, code context -->
+<!-- @cap-todo(ac:F-024/AC-2) Research known pitfalls via Context7 and web search -->
+<!-- @cap-todo(ac:F-024/AC-7) User can skip with --skip-research -->
+
+**Skip this step if `--skip-research` is in the arguments or `mode == "ANNOTATE"`.**
+
+**Detect technologies involved:**
+
+```bash
+node -e "
+const fs = require('node:fs');
+const path = require('node:path');
+const cwd = process.cwd();
+const techs = new Set();
+
+// From package.json dependencies
+const pkgPath = path.join(cwd, 'package.json');
+if (fs.existsSync(pkgPath)) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    for (const dep of Object.keys(allDeps)) {
+      // Major frameworks and services that have known pitfalls
+      const known = ['supabase','firebase','prisma','drizzle','next','nuxt','react','vue','svelte','express','fastify','stripe','auth0','clerk','passport','redis','postgres','mongodb','docker','kubernetes','vercel','netlify','aws-sdk','@aws-sdk','googleapis','twilio','sendgrid','socket.io','trpc','graphql','apollo'];
+      if (known.some(k => dep.includes(k))) techs.add(dep);
+    }
+  } catch(_) {}
+}
+
+// From AC descriptions
+const targetACs = ${JSON.stringify([])}; // placeholder — filled by command layer
+console.log(JSON.stringify([...techs]));
+"
+```
+
+Also scan the AC descriptions for technology keywords:
+
+Extract technology names from the target features' ACs by matching common service/framework names (Supabase, Firebase, Stripe, OAuth, SSO, Redis, Docker, etc.).
+
+Store combined list as `detected_techs`.
+
+**If detected_techs is not empty:**
+
+<!-- @cap-todo(ac:F-024/AC-3) Present pitfall briefing to user -->
+<!-- @cap-todo(ac:F-024/AC-4) Prioritize critical pitfalls at top -->
+
+For each detected technology, run Context7 docs fetch if not cached:
+
+```bash
+npx ctx7@latest docs {library_id} "common pitfalls problems gotchas migration issues" 2>/dev/null | head -200
+```
+
+Also search for known issues:
+
+```bash
+npx ctx7@latest library {tech_name} "known issues pitfalls" 2>/dev/null | head -50
+```
+
+**Compile the Pitfall Briefing** from research results. Categorize findings:
+
+```
+🔍 Pitfall Research: {comma-separated tech names}
+
+⚠️ CRITICAL (likely to cause hours of debugging):
+  {N}. {pitfall description + workaround}
+
+📋 COMMON MISTAKES:
+  {N}. {pitfall description + workaround}
+
+💡 GOOD TO KNOW:
+  {N}. {tip or best practice}
+```
+
+Display the briefing to the user.
+
+<!-- @cap-todo(ac:F-024/AC-6) Persist briefing in .cap/pitfalls/ -->
+
+**Save the briefing:**
+
+Write `.cap/pitfalls/{feature_id}.md` using the Write tool with the pitfall briefing content.
+
+```bash
+mkdir -p .cap/pitfalls
+```
+
+<!-- @cap-todo(ac:F-024/AC-5) Agent receives briefing as context -->
+
+Store as `pitfall_briefing` — this will be passed to the cap-prototyper agent in Step 3.
+
+**If detected_techs is empty:**
+
+Log: "No known-pitfall technologies detected. Skipping research."
 
 ## Step 3: Derive project context and spawn cap-prototyper
 
@@ -208,6 +305,13 @@ Scan the target directory for source files, read each, and add appropriate tags.
 **Stack documentation available in .cap/stack-docs/:**
 {list of available docs}
 Read these before generating code that uses those libraries.
+{End if}
+
+{If pitfall_briefing:}
+**⚠️ PITFALL BRIEFING — Read before writing code:**
+{pitfall_briefing}
+You MUST account for these known pitfalls in your implementation.
+If an AC conflicts with a pitfall workaround, document the deviation with @cap-decision.
 {End if}
 ```
 

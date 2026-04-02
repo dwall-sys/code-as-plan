@@ -352,6 +352,21 @@
 | AC-5 | pending | Checklist formatted as markdown checkboxes (- [ ]) so user can check off items directly |
 | AC-6 | pending | Emoji formatting appears in terminal command output only — FEATURE-MAP.md and other stored files remain emoji-free |
 
+### F-024: Pre-Work Pitfall Research [shipped]
+
+**Depends on:** F-004
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Before /cap:prototype, detect which technologies/services are involved (from package.json, ACs, code context) |
+| AC-2 | pending | For detected technologies, automatically research known pitfalls via Context7 docs and web search |
+| AC-3 | pending | Present research as a Pitfall Briefing to the user — known problems, common mistakes, workarounds |
+| AC-4 | pending | Briefing shall be prioritized: critical pitfalls (causing hours of debugging) at top, nice-to-know at bottom |
+| AC-5 | pending | Prototyper/debugger agent receives the briefing as context so it avoids known pitfalls when writing code |
+| AC-6 | pending | Pitfall briefing persisted in .cap/pitfalls/{feature-id}.md for later reference |
+| AC-7 | pending | User can skip research with --skip-research flag when they already know the technology well |
+| AC-8 | pending | /cap:debug shall also trigger pitfall research for the technologies involved in the bug, surfacing known issues before investigation begins |
+
 ## Legend
 
 | State | Meaning |
@@ -362,4 +377,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-02T13:26:30.967Z*
+*Last updated: 2026-04-02T14:14:11.936Z*

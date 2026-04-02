@@ -217,6 +217,92 @@ session.updateSession(process.cwd(), {
 "
 ```
 
+## Step 2c: Pitfall Research for Debug Context
+
+<!-- @cap-feature(feature:F-024) Pre-Work Pitfall Research -->
+<!-- @cap-todo(ac:F-024/AC-8) /cap:debug triggers pitfall research for technologies involved in the bug -->
+<!-- @cap-todo(ac:F-024/AC-1) Detect technologies from symptoms, package.json, and code context -->
+<!-- @cap-todo(ac:F-024/AC-2) Research known pitfalls via Context7 -->
+
+**Detect technologies from symptoms and project:**
+
+Scan the `symptoms` text for technology keywords (Supabase, Firebase, OAuth, SSO, Redis, Docker, etc.).
+Also check `package.json` for relevant dependencies.
+
+```bash
+node -e "
+const fs = require('node:fs');
+const path = require('node:path');
+const cwd = process.cwd();
+const techs = new Set();
+const symptoms = process.argv[1] || '';
+
+// Technology keywords to detect in symptoms
+const keywords = ['supabase','firebase','prisma','drizzle','next','nuxt','react','vue','svelte','express','fastify','stripe','auth0','clerk','passport','redis','postgres','mongodb','docker','kubernetes','vercel','netlify','aws','oauth','sso','jwt','cookie','session','cors','webhook','websocket','graphql','trpc'];
+const sympLower = symptoms.toLowerCase();
+for (const kw of keywords) {
+  if (sympLower.includes(kw)) techs.add(kw);
+}
+
+// From package.json
+const pkgPath = path.join(cwd, 'package.json');
+if (fs.existsSync(pkgPath)) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    for (const dep of Object.keys(allDeps)) {
+      const known = ['supabase','firebase','prisma','drizzle','next','nuxt','stripe','auth0','clerk','passport','redis','socket.io','trpc','graphql','apollo'];
+      if (known.some(k => dep.includes(k))) techs.add(dep);
+    }
+  } catch(_) {}
+}
+console.log(JSON.stringify([...techs]));
+" '{symptoms}'
+```
+
+Store as `detected_techs`.
+
+**If detected_techs is not empty:**
+
+<!-- @cap-todo(ac:F-024/AC-3) Present pitfall briefing -->
+<!-- @cap-todo(ac:F-024/AC-4) Critical pitfalls at top -->
+
+For each detected technology, fetch known pitfalls via Context7:
+
+```bash
+npx ctx7@latest docs {library_id} "common pitfalls problems debugging issues" 2>/dev/null | head -200
+```
+
+Also check for cached pitfalls from previous sessions:
+
+```bash
+ls .cap/pitfalls/*.md 2>/dev/null | head -5
+```
+
+**Compile and display the Pitfall Briefing:**
+
+```
+🔍 Pitfall Research for Debug: {tech names}
+
+⚠️ KNOWN ISSUES (check these first — they cause the most debugging time):
+  {N}. {pitfall + typical symptom + fix}
+
+📋 COMMON CAUSES for "{symptom keywords}":
+  {N}. {cause + how to verify}
+```
+
+<!-- @cap-todo(ac:F-024/AC-6) Persist briefing -->
+
+Save briefing to `.cap/pitfalls/debug-{session_id}.md`.
+
+<!-- @cap-todo(ac:F-024/AC-5) Agent receives briefing as context -->
+
+Store as `pitfall_briefing` — passed to the cap-debugger agent in Step 3.
+
+**If detected_techs is empty:**
+
+Log: "No known-pitfall technologies detected in symptoms. Skipping research."
+
 ## Step 3: Spawn cap-debugger agent
 
 <!-- @cap-todo(ref:AC-65) cap-debugger shall follow a hypothesis -> test -> verify loop, documenting each step. -->
@@ -263,9 +349,21 @@ Spawn `cap-debugger` via Task tool:
 {If deploy-aware:} - .cap/debug/DEPLOY-LOG-{session_id}.md {End if}
 </files_to_read>
 
+{If pitfall_briefing:}
+**⚠️ PITFALL BRIEFING — Check these known issues FIRST before forming hypotheses:**
+{pitfall_briefing}
+Start your investigation by checking whether any of these known pitfalls match the symptoms.
+If a known pitfall matches, prioritize it as H1 in your hypothesis list.
+{End if}
+
 **Instructions:**
 1. Read all files listed above
+{If pitfall_briefing:}
+2. Check known pitfalls from the briefing against the symptoms FIRST
+3. Form ranked hypotheses (pitfall matches first, then original hypotheses)
+{Else:}
 2. Analyze symptoms and form ranked hypotheses
+{End if}
 3. Test each hypothesis through code reading and execution
 4. Document each step in the debug session file
 {If deploy-aware:}
