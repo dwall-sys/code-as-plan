@@ -367,6 +367,40 @@
 | AC-7 | pending | User can skip research with --skip-research flag when they already know the technology well |
 | AC-8 | pending | /cap:debug shall also trigger pitfall research for the technologies involved in the bug, surfacing known issues before investigation begins |
 
+### F-025: Implement Session Extract CLI [shipped]
+
+**Depends on:** F-003
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Provide a `cap extract list` subcommand that displays all Claude sessions with date, file size, turn count, and a short preview of the first user message |
+| AC-2 | pending | Provide a `cap extract stats <session#>` subcommand that outputs token counts (input/output), tool usage distribution by tool name, session duration, and total turn count as structured Markdown |
+| AC-3 | pending | Provide a `cap extract <session#> conversation` subcommand that outputs user/assistant dialogue turns as Markdown, excluding tool calls and system messages |
+| AC-4 | pending | Provide a `cap extract <session#> code` subcommand that extracts all file writes and edits grouped by file path with operation type |
+| AC-5 | pending | Provide a `cap extract <session#> summary` subcommand that outputs a structured Markdown summary containing decisions, files changed, features touched, and key outcomes |
+| AC-6 | pending | Implement core extraction logic in `cap/bin/lib/cap-session-extract.cjs` by migrating existing `.claude/hooks/session-extract.js` to CJS with zero external dependencies |
+| AC-7 | pending | Register `extract` as a subcommand of `npx code-as-plan` with standard help text and error handling |
+| AC-8 | pending | Support session references by both numeric index (most recent = 1) and date-based lookup |
+
+**Files:**
+- `cap/bin/lib/cap-session-extract.cjs`
+
+### F-026: Implement Cross-Session Aggregation [shipped]
+
+**Depends on:** F-025
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Provide a `cap extract decisions --all` subcommand that scans all sessions and outputs decisions with session date and context as structured Markdown |
+| AC-2 | pending | Provide a `cap extract hotspots` subcommand that ranks files by edit frequency across all sessions |
+| AC-3 | pending | Provide a `cap extract timeline` subcommand that outputs a chronological Markdown view of work across sessions |
+| AC-4 | pending | Provide a `cap extract cost` subcommand that aggregates token usage across sessions with configurable per-token rates |
+| AC-5 | pending | All cross-session subcommands shall support a `--since <date>` flag to filter sessions by date range |
+| AC-6 | pending | Reuse single-session parsing logic from F-025 without duplicating extraction code |
+
+**Files:**
+- `cap/bin/lib/cap-session-extract.cjs`
+
 ## Legend
 
 | State | Meaning |

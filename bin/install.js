@@ -52,6 +52,21 @@ const pkg = require('../package.json');
 
 // Parse args
 const args = process.argv.slice(2);
+
+// --- Subcommand routing (before installer flow) ---
+// @cap-feature(feature:F-025) Route "cap extract" subcommand to session extract module
+if (args[0] === 'extract') {
+  try {
+    const extract = require('../cap/bin/lib/cap-session-extract.cjs');
+    const output = extract.run(args.slice(1));
+    console.log(output);
+    process.exit(0);
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+}
+
 const hasGlobal = args.includes('--global') || args.includes('-g');
 const hasLocal = args.includes('--local') || args.includes('-l');
 const hasOpencode = args.includes('--opencode');
