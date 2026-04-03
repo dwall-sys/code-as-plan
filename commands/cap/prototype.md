@@ -1,7 +1,7 @@
 ---
 name: cap:prototype
 description: Feature Map-driven prototype pipeline -- reads FEATURE-MAP.md, confirms ACs with user, spawns cap-prototyper to build annotated code scaffold. Supports --architecture and --annotate modes.
-argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive]"
+argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch]"
 allowed-tools:
   - Read
   - Write
@@ -32,6 +32,7 @@ On completion, automatically runs `/cap:scan` to update Feature Map status.
 - `--annotate` -- retroactively annotate existing code with @cap-feature tags
 - `--interactive` -- pause after each iteration
 - `--non-interactive` -- skip AC confirmation gate (for CI)
+- `--no-branch` -- stay on current branch (skip auto feature-branch creation)
 </objective>
 
 <context>
@@ -52,6 +53,7 @@ Check `$ARGUMENTS` for:
 - `--interactive` -- if present, set `interactive_mode = true`
 - `--non-interactive` -- if present, set `non_interactive = true`
 - `--skip-research` -- if present, set `skip_research = true`
+- `--no-branch` -- if present, set `skip_branch = true`
 - `path` -- target directory (defaults to `.`)
 
 If neither `--architecture` nor `--annotate`: set `mode = "PROTOTYPE"`
@@ -87,6 +89,32 @@ Store filtered list as `target_features`.
 
 If `target_features` is empty: STOP and report:
 > "No features in scope. Run /cap:brainstorm to discover features, or specify --features."
+
+## Step 1b: Create feature branch (unless --no-branch or --annotate)
+
+**Skip if `skip_branch` is true, `mode == "ANNOTATE"`, or already on a feature branch.**
+
+When prototyping a new feature on `main`, automatically create a feature branch to keep main clean.
+
+```bash
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+```
+
+If `CURRENT_BRANCH` is `main` or `master` AND `mode` is `PROTOTYPE` or `ARCHITECTURE`:
+
+1. Derive branch name from the first target feature:
+   - Take feature ID + title slug: `feature/F-031-conversation-thread-tracking`
+   - Slugify: lowercase, replace spaces/special chars with hyphens, max 60 chars
+
+```bash
+git checkout -b "feature/{feature_id}-{slug}" 2>/dev/null
+```
+
+2. Log: `Created branch: feature/{feature_id}-{slug}`
+
+If `CURRENT_BRANCH` is already a `feature/` branch: stay on it, log: `Already on feature branch: {CURRENT_BRANCH}`
+
+If git is not available or not a git repo: skip silently.
 
 ## Step 2: Present ACs for confirmation
 
