@@ -18,6 +18,8 @@ const cyan = '\x1b[36m';
 const green = '\x1b[32m';
 const yellow = '\x1b[33m';
 const dim = '\x1b[2m';
+const magenta = '\x1b[35m';
+const bold = '\x1b[1m';
 const reset = '\x1b[0m';
 
 // Codex config.toml constants
@@ -297,16 +299,18 @@ function getGlobalDir(runtime, explicitDir = null) {
 }
 
 const banner = '\n' +
-  cyan + '   ██████╗ █████╗ ██████╗\n' +
+  magenta + bold + '   ██████╗ █████╗ ██████╗\n' +
   '  ██╔════╝██╔══██╗██╔══██╗\n' +
   '  ██║     ███████║██████╔╝\n' +
   '  ██║     ██╔══██║██╔═══╝\n' +
   '  ╚██████╗██║  ██║██║\n' +
   '   ╚═════╝╚═╝  ╚═╝╚═╝' + reset + '\n' +
   '\n' +
-  '  Code as Plan ' + dim + 'v' + pkg.version + reset + '\n' +
-  '  Code-first development framework — build first, annotate,\n' +
-  '  iterate. For Claude Code, OpenCode, Gemini, Codex, Copilot, Antigravity, Cursor, and Windsurf.\n';
+  '  ' + bold + 'Code as Plan' + reset + ' ' + dim + 'v' + pkg.version + reset + '\n' +
+  '  Build first. Plan from code. Ship with confidence.\n' +
+  '\n' +
+  '  ' + cyan + 'New in v3:' + reset + ' Project Memory System — code-first decisions,\n' +
+  '  conversation threading, impact analysis, and connected memory graph.\n';
 
 // Parse --config-dir argument
 function parseConfigDirArg() {
@@ -4844,12 +4848,20 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
   if (runtime === 'antigravity') command = '/cap-new-project';
   if (runtime === 'cursor') command = 'cap-new-project (mention the skill name)';
   console.log(`
+  ${magenta}${bold}CAP v${pkg.version} installed.${reset}
+
   ${green}Done!${reset} Open a directory in ${program} and run ${cyan}/cap:init${reset} to get started.
 
-  ${dim}Note: The first /cap:init will fetch library docs via Context7 (npx ctx7@latest).
-  This may take a few seconds on first run — results are cached in .cap/stack-docs/.${reset}
+  ${bold}Quick start:${reset}
+    /cap:init          Initialize project + detect stack
+    /cap:brainstorm    Discover features interactively
+    /cap:prototype     Build annotated code from Feature Map
+    /cap:memory init   Bootstrap project memory from sessions + code
 
-  ${cyan}Join the community:${reset} https://discord.gg/code-as-plan
+  ${dim}The first /cap:init will fetch library docs via Context7 (npx ctx7@latest).
+  Results are cached in .cap/stack-docs/.${reset}
+
+  ${cyan}Docs:${reset}  https://github.com/dwall-sys/code-as-plan
 `);
 }
 
