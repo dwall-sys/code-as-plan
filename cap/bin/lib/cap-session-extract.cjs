@@ -33,6 +33,57 @@ function getProjectDir(cwd) {
   return null;
 }
 
+/**
+ * Find all Claude Code project directories for a path and its sub-projects.
+ * For monorepos: if cwd is /GoetzeInvest, finds sessions for GoetzeInvest,
+ * GoetzeInvest/GoetzeBooking, GoetzeInvest/EasySign, etc.
+ * @param {string} cwd - Current working directory (typically monorepo root)
+ * @returns {Array<{dir: string, name: string}>} Project directories with display names
+ */
+function getProjectDirsWithChildren(cwd) {
+  if (!fs.existsSync(PROJECTS_DIR)) return [];
+  const encoded = cwd.replace(/\//g, '-');
+  const results = [];
+
+  for (const d of fs.readdirSync(PROJECTS_DIR)) {
+    if (d.startsWith(encoded)) {
+      const fullPath = path.join(PROJECTS_DIR, d);
+      // Extract the sub-path relative to cwd for display
+      const suffix = d.slice(encoded.length);
+      const name = suffix ? suffix.replace(/^-/, '').replace(/-/g, '/') : '(root)';
+      results.push({ dir: fullPath, name });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Get all session files across a project and its sub-projects (monorepo-aware).
+ * @param {string} cwd - Working directory
+ * @returns {{files: Array<{file: string, path: string, date: string|null, size: number, project: string}>, projects: string[]}}
+ */
+function getAllSessionFiles(cwd) {
+  const projectDirs = getProjectDirsWithChildren(cwd);
+  const allFiles = [];
+  const projects = [];
+
+  for (const { dir, name } of projectDirs) {
+    const files = getSessionFiles(dir);
+    if (files.length > 0) {
+      projects.push(`${name} (${files.length} sessions)`);
+      for (const f of files) {
+        allFiles.push({ ...f, project: name });
+      }
+    }
+  }
+
+  // Sort all files by date, most recent first
+  allFiles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  return { files: allFiles, projects };
+}
+
 // --- JSONL Parsing ---
 
 /**
@@ -904,6 +955,8 @@ module.exports = {
   extractCost,
   resolveSessionRef,
   getProjectDir,
+  getProjectDirsWithChildren,
+  getAllSessionFiles,
   parseSession,
   getSessionFiles,
   filterBySince,

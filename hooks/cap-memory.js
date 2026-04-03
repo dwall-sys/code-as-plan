@@ -86,11 +86,23 @@ function run(options = {}) {
     return;
   }
 
-  // Find project sessions
-  const projectDir = extract.getProjectDir(cwd);
-  if (!projectDir) return;
+  // Find project sessions — monorepo-aware for init, single-project for incremental
+  let allSessionFiles;
+  let projectInfo;
 
-  const allSessionFiles = extract.getSessionFiles(projectDir);
+  if (options.init && extract.getAllSessionFiles) {
+    // Init mode: scan all sub-project sessions (monorepo-aware)
+    const result = extract.getAllSessionFiles(cwd);
+    allSessionFiles = result.files;
+    projectInfo = result.projects;
+  } else {
+    // Incremental mode: single project only (fast)
+    const projectDir = extract.getProjectDir(cwd);
+    if (!projectDir) return;
+    allSessionFiles = extract.getSessionFiles(projectDir);
+    projectInfo = null;
+  }
+
   if (allSessionFiles.length === 0) return;
 
   // Incremental: only process sessions since last run (unless init mode)
@@ -155,6 +167,12 @@ function run(options = {}) {
   // Report in init mode
   if (options.init) {
     const elapsed2 = Date.now() - startTime;
+    if (projectInfo && projectInfo.length > 1) {
+      process.stdout.write(`cap-memory init: monorepo mode — ${projectInfo.length} sub-projects found\n`);
+      for (const p of projectInfo) {
+        process.stdout.write(`  ${p}\n`);
+      }
+    }
     process.stdout.write(`cap-memory init: ${sessionFiles.length} sessions processed in ${elapsed2}ms\n`);
     process.stdout.write(`  decisions: ${result.stats.decisions}, pitfalls: ${result.stats.pitfalls}, patterns: ${result.stats.patterns}, hotspots: ${result.stats.hotspots}\n`);
   }
