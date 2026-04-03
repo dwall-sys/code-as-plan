@@ -5,8 +5,9 @@
 //
 // Pipeline: F-027 (Engine) → F-028 (Annotation Writer) → F-029 (Memory Directory)
 //
-// Reads Claude Code session JSONL files, extracts decisions/pitfalls/patterns/hotspots,
-// writes annotations into source files and generates .cap/memory/ directory.
+// Two modes:
+//   Incremental (default): Only processes sessions newer than .cap/memory/.last-run
+//   Init (via /cap:memory init): Processes ALL sessions, builds initial memory
 //
 // Skip with CAP_SKIP_MEMORY=1 environment variable.
 
@@ -27,10 +28,50 @@ function tryRequire(modulePath) {
   try { return require(modulePath); } catch { return null; }
 }
 
+const LAST_RUN_FILE = '.last-run';
+
+/**
+ * Read the last-run timestamp from .cap/memory/.last-run
+ * @param {string} cwd
+ * @returns {string|null} ISO timestamp or null if never run
+ */
+function readLastRun(cwd) {
+  const fp = path.join(cwd, '.cap', 'memory', LAST_RUN_FILE);
+  try {
+    return fs.readFileSync(fp, 'utf8').trim() || null;
+  } catch { return null; }
+}
+
+/**
+ * Write the current timestamp to .cap/memory/.last-run
+ * @param {string} cwd
+ */
+function writeLastRun(cwd) {
+  const dir = path.join(cwd, '.cap', 'memory');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, LAST_RUN_FILE), new Date().toISOString(), 'utf8');
+}
+
+/**
+ * Filter session files to only those newer than a timestamp.
+ * @param {Array<{path: string, date: string|null}>} files
+ * @param {string|null} since - ISO timestamp
+ * @returns {Array}
+ */
+function filterNewSessions(files, since) {
+  if (!since) return files; // No last-run = process all
+  return files.filter(f => f.date && f.date > since);
+}
+
 // @cap-todo(ref:F-030:AC-1) Post-session hook triggers F-027→F-028→F-029 pipeline
 // @cap-todo(ref:F-030:AC-7) Hook completes within 5 seconds for up to 50 session files
 
-function run() {
+/**
+ * Run the memory pipeline.
+ * @param {Object} [options]
+ * @param {boolean} [options.init] - If true, process ALL sessions (bootstrap mode)
+ */
+function run(options = {}) {
   const startTime = Date.now();
   const cwd = process.cwd();
 
@@ -49,8 +90,14 @@ function run() {
   const projectDir = extract.getProjectDir(cwd);
   if (!projectDir) return;
 
-  const sessionFiles = extract.getSessionFiles(projectDir);
-  if (sessionFiles.length === 0) return;
+  const allSessionFiles = extract.getSessionFiles(projectDir);
+  if (allSessionFiles.length === 0) return;
+
+  // Incremental: only process sessions since last run (unless init mode)
+  const lastRun = options.init ? null : readLastRun(cwd);
+  const sessionFiles = filterNewSessions(allSessionFiles, lastRun);
+
+  if (sessionFiles.length === 0) return; // Nothing new
 
   // Detect debug sessions from SESSION.json
   let activeDebug = false;
@@ -62,15 +109,18 @@ function run() {
     }
   } catch { /* ignore */ }
 
-  // F-027: Accumulate memory from sessions (limit to last 10 for performance)
-  const recentFiles = sessionFiles.slice(0, 10).map(f => ({
+  // F-027: Accumulate memory from sessions
+  const filesToProcess = sessionFiles.map(f => ({
     path: f.path,
     isDebugSession: activeDebug,
   }));
 
-  const result = engine.accumulateFromFiles(recentFiles);
+  const result = engine.accumulateFromFiles(filesToProcess);
 
-  if (result.stats.total === 0 && result.staleEntries.length === 0) return;
+  if (result.stats.total === 0 && result.staleEntries.length === 0) {
+    writeLastRun(cwd);
+    return;
+  }
 
   // F-028: Write annotations into source files
   const fileEntries = {};
@@ -93,15 +143,29 @@ function run() {
   // F-029: Write memory directory
   memDir.writeMemoryDirectory(cwd, result.newEntries);
 
+  // Save last-run timestamp
+  writeLastRun(cwd);
+
   // Performance check
   const elapsed = Date.now() - startTime;
-  if (elapsed > 5000) {
+  if (elapsed > 5000 && !options.init) {
     process.stderr.write(`cap-memory: warning — hook took ${elapsed}ms (target: <5000ms)\n`);
+  }
+
+  // Report in init mode
+  if (options.init) {
+    const elapsed2 = Date.now() - startTime;
+    process.stdout.write(`cap-memory init: ${sessionFiles.length} sessions processed in ${elapsed2}ms\n`);
+    process.stdout.write(`  decisions: ${result.stats.decisions}, pitfalls: ${result.stats.pitfalls}, patterns: ${result.stats.patterns}, hotspots: ${result.stats.hotspots}\n`);
   }
 }
 
+// CLI mode: support "init" argument for bootstrap
+const args = process.argv.slice(2);
+const isInit = args.includes('init') || args.includes('--init');
+
 try {
-  run();
+  run({ init: isInit });
 } catch (err) {
   // Never block session end — fail silently
   process.stderr.write(`cap-memory: ${err.message}\n`);
