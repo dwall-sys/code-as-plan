@@ -490,7 +490,7 @@ function accumulateFromCode(tags) {
       });
     }
 
-    // @cap-todo risk: → pitfall entries
+    // Extract pitfalls from @cap-todo with risk: subtype
     if (tag.type === 'todo' && tag.subtype === 'risk') {
       const desc = tag.description.replace(/^risk:\s*/i, '');
       if (!desc || desc.length < 10) continue;
@@ -513,7 +513,7 @@ function accumulateFromCode(tags) {
       });
     }
 
-    // @cap-risk → pitfall entries (standalone risk tags)
+    // Extract pitfalls from standalone @cap-risk tags
     if (tag.type === 'risk') {
       if (!tag.description || tag.description.length < 10) continue;
       const key = tag.description.substring(0, 80).toLowerCase();
