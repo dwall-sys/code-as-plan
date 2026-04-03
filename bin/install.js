@@ -3568,7 +3568,7 @@ function uninstall(isGlobal, runtime = 'claude') {
   // 4. Remove CAP hooks
   const hooksDir = path.join(targetDir, 'hooks');
   if (fs.existsSync(hooksDir)) {
-    const capHooks = ['cap-statusline.js', 'cap-check-update.js', 'cap-context-monitor.js', 'cap-prompt-guard.js', 'cap-workflow-guard.js',
+    const capHooks = ['cap-statusline.js', 'cap-check-update.js', 'cap-context-monitor.js', 'cap-prompt-guard.js', 'cap-workflow-guard.js', 'cap-memory.js',
       'gsd-statusline.js', 'gsd-check-update.js', 'gsd-check-update.sh', 'gsd-context-monitor.js', 'gsd-prompt-guard.js', 'gsd-workflow-guard.js'];
     let hookCount = 0;
     for (const hook of capHooks) {
@@ -4640,6 +4640,9 @@ function install(isGlobal, runtime = 'claude') {
   const promptGuardCommand = isGlobal
     ? buildHookCommand(targetDir, 'cap-prompt-guard.js')
     : 'node ' + dirName + '/hooks/cap-prompt-guard.js';
+  const memoryHookCommand = isGlobal
+    ? buildHookCommand(targetDir, 'cap-memory.js')
+    : 'node ' + dirName + '/hooks/cap-memory.js';
 
   // Enable experimental agents for Gemini CLI (required for custom sub-agents)
   if (isGemini) {
@@ -4743,6 +4746,28 @@ function install(isGlobal, runtime = 'claude') {
         ]
       });
       console.log(`  ${green}✓${reset} Configured prompt injection guard hook`);
+    }
+
+    // Configure Stop hook for project memory accumulation
+    if (!settings.hooks.Stop) {
+      settings.hooks.Stop = [];
+    }
+
+    const hasMemoryHook = settings.hooks.Stop.some(entry =>
+      entry.hooks && entry.hooks.some(h => h.command && h.command.includes('cap-memory'))
+    );
+
+    if (!hasMemoryHook) {
+      settings.hooks.Stop.push({
+        hooks: [
+          {
+            type: 'command',
+            command: memoryHookCommand,
+            timeout: 10
+          }
+        ]
+      });
+      console.log(`  ${green}✓${reset} Configured project memory hook`);
     }
   }
 
