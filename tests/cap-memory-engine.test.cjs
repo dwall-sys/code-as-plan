@@ -81,7 +81,7 @@ describe('analyzeSession', () => {
     const session = makeSession({
       messages: [
         userMsg('fix auth'),
-        assistantMsg('I decided to use token-based refresh. The root cause is expired cookies.'),
+        assistantMsg('I decided to use token-based refresh because the root cause is expired session cookies in the auth middleware.'),
       ],
     });
     const result = analyzeSession(session);
@@ -361,7 +361,7 @@ describe('accumulateFromFiles', () => {
       { sessionId: 's1', timestamp: '2026-03-01T10:00:00Z', gitBranch: 'main' },
       { type: 'user', message: { content: 'fix auth' } },
       { type: 'assistant', message: { content: [
-        { type: 'text', text: 'I decided to refactor auth. The root cause is expired tokens.' },
+        { type: 'text', text: 'I decided to refactor the auth module because the root cause is expired tokens in the session middleware.' },
         { type: 'tool_use', name: 'Edit', input: { file_path: '/src/auth.js', old_string: 'a', new_string: 'b' } },
       ] } },
     ]);

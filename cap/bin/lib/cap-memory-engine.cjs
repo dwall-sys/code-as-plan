@@ -118,11 +118,74 @@ function stripTags(text) {
   return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim();
 }
 
+/** Patterns that indicate conversational noise rather than real knowledge. */
+const NOISE_PATTERNS = [
+  // Conversational openers/fillers
+  /^(Let me |Let's |I'll |I will |Now |OK|Sure|Got it|Done|Great|Perfect|Absolutely|Here's|Here is|Alright)/i,
+  // Imperative prompts from agent
+  /^(Please |Provide |Check |Run |Show |Read |Write |Create |Update |Delete |Review |Look |Schauen|Lass)/i,
+  // Markdown formatting: tables, headers, bold-prefixed lines, quotes, HR, code blocks
+  /^\||^```|^#+\s|^\*\*[A-Z]|^>\s|^---|^- \*\*/,
+  // Code/command references
+  /^`\//,
+  // Numbered lists, bullet points
+  /^\d+[\.\)]\s|^- [a-z]/,
+  // GSD/CAP command references
+  /^`?(\/gsd:|\/cap:|cap:|gsd:)/,
+  // Status/log messages
+  /^(Last scan|Shell cwd|Exit code|Session|Commit|What was generated)/i,
+  // German filler
+  /^(Aendere|Weiter mit|Dann |Jetzt |Genau)/i,
+  // Agent workflow noise
+  /^(Starting|Spawning|Loading|Checking|Analyzing|Processing|Running|Scanning)/i,
+  // Contains only markdown bold + colon (structured output, not prose)
+  /^\*\*.*:\*\*$/,
+  // Lines starting with bold (structured output headers, not decisions)
+  /^\*\*\d+-\d+/,
+  // Bullet lists that start with "- Discovers", "- Analyzes", etc. (agent workflow descriptions)
+  /^- (Discovers|Analyzes|Creates|Produces|Reads|Writes|Returns|Generates|Validates|Checks)/i,
+];
+
+/**
+ * Check if a sentence is conversational noise rather than real knowledge.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isNoise(text) {
+  return NOISE_PATTERNS.some(p => p.test(text));
+}
+
+/**
+ * Normalize a file path for cross-session matching.
+ * Strips worktree paths and resolves to monorepo-relative path.
+ * @param {string} fp - Absolute file path
+ * @param {string|null} projectRoot - Project root to make paths relative
+ * @returns {string} Normalized path
+ */
+function normalizeFilePath(fp, projectRoot) {
+  if (!fp) return fp;
+  let normalized = fp;
+  // Strip worktree prefix: .claude/worktrees/<name>/ → ""
+  normalized = normalized.replace(/\.claude\/worktrees\/[^/]+\//, '');
+  // Strip /private/var/folders temp paths for worktrees
+  const worktreeMatch = normalized.match(/\/private\/var\/.*?\/([^/]+)\/(.*)/);
+  if (worktreeMatch) {
+    // Try to find the project name in the path
+    normalized = worktreeMatch[2] || normalized;
+  }
+  // Make relative to project root if provided
+  if (projectRoot && normalized.startsWith(projectRoot)) {
+    normalized = normalized.substring(projectRoot.length).replace(/^\//, '');
+  }
+  return normalized;
+}
+
 /**
  * Analyze a single parsed session for memory-worthy content.
  * @param {Object} parsed - { meta, messages } from parseSession
  * @param {Object} [options]
  * @param {boolean} [options.isDebugSession] - Whether this session was a debug session
+ * @param {string} [options.projectRoot] - Project root for path normalization
  * @returns {{decisions: string[], pitfalls: string[], patterns: string[], editedFiles: Object<string, number>, features: Set<string>}}
  */
 function analyzeSession(parsed, options = {}) {
@@ -134,41 +197,44 @@ function analyzeSession(parsed, options = {}) {
   const features = new Set();
 
   for (const msg of messages) {
-    if (msg.isSidechain) continue;
+    if (msg.type !== 'assistant') continue;
 
-    if (msg.type === 'assistant') {
-      const text = stripTags(extractText(msg));
-      if (!text) continue;
-
-      // Collect file edits
-      for (const tool of extractTools(msg)) {
-        if (tool.tool === 'Write' || tool.tool === 'Edit' || tool.tool === 'MultiEdit') {
-          const fp = tool.input?.file_path || tool.input?.filePath || null;
-          if (fp) editedFiles[fp] = (editedFiles[fp] || 0) + 1;
+    // File edits: collect from ALL messages including subagents
+    for (const tool of extractTools(msg)) {
+      if (tool.tool === 'Write' || tool.tool === 'Edit' || tool.tool === 'MultiEdit') {
+        const rawFp = tool.input?.file_path || tool.input?.filePath || null;
+        if (rawFp) {
+          // Skip planning/memory/config artifacts — not real source code hotspots
+          if (/\.(planning|cap)\/|memory\/|\.claude\/|SESSION\.json|MEMORY\.md|STATE\.md/.test(rawFp)) continue;
+          const fp = normalizeFilePath(rawFp, options.projectRoot || null);
+          editedFiles[fp] = (editedFiles[fp] || 0) + 1;
         }
       }
+    }
 
-      // Collect feature references
-      const featureMatches = text.match(FEATURE_RE);
-      if (featureMatches) featureMatches.forEach(f => features.add(f));
+    // Text analysis: include subagent messages (they contain decisions/pitfalls too)
+    const text = stripTags(extractText(msg));
+    if (!text) continue;
 
-      // Extract sentences — skip markdown formatting artifacts
-      const sentences = text.split(/(?<=[.!?\n])\s+/);
-      for (const sentence of sentences) {
-        if (sentence.length < 20 || sentence.length > 500) continue;
-        const clean = sentence.trim();
-        // Skip markdown tables, headers, bullet-lists, and code blocks
-        if (/^\||\*\*[A-Z].*:\*\*|^#+\s|^```|^- \*\*|^>\s/.test(clean)) continue;
+    // Collect feature references
+    const featureMatches = text.match(FEATURE_RE);
+    if (featureMatches) featureMatches.forEach(f => features.add(f));
 
-        if (DECISION_PATTERNS.some(p => p.test(clean))) {
-          decisions.push(clean);
-        }
-        if ((options.isDebugSession || PITFALL_PATTERNS.some(p => p.test(clean))) && PITFALL_PATTERNS.some(p => p.test(clean))) {
-          pitfalls.push(clean);
-        }
-        if (PATTERN_PATTERNS.some(p => p.test(clean))) {
-          patterns.push(clean);
-        }
+    // Extract sentences — skip markdown formatting artifacts
+    const sentences = text.split(/(?<=[.!?\n])\s+/);
+    for (const sentence of sentences) {
+      if (sentence.length < 40 || sentence.length > 500) continue;
+      const clean = sentence.trim();
+      if (isNoise(clean)) continue;
+
+      if (DECISION_PATTERNS.some(p => p.test(clean))) {
+        decisions.push(clean);
+      }
+      if (PITFALL_PATTERNS.some(p => p.test(clean))) {
+        pitfalls.push(clean);
+      }
+      if (PATTERN_PATTERNS.some(p => p.test(clean))) {
+        patterns.push(clean);
       }
     }
   }
@@ -368,6 +434,7 @@ function accumulate(sessionAnalyses, options = {}) {
  * This is the main entry point — reads session files, analyzes them, and accumulates.
  * @param {Array<{path: string, isDebugSession?: boolean}>} sessionFiles - Session file descriptors
  * @param {Object} [options] - Options passed to accumulate()
+ * @param {string} [options.projectRoot] - Project root for file path normalization (monorepo-aware)
  * @returns {AccumulationResult}
  */
 function accumulateFromFiles(sessionFiles, options = {}) {
@@ -392,7 +459,7 @@ function accumulateFromFiles(sessionFiles, options = {}) {
 
       const analysis = analyzeSession(
         { meta: meta || { id: 'unknown', timestamp: null, branch: null }, messages },
-        { isDebugSession: sf.isDebugSession || false }
+        { isDebugSession: sf.isDebugSession || false, projectRoot: options.projectRoot || null }
       );
       analyses.push(analysis);
     } catch { /* skip unreadable files */ }
@@ -435,6 +502,8 @@ module.exports = {
   extractText,
   extractTools,
   stripTags,
+  isNoise,
+  normalizeFilePath,
 
   // Constants (configurable via options, exposed for transparency)
   DEFAULT_STALE_THRESHOLD,

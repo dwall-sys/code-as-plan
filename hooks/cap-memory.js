@@ -127,7 +127,7 @@ function run(options = {}) {
     isDebugSession: activeDebug,
   }));
 
-  const result = engine.accumulateFromFiles(filesToProcess);
+  const result = engine.accumulateFromFiles(filesToProcess, { projectRoot: cwd });
 
   if (result.stats.total === 0 && result.staleEntries.length === 0) {
     writeLastRun(cwd);
