@@ -384,6 +384,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-session-extract.cjs`
+- `bin/install.js`
 
 ### F-026: Implement Cross-Session Aggregation [shipped]
 
@@ -472,6 +473,73 @@
 - `hooks/cap-memory.js`
 - `commands/cap/memory.md`
 
+### F-031: Implement Conversation Thread Tracking [shipped]
+
+**Depends on:** F-003, F-027
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Persist each brainstorm session as a named thread in .cap/memory/threads/ with unique thread ID, timestamp, and parent thread reference (if branched) |
+| AC-2 | pending | Capture full discovery context per thread: problem statement, solution shape, boundary decisions, and resulting Feature Map entries (by F-ID) |
+| AC-3 | pending | Detect when a brainstorm session revisits a topic covered by an existing thread by comparing problem-space keywords and referenced feature IDs |
+| AC-4 | pending | Support thread branching — when a brainstorm diverges from an earlier thread, reference parent thread ID and divergence point |
+| AC-5 | pending | Store thread metadata in .cap/memory/thread-index.json mapping thread IDs to feature IDs, timestamps, and branch relationships |
+| AC-6 | pending | Thread data shall be git-committable (not gitignored) so conversation history persists across clones and team members |
+| AC-7 | pending | cap-brainstormer agent shall automatically check thread index at session start and surface relevant prior threads before beginning discovery |
+
+**Files:**
+- `cap/bin/lib/cap-thread-tracker.cjs`
+
+### F-032: Build Thread Reconnection and Synthesis Engine [shipped]
+
+**Depends on:** F-031
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Present side-by-side comparison of previous thread conclusions versus new session direction when returning thread detected |
+| AC-2 | pending | Propose one of four reconnection strategies: merge (combine threads), supersede (new replaces old), branch (both coexist), or resume (continue where left off) |
+| AC-3 | pending | User shall explicitly approve or reject each reconnection proposal before any Feature Map changes are made |
+| AC-4 | pending | When merge approved, produce unified AC set combining non-conflicting criteria and flagging conflicts for manual resolution |
+| AC-5 | pending | When supersede approved, mark old thread as archived and update Feature Map entries that referenced old thread ACs |
+| AC-6 | pending | Detect AC-level conflicts between threads — contradictory acceptance criteria from different brainstorm sessions |
+| AC-7 | pending | Log synthesis results in .cap/memory/threads/ with resolution record documenting what was merged, split, or discarded and why |
+
+**Files:**
+- `cap/bin/lib/cap-thread-synthesis.cjs`
+
+### F-033: Implement Feature Impact Analysis [shipped]
+
+**Depends on:** F-031, F-002
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Detect overlap between proposed feature and existing Feature Map entries by comparing AC descriptions, dependency chains, and referenced file paths |
+| AC-2 | pending | Run overlap detection automatically during /cap:brainstorm before new Feature Map entries are proposed to user |
+| AC-3 | pending | Present structured impact report: overlapping ACs with similarity reasoning, affected dependency chains, implementation file conflicts |
+| AC-4 | pending | Trace full dependency chains — if A depends on B depends on C, changing B ACs shall surface impact on both A and C |
+| AC-5 | pending | Propose concrete resolutions: merge ACs into existing feature, split into separate features, adjust dependency ordering, or flag as intentional duplication |
+| AC-6 | pending | All proposals shall be advisory only — no Feature Map modifications, dependency reordering, or AC adjustments without explicit user approval |
+| AC-7 | pending | Persist impact analysis results in .cap/memory/impact/{feature-id}.md for audit trail and future reference |
+| AC-8 | pending | Detect circular dependency risks when new features are proposed and warn before Feature Map entries are written |
+
+**Files:**
+- `cap/bin/lib/cap-impact-analysis.cjs`
+
+### F-034: Upgrade Memory to Connected Graph Structure [planned]
+
+**Depends on:** F-027, F-031, F-033
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Maintain memory graph in .cap/memory/graph.json connecting features, threads, decisions, pitfalls, and patterns as typed nodes with labeled edges |
+| AC-2 | pending | Support edge types: depends_on, supersedes, conflicts_with, branched_from, informed_by, relates_to |
+| AC-3 | pending | Graph queryable by node type and traversal depth — e.g. show all decisions that informed F-005 within 2 hops |
+| AC-4 | pending | Existing flat memory files from F-029 (decisions.md, hotspots.md, patterns.md, pitfalls.md) remain as human-readable views generated from graph |
+| AC-5 | pending | Support temporal queries — what changed between session X and session Y via timestamps on all nodes and edges |
+| AC-6 | pending | When node marked stale by F-027 aging logic, preserve edges as inactive so historical context is not lost |
+| AC-7 | pending | Graph incrementally updatable — adding new session shall not require full graph reconstruction |
+| AC-8 | pending | Graph data git-committable and merge-friendly — sorted keys, one-entry-per-line JSON to minimize merge conflicts |
+
 ## Legend
 
 | State | Meaning |
@@ -482,4 +550,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-02T14:14:11.936Z*
+*Last updated: 2026-04-03T17:29:06.946Z*
