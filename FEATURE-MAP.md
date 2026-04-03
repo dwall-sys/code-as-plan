@@ -540,6 +540,20 @@
 | AC-7 | pending | Graph incrementally updatable — adding new session shall not require full graph reconstruction |
 | AC-8 | pending | Graph data git-committable and merge-friendly — sorted keys, one-entry-per-line JSON to minimize merge conflicts |
 
+### F-035: Detect In-Session Topic Divergence During Brainstorm [planned]
+
+**Depends on:** F-031, F-032
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | During an active brainstorm, compare each new user message against the current thread keywords and detect when topic similarity drops below a configurable threshold (default: 0.15 overlap ratio) |
+| AC-2 | pending | When divergence detected, proactively ask the user: create a branch thread for the new topic, stay on the current topic, or replace the current thread direction |
+| AC-3 | pending | If branch chosen, automatically call branchThread() with the divergence point set to the last message before the topic shift |
+| AC-4 | pending | Track topic evolution within a session by maintaining a running keyword set that updates with each user message — detect gradual drift not just sudden jumps |
+| AC-5 | pending | After branch creation, continue the brainstorm on the new branch thread while preserving the parent thread state as-is |
+| AC-6 | pending | At brainstorm end, persist all threads (parent + branches) and update the thread index with branch relationships |
+| AC-7 | pending | Divergence detection shall not interrupt the conversation flow — present as a brief inline suggestion, not a blocking modal |
+
 ## Legend
 
 | State | Meaning |
@@ -550,4 +564,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-03T17:29:06.946Z*
+*Last updated: 2026-04-03T19:06:07.027Z*
