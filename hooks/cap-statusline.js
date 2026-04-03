@@ -28,6 +28,15 @@ process.stdin.on('end', () => {
     // Claude Code reserves ~16.5% for autocompact buffer, so usable context
     // is 83.5% of the total window. We normalize to show 100% at that point.
     const AUTO_COMPACT_BUFFER_PCT = 16.5;
+    const totalIn = data.context_window?.total_input_tokens || 0;
+    const totalOut = data.context_window?.total_output_tokens || 0;
+    const windowSize = data.context_window?.context_window_size || 200000;
+    const totalTokens = totalIn + totalOut;
+    const fmtTokens = n => {
+      if (n >= 1000000) return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+      return String(n);
+    };
     let ctx = '';
     if (remaining != null) {
       // Normalize: subtract buffer from remaining, scale to usable range
@@ -51,19 +60,20 @@ process.stdin.on('end', () => {
         }
       }
 
-      // Build progress bar (10 segments)
+      // Token counts + progress bar (10 segments)
       const filled = Math.floor(used / 10);
       const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+      const tokenInfo = `In:${fmtTokens(totalIn)} Out:${fmtTokens(totalOut)} ${used}% (${fmtTokens(totalTokens)}/${fmtTokens(windowSize)})`;
 
       // Color based on usable context thresholds
       if (used < 50) {
-        ctx = ` \x1b[32m${bar} ${used}%\x1b[0m`;
+        ctx = ` \x1b[32m${bar} ${tokenInfo}\x1b[0m`;
       } else if (used < 65) {
-        ctx = ` \x1b[33m${bar} ${used}%\x1b[0m`;
+        ctx = ` \x1b[33m${bar} ${tokenInfo}\x1b[0m`;
       } else if (used < 80) {
-        ctx = ` \x1b[38;5;208m${bar} ${used}%\x1b[0m`;
+        ctx = ` \x1b[38;5;208m${bar} ${tokenInfo}\x1b[0m`;
       } else {
-        ctx = ` \x1b[5;31m💀 ${bar} ${used}%\x1b[0m`;
+        ctx = ` \x1b[5;31m💀 ${bar} ${tokenInfo}\x1b[0m`;
       }
     }
 
@@ -109,12 +119,37 @@ process.stdin.on('end', () => {
       } catch (e) {}
     }
 
+    // Active app + feature from CAP session
+    let capContext = '';
+    try {
+      const sessionPath = path.join(dir, '.cap', 'SESSION.json');
+      if (fs.existsSync(sessionPath)) {
+        const capSession = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+        const parts = [];
+        if (capSession.activeApp) parts.push(capSession.activeApp);
+        if (capSession.activeFeature) {
+          let featureLabel = capSession.activeFeature;
+          try {
+            const mapPath = path.join(dir, 'FEATURE-MAP.md');
+            if (fs.existsSync(mapPath)) {
+              const mapContent = fs.readFileSync(mapPath, 'utf8');
+              const re = new RegExp(`###\\s+${capSession.activeFeature}:\\s+(.+?)\\s*\\[`);
+              const m = mapContent.match(re);
+              if (m) featureLabel = `${capSession.activeFeature}: ${m[1].trim()}`;
+            }
+          } catch (e) {}
+          parts.push(featureLabel);
+        }
+        if (parts.length > 0) capContext = `\x1b[36m${parts.join(' │ ')}\x1b[0m │ `;
+      }
+    } catch (e) {}
+
     // Output
     const dirname = path.basename(dir);
     if (task) {
-      process.stdout.write(`${capUpdate}\x1b[2m${model}\x1b[0m │ \x1b[1m${task}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${ctx}`);
+      process.stdout.write(`${capUpdate}${capContext}\x1b[2m${model}\x1b[0m │ \x1b[1m${task}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${ctx}`);
     } else {
-      process.stdout.write(`${capUpdate}\x1b[2m${model}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${ctx}`);
+      process.stdout.write(`${capUpdate}${capContext}\x1b[2m${model}\x1b[0m │ \x1b[2m${dirname}\x1b[0m${ctx}`);
     }
   } catch (e) {
     // Silent fail - don't break statusline on parse errors
