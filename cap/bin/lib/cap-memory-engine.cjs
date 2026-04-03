@@ -455,14 +455,95 @@ function accumulate(sessionAnalyses, options = {}) {
   return { newEntries, staleEntries, updatedEntries, stats };
 }
 
-// --- Convenience: Full Pipeline Input ---
+// --- Code-Based Memory (primary source — code is the single source of truth) ---
 
-// @cap-todo(ref:F-027:AC-1) Read session data from F-025/F-026 as sole input source
-// @cap-todo(ref:F-027:AC-8) Output structured memory entries consumable by F-028 and F-029
+/**
+ * Extract memory entries from code tags (via tag scanner).
+ * Code tags are high-signal, zero-noise — they are explicit developer annotations.
+ * @param {Array<{type: string, file: string, line: number, metadata: Object, description: string, subtype: string|null}>} tags - Tags from cap-tag-scanner
+ * @returns {MemoryEntry[]}
+ */
+function accumulateFromCode(tags) {
+  const entries = [];
+  const seen = new Set();
+
+  for (const tag of tags) {
+    // @cap-decision tags → decision entries
+    if (tag.type === 'decision') {
+      if (!tag.description || tag.description.length < 10) continue;
+      const key = tag.description.substring(0, 80).toLowerCase();
+      if (seen.has('d:' + key)) continue;
+      seen.add('d:' + key);
+
+      entries.push({
+        category: 'decision',
+        file: tag.file,
+        content: tag.description,
+        metadata: {
+          source: 'code',
+          branch: null,
+          relatedFiles: [tag.file],
+          features: tag.metadata?.feature ? [tag.metadata.feature] : [],
+          pinned: false,
+          line: tag.line,
+        },
+      });
+    }
+
+    // @cap-todo risk: → pitfall entries
+    if (tag.type === 'todo' && tag.subtype === 'risk') {
+      const desc = tag.description.replace(/^risk:\s*/i, '');
+      if (!desc || desc.length < 10) continue;
+      const key = desc.substring(0, 80).toLowerCase();
+      if (seen.has('p:' + key)) continue;
+      seen.add('p:' + key);
+
+      entries.push({
+        category: 'pitfall',
+        file: tag.file,
+        content: desc,
+        metadata: {
+          source: 'code',
+          branch: null,
+          relatedFiles: [tag.file],
+          features: tag.metadata?.feature ? [tag.metadata.feature] : [],
+          pinned: false,
+          line: tag.line,
+        },
+      });
+    }
+
+    // @cap-risk → pitfall entries (standalone risk tags)
+    if (tag.type === 'risk') {
+      if (!tag.description || tag.description.length < 10) continue;
+      const key = tag.description.substring(0, 80).toLowerCase();
+      if (seen.has('p:' + key)) continue;
+      seen.add('p:' + key);
+
+      entries.push({
+        category: 'pitfall',
+        file: tag.file,
+        content: tag.description,
+        metadata: {
+          source: 'code',
+          branch: null,
+          relatedFiles: [tag.file],
+          features: tag.metadata?.feature ? [tag.metadata.feature] : [],
+          pinned: false,
+          line: tag.line,
+        },
+      });
+    }
+  }
+
+  return entries;
+}
+
+// --- Convenience: Full Pipeline Input ---
 
 /**
  * Parse raw JSONL session files and accumulate memory.
- * This is the main entry point — reads session files, analyzes them, and accumulates.
+ * Sessions provide HOTSPOTS ONLY (edit frequency). Decisions/pitfalls come from code tags.
  * @param {Array<{path: string, isDebugSession?: boolean}>} sessionFiles - Session file descriptors
  * @param {Object} [options] - Options passed to accumulate()
  * @param {string} [options.projectRoot] - Project root for file path normalization (monorepo-aware)
@@ -492,6 +573,10 @@ function accumulateFromFiles(sessionFiles, options = {}) {
         { meta: meta || { id: 'unknown', timestamp: null, branch: null }, messages },
         { isDebugSession: sf.isDebugSession || false, projectRoot: options.projectRoot || null }
       );
+      // Sessions contribute only hotspots — clear noisy text-based extractions
+      analysis.decisions = [];
+      analysis.pitfalls = [];
+      analysis.patterns = [];
       analyses.push(analysis);
     } catch { /* skip unreadable files */ }
   }
@@ -526,6 +611,7 @@ module.exports = {
   // Core
   analyzeSession,
   accumulate,
+  accumulateFromCode,
   accumulateFromFiles,
   formatAnnotation,
 

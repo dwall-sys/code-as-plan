@@ -9,6 +9,7 @@ const os = require('node:os');
 const {
   analyzeSession,
   accumulate,
+  accumulateFromCode,
   accumulateFromFiles,
   formatAnnotation,
   extractText,
@@ -376,7 +377,8 @@ describe('accumulateFromFiles', () => {
     const result = accumulateFromFiles([{ path: fp1 }, { path: fp2 }]);
     assert.ok(result.stats.sessionsAnalyzed === 2);
     assert.ok(result.stats.hotspots >= 1); // auth.js edited in 2 sessions
-    assert.ok(result.stats.decisions >= 1);
+    // Sessions now provide hotspots only — decisions come from code tags
+    assert.strictEqual(result.stats.decisions, 0);
   });
 
   it('handles unreadable files gracefully', () => {
@@ -384,13 +386,67 @@ describe('accumulateFromFiles', () => {
     assert.strictEqual(result.stats.sessionsAnalyzed, 0);
   });
 
-  it('marks debug sessions for pitfall detection', () => {
+  it('sessions provide only hotspots, not pitfalls', () => {
     const fp = makeSessionFile('debug.jsonl', [
       { sessionId: 'd1', timestamp: '2026-04-01T10:00:00Z' },
       { type: 'assistant', message: { content: 'The bug was a subtle regression caused by broken cache invalidation.' } },
     ]);
 
+    // Sessions no longer extract pitfalls — those come from code tags
     const result = accumulateFromFiles([{ path: fp, isDebugSession: true }]);
-    assert.ok(result.stats.pitfalls >= 1);
+    assert.strictEqual(result.stats.pitfalls, 0);
+  });
+});
+
+// --- accumulateFromCode ---
+
+describe('accumulateFromCode', () => {
+  it('extracts decisions from @cap-decision tags', () => {
+    const tags = [
+      { type: 'decision', file: 'src/auth.ts', line: 5, metadata: { feature: 'F-AUTH' }, description: 'Single source of truth for cookie domain config', subtype: null },
+      { type: 'decision', file: 'src/auth.ts', line: 10, metadata: {}, description: 'Short', subtype: null }, // too short, should be filtered
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 1);
+    assert.strictEqual(entries[0].category, 'decision');
+    assert.strictEqual(entries[0].file, 'src/auth.ts');
+    assert.ok(entries[0].content.includes('cookie domain'));
+  });
+
+  it('extracts pitfalls from @cap-todo risk: tags', () => {
+    const tags = [
+      { type: 'todo', file: 'src/proxy.ts', line: 3, metadata: {}, description: 'risk: Supabase connection pooling can cause timeouts under load', subtype: 'risk' },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 1);
+    assert.strictEqual(entries[0].category, 'pitfall');
+    assert.ok(entries[0].content.includes('Supabase connection'));
+  });
+
+  it('extracts pitfalls from standalone @cap-risk tags', () => {
+    const tags = [
+      { type: 'risk', file: 'src/db.ts', line: 8, metadata: { feature: 'F-DB' }, description: 'Migration rollback not tested for large datasets', subtype: null },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 1);
+    assert.strictEqual(entries[0].category, 'pitfall');
+  });
+
+  it('deduplicates entries with same content prefix', () => {
+    const tags = [
+      { type: 'decision', file: 'a.ts', line: 1, metadata: {}, description: 'Use token-based refresh for all auth flows because cookies are unreliable', subtype: null },
+      { type: 'decision', file: 'b.ts', line: 1, metadata: {}, description: 'Use token-based refresh for all auth flows because cookies are unreliable', subtype: null },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 1);
+  });
+
+  it('ignores non-decision/risk tags', () => {
+    const tags = [
+      { type: 'feature', file: 'x.ts', line: 1, metadata: { feature: 'F-001' }, description: 'Tag Scanner', subtype: null },
+      { type: 'todo', file: 'y.ts', line: 1, metadata: {}, description: 'Implement caching layer', subtype: null },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 0);
   });
 });

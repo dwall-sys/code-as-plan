@@ -122,23 +122,36 @@ function run(options = {}) {
     }
   } catch { /* ignore */ }
 
-  // F-027: Accumulate memory from sessions
+  // --- Primary source: Code tags (single source of truth) ---
+  const scanner = tryRequire(path.join(capLib, 'cap-tag-scanner.cjs'));
+  let codeEntries = [];
+  if (scanner) {
+    const tags = scanner.scanDirectory(cwd, { projectRoot: cwd });
+    codeEntries = engine.accumulateFromCode(tags);
+  }
+
+  // --- Secondary source: Sessions (hotspots only — edit frequency) ---
   const filesToProcess = sessionFiles.map(f => ({
     path: f.path,
     isDebugSession: activeDebug,
   }));
 
-  const result = engine.accumulateFromFiles(filesToProcess, { projectRoot: cwd });
+  const sessionResult = engine.accumulateFromFiles(filesToProcess, { projectRoot: cwd });
 
-  if (result.stats.total === 0 && result.staleEntries.length === 0) {
+  // Merge: code-based decisions/pitfalls + session-based hotspots
+  const allEntries = [...codeEntries, ...sessionResult.newEntries];
+
+  if (allEntries.length === 0 && sessionResult.staleEntries.length === 0) {
     writeLastRun(cwd);
     return;
   }
 
-  // F-028: Write annotations into source files (only annotatable source code)
+  // F-028: Write hotspot annotations into source files (only annotatable source code)
+  // Code-based decisions/pitfalls are ALREADY in the code as @cap-decision/@cap-todo — no need to re-annotate.
   const NON_ANNOTATABLE_EXT = new Set(['.md', '.markdown', '.json', '.jsonl', '.lock', '.svg', '.xml', '.html', '.css', '.scss']);
   const fileEntries = {};
-  for (const entry of result.newEntries) {
+  for (const entry of allEntries) {
+    if (entry.category !== 'hotspot') continue; // Only write hotspot annotations
     if (entry.file && fs.existsSync(entry.file)) {
       const ext = path.extname(entry.file).toLowerCase();
       if (NON_ANNOTATABLE_EXT.has(ext)) continue;
@@ -152,15 +165,25 @@ function run(options = {}) {
   }
 
   // F-028: Remove stale annotations
-  if (result.staleEntries.length > 0) {
-    writer.removeStaleAnnotations(result.staleEntries);
+  if (sessionResult.staleEntries.length > 0) {
+    writer.removeStaleAnnotations(sessionResult.staleEntries);
   }
 
-  // F-029: Write memory directory
-  memDir.writeMemoryDirectory(cwd, result.newEntries);
+  // F-029: Write memory directory (merge mode for multi-developer support)
+  memDir.writeMemoryDirectory(cwd, allEntries, { merge: !options.init });
 
   // Save last-run timestamp
   writeLastRun(cwd);
+
+  // Stats for reporting
+  const stats = {
+    decisions: allEntries.filter(e => e.category === 'decision').length,
+    pitfalls: allEntries.filter(e => e.category === 'pitfall').length,
+    patterns: allEntries.filter(e => e.category === 'pattern').length,
+    hotspots: allEntries.filter(e => e.category === 'hotspot').length,
+    fromCode: codeEntries.length,
+    fromSessions: sessionResult.newEntries.length,
+  };
 
   // Performance check
   const elapsed = Date.now() - startTime;
@@ -177,8 +200,8 @@ function run(options = {}) {
         process.stdout.write(`  ${p}\n`);
       }
     }
-    process.stdout.write(`cap-memory init: ${sessionFiles.length} sessions processed in ${elapsed2}ms\n`);
-    process.stdout.write(`  decisions: ${result.stats.decisions}, pitfalls: ${result.stats.pitfalls}, patterns: ${result.stats.patterns}, hotspots: ${result.stats.hotspots}\n`);
+    process.stdout.write(`cap-memory init: ${sessionFiles.length} sessions, ${stats.fromCode} code tags processed in ${elapsed2}ms\n`);
+    process.stdout.write(`  decisions: ${stats.decisions} (from code), pitfalls: ${stats.pitfalls} (from code), hotspots: ${stats.hotspots} (from sessions)\n`);
   }
 }
 

@@ -51,7 +51,7 @@ function generateCategoryMarkdown(category, entries) {
   const out = [];
   out.push(`# Project Memory: ${title}`);
   out.push('');
-  out.push(`> Auto-generated from session data. Pinned entries are preserved; others may be updated on regeneration.`);
+  out.push(`> Auto-generated from code tags and session data. Pinned entries are preserved; others may be updated on regeneration.`);
   out.push(`> Last updated: ${new Date().toISOString().substring(0, 10)}`);
   out.push('');
 
@@ -127,11 +127,29 @@ function generateHotspotsMarkdown(out, entries) {
 // @cap-todo(ref:F-029:AC-7) .cap/memory/ is git-committable (not gitignored)
 
 /**
+ * Parse existing memory entries from a markdown file to support merging.
+ * Extracts anchor IDs to detect already-known entries.
+ * @param {string} content - Markdown file content
+ * @returns {Set<string>} Set of anchor IDs already present
+ */
+function parseExistingAnchors(content) {
+  const anchors = new Set();
+  const re = /<a id="([a-f0-9]+)"><\/a>/g;
+  let match;
+  while ((match = re.exec(content)) !== null) {
+    anchors.add(match[1]);
+  }
+  return anchors;
+}
+
+/**
  * Write all memory category files to .cap/memory/.
+ * Supports merge mode: new entries are added to existing files, duplicates skipped by anchor ID.
  * @param {string} projectRoot - Project root directory
  * @param {import('./cap-memory-engine.cjs').MemoryEntry[]} entries - All memory entries
  * @param {Object} [options]
  * @param {boolean} [options.dryRun] - If true, return content without writing
+ * @param {boolean} [options.merge] - If true, merge with existing entries instead of overwriting
  * @returns {{files: Object<string, string>, written: number}}
  */
 function writeMemoryDirectory(projectRoot, entries, options = {}) {
@@ -146,9 +164,31 @@ function writeMemoryDirectory(projectRoot, entries, options = {}) {
     if (grouped[cat]) grouped[cat].push(entry);
   }
 
+  // In merge mode, read existing files and skip entries with matching anchor IDs
+  const existingFiles = options.merge ? readMemoryDirectory(projectRoot) : {};
+
   for (const [category, categoryEntries] of Object.entries(grouped)) {
     const filename = CATEGORY_FILES[category];
-    const content = generateCategoryMarkdown(category, categoryEntries);
+
+    // If merging: filter out entries whose anchor already exists
+    let entriesToWrite = categoryEntries;
+    if (options.merge && existingFiles[filename]) {
+      const existingAnchors = parseExistingAnchors(existingFiles[filename]);
+      entriesToWrite = categoryEntries.filter(entry => {
+        const anchor = category === 'hotspot'
+          ? generateAnchorId(entry.content + entry.file)
+          : generateAnchorId(entry.content);
+        return !existingAnchors.has(anchor);
+      });
+
+      // For hotspots: always regenerate fully (session counts change)
+      if (category === 'hotspot') {
+        entriesToWrite = categoryEntries;
+      }
+    }
+
+    const content = generateCategoryMarkdown(category,
+      category === 'hotspot' ? entriesToWrite : categoryEntries);
     files[filename] = content;
 
     if (!options.dryRun) {
@@ -201,6 +241,7 @@ function getCrossReference(entry) {
 module.exports = {
   generateAnchorId,
   generateCategoryMarkdown,
+  parseExistingAnchors,
   writeMemoryDirectory,
   readMemoryDirectory,
   getCrossReference,
