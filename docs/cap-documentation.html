@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAP - Code as Plan | Documentation</title>
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-code: #1e1e2e;
+  --bg-sidebar: #0c1322;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+  --primary: #3b82f6;
+  --primary-dim: #2563eb;
+  --accent: #22d3ee;
+  --accent-dim: #06b6d4;
+  --green: #22c55e;
+  --red: #ef4444;
+  --orange: #f59e0b;
+  --purple: #a78bfa;
+  --pink: #f472b6;
+  --border: #334155;
+  --border-light: #475569;
+  --radius: 8px;
+  --sidebar-w: 280px;
+  --transition: 0.25s ease;
+}
+
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+a { color: var(--accent); text-decoration: none; transition: color var(--transition); }
+a:hover { color: var(--primary); }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 100;
+  padding: 1.5rem 0;
+  transition: transform var(--transition);
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h2 {
+  font-size: 1.25rem;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+.sidebar nav ul { list-style: none; }
+.sidebar nav > ul > li { margin-bottom: 0.125rem; }
+.sidebar nav a {
+  display: block;
+  padding: 0.5rem 1.25rem;
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  transition: all var(--transition);
+  border-left: 3px solid transparent;
+}
+.sidebar nav a:hover,
+.sidebar nav a.active {
+  color: var(--accent);
+  background: rgba(34, 211, 238, 0.05);
+  border-left-color: var(--accent);
+}
+.sidebar nav .sub-items { padding-left: 1rem; }
+.sidebar nav .sub-items a { font-size: 0.8rem; padding: 0.35rem 1.25rem; }
+
+/* Mobile toggle */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 1rem; left: 1rem;
+  z-index: 200;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 40px; height: 40px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== MAIN ===== */
+.main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+}
+
+/* ===== HERO ===== */
+.hero {
+  padding: 6rem 2rem 4rem;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(59,130,246,0.08) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border);
+}
+.hero-logo {
+  font-size: 4rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+.hero-subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 1rem;
+}
+.hero-tagline {
+  font-size: 1.5rem;
+  color: var(--text);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+  font-weight: 300;
+}
+.hero-install {
+  display: inline-block;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 2rem;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 1.05rem;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+}
+.hero-install:hover { border-color: var(--accent); }
+.hero-install .copy-hint {
+  position: absolute;
+  top: -2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: var(--green);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.hero-install.copied .copy-hint { opacity: 1; }
+.hero-runtimes {
+  margin-top: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.runtime-badge {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  transition: all var(--transition);
+}
+.runtime-badge:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+/* ===== SECTIONS ===== */
+.section {
+  padding: 4rem 2rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.section + .section { border-top: 1px solid var(--border); }
+.section-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+.section-title .num {
+  color: var(--primary);
+  font-weight: 400;
+  margin-right: 0.5rem;
+}
+.section-desc {
+  color: var(--text-dim);
+  margin-bottom: 2rem;
+  font-size: 1.05rem;
+}
+
+h3 {
+  font-size: 1.35rem;
+  margin: 2rem 0 1rem;
+  color: var(--text);
+}
+h4 {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.75rem;
+  color: var(--text-dim);
+}
+p { margin-bottom: 1rem; }
+ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+li { margin-bottom: 0.35rem; }
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  transition: all var(--transition);
+}
+.card:hover { border-color: var(--border-light); }
+.card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ===== COLLAPSIBLE ===== */
+.collapsible {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+.collapsible-header {
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  transition: background var(--transition);
+}
+.collapsible-header:hover { background: rgba(59,130,246,0.05); }
+.collapsible-header h4 { margin: 0; font-size: 1rem; color: var(--text); }
+.collapsible-arrow {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+.collapsible.open .collapsible-arrow { transform: rotate(180deg); }
+.collapsible-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+}
+.collapsible.open .collapsible-body { max-height: 5000px; }
+.collapsible-content { padding: 0 1.25rem 1.25rem; }
+
+/* ===== CODE ===== */
+code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.875em;
+  background: var(--bg-code);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: var(--accent);
+}
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+/* Syntax highlighting classes */
+.kw { color: #c678dd; }       /* keyword */
+.fn { color: #61afef; }       /* function */
+.str { color: #98c379; }      /* string */
+.cmt { color: #5c6370; font-style: italic; } /* comment */
+.tag { color: #e5c07b; }      /* tag/decorator */
+.num { color: #d19a66; }      /* number */
+.type { color: #e06c75; }     /* type */
+.op { color: #56b6c2; }       /* operator */
+.attr { color: #d19a66; }     /* attribute */
+
+/* ===== TABLES ===== */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+th {
+  background: var(--bg-code);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 2px solid var(--border);
+}
+td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+tr:hover td { background: rgba(59,130,246,0.03); }
+
+/* ===== TABS ===== */
+.tabs {
+  margin-bottom: 1.5rem;
+}
+.tab-buttons {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 0;
+  overflow-x: auto;
+}
+.tab-btn {
+  padding: 0.65rem 1.25rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all var(--transition);
+  white-space: nowrap;
+  font-family: inherit;
+}
+.tab-btn:hover { color: var(--text-dim); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ===== SEARCH / FILTER ===== */
+.search-box {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+.search-box:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.search-box::placeholder { color: var(--text-muted); }
+
+/* ===== BADGES ===== */
+.badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-blue { background: rgba(59,130,246,0.15); color: var(--primary); }
+.badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-orange { background: rgba(245,158,11,0.15); color: var(--orange); }
+.badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+.badge-purple { background: rgba(167,139,250,0.15); color: var(--purple); }
+.badge-cyan { background: rgba(34,211,238,0.15); color: var(--accent); }
+
+/* ===== LIFECYCLE / FLOW ===== */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+.flow-step {
+  padding: 0.6rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  transition: all var(--transition);
+}
+.flow-step:hover { border-color: var(--primary); color: var(--text); }
+.flow-arrow {
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  padding: 0 0.5rem;
+}
+
+/* ===== COMPARISON TABLE ===== */
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+.comparison-col {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+.comparison-col.bad { border-top: 3px solid var(--red); }
+.comparison-col.good { border-top: 3px solid var(--green); }
+.comparison-col h4 { margin-top: 0; }
+
+/* ===== ARCH DIAGRAM ===== */
+.diagram {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: pre;
+}
+.diagram .hl { color: var(--accent); }
+.diagram .hl2 { color: var(--primary); }
+.diagram .hl3 { color: var(--green); }
+.diagram .hl4 { color: var(--orange); }
+
+/* ===== AGENT CARDS ===== */
+.agent-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  transition: all var(--transition);
+}
+.agent-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+.agent-icon {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+
+/* ===== STRATEGY CARDS ===== */
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.strategy-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+  transition: all var(--transition);
+}
+.strategy-card:hover { border-color: var(--accent); }
+.strategy-card .strategy-name {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.strategy-card .strategy-desc {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* ===== NODE TYPE CHIPS ===== */
+.node-types, .edge-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.chip {
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+/* ===== BACK TO TOP ===== */
+.back-to-top {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 42px;
+  height: 42px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all var(--transition);
+  z-index: 50;
+}
+.back-to-top.visible { opacity: 1; pointer-events: auto; }
+.back-to-top:hover { background: var(--accent); }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-toggle { display: flex; }
+  .main { margin-left: 0; }
+  .hero { padding: 4rem 1.5rem 3rem; }
+  .hero-logo { font-size: 2.5rem; }
+  .hero-tagline { font-size: 1.2rem; }
+  .section { padding: 3rem 1.5rem; }
+  .comparison { grid-template-columns: 1fr; }
+  .strategy-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 500px) {
+  .flow { flex-direction: column; align-items: stretch; }
+  .flow-arrow { transform: rotate(90deg); text-align: center; padding: 0.25rem 0; }
+  .strategy-grid { grid-template-columns: 1fr; }
+  .tab-buttons { gap: 0; }
+  .tab-btn { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar Toggle (Mobile) -->
+<button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle navigation">&#9776;</button>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h2>CAP</h2>
+    <div class="version">Code as Plan &middot; v2.5</div>
+  </div>
+  <nav>
+    <ul>
+      <li><a href="#hero">Home</a></li>
+      <li><a href="#philosophy">Core Philosophy</a></li>
+      <li><a href="#quickstart">Getting Started</a></li>
+      <li><a href="#commands">Commands</a></li>
+      <li><a href="#tags">Tag System</a></li>
+      <li><a href="#featuremap">Feature Map</a></li>
+      <li>
+        <a href="#memory">Project Memory</a>
+        <ul class="sub-items">
+          <li><a href="#mem-overview">Overview</a></li>
+          <li><a href="#mem-architecture">Architecture</a></li>
+          <li><a href="#mem-codefirst">Code-First Memory</a></li>
+          <li><a href="#mem-hotspots">Session Hotspots</a></li>
+          <li><a href="#mem-threads">Conversation Threads</a></li>
+          <li><a href="#mem-reconnection">Thread Reconnection</a></li>
+          <li><a href="#mem-impact">Impact Analysis</a></li>
+          <li><a href="#mem-graph">Memory Graph</a></li>
+          <li><a href="#mem-multidev">Multi-Developer</a></li>
+          <li><a href="#mem-commands">Memory Commands</a></li>
+        </ul>
+      </li>
+      <li><a href="#agents">Agents</a></li>
+      <li><a href="#testquality">Test Quality</a></li>
+      <li><a href="#monorepo">Monorepo Support</a></li>
+      <li><a href="#security">Security</a></li>
+      <li><a href="#migration">Migration from GSD</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div class="main">
+
+<!-- ===== 1. HERO ===== -->
+<section class="hero" id="hero">
+  <div class="hero-logo">CAP</div>
+  <div class="hero-subtitle">Code as Plan</div>
+  <p class="hero-tagline">Build first. Plan from code. Ship with confidence.</p>
+  <div class="hero-install" onclick="copyInstall(this)" title="Click to copy">
+    <span class="copy-hint">Copied!</span>
+    npx code-as-plan@latest
+  </div>
+  <div class="hero-runtimes">
+    <span class="runtime-badge">Claude Code</span>
+    <span class="runtime-badge">Gemini CLI</span>
+    <span class="runtime-badge">Codex</span>
+    <span class="runtime-badge">Copilot</span>
+    <span class="runtime-badge">Cursor</span>
+    <span class="runtime-badge">Windsurf</span>
+    <span class="runtime-badge">OpenCode</span>
+  </div>
+</section>
+
+<!-- ===== 2. CORE PHILOSOPHY ===== -->
+<section class="section" id="philosophy">
+  <h2 class="section-title"><span class="num">01</span>Core Philosophy</h2>
+  <p class="section-desc">Eliminate upfront document-heavy planning. Let your code be the plan.</p>
+
+  <h3>The Problem</h3>
+  <div class="comparison">
+    <div class="comparison-col bad">
+      <h4 style="color: var(--red);">Traditional Plan-Heavy Workflow</h4>
+      <ul>
+        <li>Weeks spent writing requirements documents</li>
+        <li>PRDs become stale before code is written</li>
+        <li>Traceability lost between plan and code</li>
+        <li>Developers duplicate information</li>
+        <li>Context switching between docs and code</li>
+      </ul>
+    </div>
+    <div class="comparison-col good">
+      <h4 style="color: var(--green);">CAP: Prototype-Driven</h4>
+      <ul>
+        <li>Start building immediately</li>
+        <li>Structure emerges from annotated code</li>
+        <li>Tags are the traceability link</li>
+        <li>Feature Map is auto-enriched from code</li>
+        <li>Everything stays in the codebase</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>How CAP Is Different</h3>
+  <table>
+    <thead>
+      <tr><th>Aspect</th><th>Traditional</th><th>CAP</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Planning</td><td>Upfront documents (PRD, RFC, ADR)</td><td>Code tags + Feature Map</td></tr>
+      <tr><td>Source of truth</td><td>Wiki / Google Docs</td><td>The codebase itself</td></tr>
+      <tr><td>Traceability</td><td>Manual linking</td><td>Tag scanner auto-links</td></tr>
+      <tr><td>Staleness</td><td>Docs drift from reality</td><td>Tags live in code, always current</td></tr>
+      <tr><td>Onboarding</td><td>Read 50 pages of docs</td><td>Read Feature Map + grep tags</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Prototype-Driven Development</h3>
+  <p>CAP implements the "Code-First" principle: build a working prototype first, then extract structured planning artifacts from the annotated code. This inverts the traditional workflow where planning precedes coding.</p>
+
+  <div class="card">
+    <div class="card-title">Aligned with Farley's Principles</div>
+    <p style="margin-bottom:0;">Dave Farley's <em>Modern Software Engineering</em> advocates optimizing for <strong>learning</strong> and <strong>managing complexity</strong>. CAP operationalizes this by:</p>
+    <ul style="margin-top:0.75rem;">
+      <li><strong>Optimizing for learning:</strong> Brainstorm, prototype fast, test against acceptance criteria, iterate</li>
+      <li><strong>Managing complexity:</strong> Feature Map as single source of truth, tag-based traceability, agent separation of concerns</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===== 3. GETTING STARTED ===== -->
+<section class="section" id="quickstart">
+  <h2 class="section-title"><span class="num">02</span>Getting Started</h2>
+  <p class="section-desc">From zero to your first feature in 5 minutes.</p>
+
+  <h3>Installation</h3>
+  <pre><code><span class="cmt"># Default (Claude Code)</span>
+npx code-as-plan@latest
+
+<span class="cmt"># With runtime flag</span>
+npx code-as-plan@latest --runtime gemini
+npx code-as-plan@latest --runtime codex
+npx code-as-plan@latest --runtime cursor</code></pre>
+
+  <h3>The 5-Step Workflow</h3>
+  <div class="flow">
+    <div class="flow-step" style="border-color: var(--purple);">brainstorm</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--primary);">prototype</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--orange);">iterate</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--green);">test</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--accent);">review</div>
+  </div>
+  <p>Linear by default, <strong>re-entrant by design</strong> &mdash; jump back to any step at any time.</p>
+
+  <h3>Quick Example</h3>
+  <pre><code><span class="cmt">// Step 1: Initialize CAP in your project</span>
+/cap:init
+
+<span class="cmt">// Step 2: Brainstorm your first feature</span>
+/cap:brainstorm
+
+<span class="cmt">// Step 3: Build annotated code</span>
+/cap:prototype
+
+<span class="cmt">// Step 4: Write tests against acceptance criteria</span>
+/cap:test
+
+<span class="cmt">// Step 5: Two-stage review</span>
+/cap:review</code></pre>
+
+  <h3>Tags in Action</h3>
+  <pre><code><span class="cmt">// @cap-feature F-001 User Authentication</span>
+
+<span class="kw">async function</span> <span class="fn">login</span>(email, password) {
+  <span class="cmt">// @cap-todo F-001 Add rate limiting</span>
+  <span class="cmt">// @cap-decision F-001 Using bcrypt over argon2 — broader ecosystem support</span>
+  <span class="kw">const</span> hash = <span class="kw">await</span> bcrypt.<span class="fn">compare</span>(password, user.hash);
+
+  <span class="cmt">// @cap-todo risk:security F-001 Token rotation not yet implemented</span>
+  <span class="kw">return</span> <span class="fn">signToken</span>({ sub: user.id });
+}</code></pre>
+</section>
+
+<!-- ===== 4. COMMANDS ===== -->
+<section class="section" id="commands">
+  <h2 class="section-title"><span class="num">03</span>Commands</h2>
+  <p class="section-desc">Every command available in CAP. Filter by name, description, or agent.</p>
+
+  <input type="text" class="search-box" id="cmd-search" placeholder="Search commands... (e.g. test, memory, scan)" oninput="filterCommands()">
+
+  <table id="cmd-table">
+    <thead>
+      <tr><th>Command</th><th>Description</th><th>Agent</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>/cap:init</code></td><td>Initialize CAP project &mdash; creates FEATURE-MAP.md + .cap/</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:brainstorm</code></td><td>Interactive feature discovery conversation</td><td><span class="badge badge-purple">cap-brainstormer</span></td></tr>
+      <tr><td><code>/cap:prototype</code></td><td>Build annotated code (4 modes: prototype / iterate / architecture / annotate)</td><td><span class="badge badge-blue">cap-prototyper</span></td></tr>
+      <tr><td><code>/cap:iterate</code></td><td>Scan + fix loop until acceptance criteria met</td><td><span class="badge badge-blue">cap-prototyper</span></td></tr>
+      <tr><td><code>/cap:test</code></td><td>RED-GREEN tests against acceptance criteria</td><td><span class="badge badge-green">cap-tester</span></td></tr>
+      <tr><td><code>/cap:review</code></td><td>Two-stage: AC compliance + code quality</td><td><span class="badge badge-orange">cap-reviewer</span></td></tr>
+      <tr><td><code>/cap:debug</code></td><td>Systematic debugging with persistent state</td><td><span class="badge badge-red">cap-debugger</span></td></tr>
+      <tr><td><code>/cap:scan</code></td><td>Tag scanner &mdash; extract @cap-* tags, update Feature Map</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:status</code></td><td>Project status from Feature Map</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:start</code></td><td>Initialize session, restore state</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:save</code></td><td>Save context snapshot for cross-session continuity</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:continue</code></td><td>Restore saved context snapshot</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:switch-app</code></td><td>Switch active monorepo app</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:annotate</code></td><td>Retroactively tag existing code with @cap-* tags</td><td><span class="badge badge-blue">cap-prototyper</span></td></tr>
+      <tr><td><code>/cap:refresh-docs</code></td><td>Fetch Context7 library docs</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:update</code></td><td>Update CAP to latest version</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:migrate</code></td><td>Migrate from GSD v1.x</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:test-audit</code></td><td>Test quality: assertions, coverage, mutations, trust score</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:report</code></td><td>Human-readable project overview</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:doctor</code></td><td>Health check for dependencies</td><td><span class="badge badge-blue">&mdash;</span></td></tr>
+      <tr><td><code>/cap:memory</code></td><td>Project memory management (init / status / pin / unpin)</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
+      <tr><td><code>/cap:memory init</code></td><td>Bootstrap memory from all sessions + code tags</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
+      <tr><td><code>/cap:memory status</code></td><td>Show memory summary</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== 5. TAG SYSTEM ===== -->
+<section class="section" id="tags">
+  <h2 class="section-title"><span class="num">04</span>Tag System</h2>
+  <p class="section-desc">Language-agnostic annotations that turn code into structured data. Extracted by regex &mdash; works in any language.</p>
+
+  <table>
+    <thead>
+      <tr><th>Tag</th><th>Purpose</th><th>Required</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>@cap-feature</code></td><td>Declare feature ownership of a file or block</td><td><span class="badge badge-green">Primary</span></td></tr>
+      <tr><td><code>@cap-todo</code></td><td>Outstanding work item tied to a feature</td><td><span class="badge badge-green">Primary</span></td></tr>
+      <tr><td><code>@cap-todo risk:...</code></td><td>Risk-flagged todo (security, performance, etc.)</td><td><span class="badge badge-orange">Subtype</span></td></tr>
+      <tr><td><code>@cap-todo decision:...</code></td><td>Decision-tagged todo</td><td><span class="badge badge-orange">Subtype</span></td></tr>
+      <tr><td><code>@cap-risk</code></td><td>Explicit risk annotation</td><td><span class="badge badge-blue">Optional</span></td></tr>
+      <tr><td><code>@cap-decision</code></td><td>Architectural decision recorded in code</td><td><span class="badge badge-blue">Optional</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Examples by Language</h3>
+  <div class="tabs">
+    <div class="tab-buttons" data-group="lang">
+      <button class="tab-btn active" data-tab="js">JavaScript</button>
+      <button class="tab-btn" data-tab="py">Python</button>
+      <button class="tab-btn" data-tab="go">Go</button>
+      <button class="tab-btn" data-tab="rs">Rust</button>
+      <button class="tab-btn" data-tab="sql">SQL</button>
+    </div>
+    <div class="tab-panel active" data-tab="js">
+      <pre><code><span class="cmt">// @cap-feature F-012 Payment Processing</span>
+<span class="cmt">// @cap-decision F-012 Stripe over Braintree — better webhook DX</span>
+
+<span class="kw">const</span> stripe = <span class="fn">require</span>(<span class="str">'stripe'</span>)(process.env.STRIPE_KEY);
+
+<span class="kw">async function</span> <span class="fn">chargeCustomer</span>(customerId, amount) {
+  <span class="cmt">// @cap-todo F-012 Add idempotency key for retries</span>
+  <span class="cmt">// @cap-todo risk:financial F-012 No refund flow yet</span>
+  <span class="kw">return</span> stripe.paymentIntents.<span class="fn">create</span>({
+    amount,
+    currency: <span class="str">'usd'</span>,
+    customer: customerId,
+  });
+}</code></pre>
+    </div>
+    <div class="tab-panel" data-tab="py">
+      <pre><code><span class="cmt"># @cap-feature F-012 Payment Processing</span>
+<span class="cmt"># @cap-decision F-012 Stripe over Braintree -- better webhook DX</span>
+
+<span class="kw">import</span> stripe
+
+<span class="kw">def</span> <span class="fn">charge_customer</span>(customer_id: <span class="type">str</span>, amount: <span class="type">int</span>) -> <span class="type">dict</span>:
+    <span class="cmt"># @cap-todo F-012 Add idempotency key for retries</span>
+    <span class="cmt"># @cap-todo risk:financial F-012 No refund flow yet</span>
+    <span class="kw">return</span> stripe.PaymentIntent.<span class="fn">create</span>(
+        amount=amount,
+        currency=<span class="str">"usd"</span>,
+        customer=customer_id,
+    )</code></pre>
+    </div>
+    <div class="tab-panel" data-tab="go">
+      <pre><code><span class="cmt">// @cap-feature F-012 Payment Processing</span>
+<span class="cmt">// @cap-decision F-012 Stripe over Braintree — better webhook DX</span>
+
+<span class="kw">func</span> <span class="fn">ChargeCustomer</span>(customerID <span class="type">string</span>, amount <span class="type">int64</span>) (*stripe.PaymentIntent, <span class="type">error</span>) {
+    <span class="cmt">// @cap-todo F-012 Add idempotency key for retries</span>
+    <span class="cmt">// @cap-todo risk:financial F-012 No refund flow yet</span>
+    params := &stripe.PaymentIntentParams{
+        Amount:   stripe.<span class="fn">Int64</span>(amount),
+        Currency: stripe.<span class="fn">String</span>(<span class="str">"usd"</span>),
+        Customer: stripe.<span class="fn">String</span>(customerID),
+    }
+    <span class="kw">return</span> paymentintent.<span class="fn">New</span>(params)
+}</code></pre>
+    </div>
+    <div class="tab-panel" data-tab="rs">
+      <pre><code><span class="cmt">// @cap-feature F-012 Payment Processing</span>
+<span class="cmt">// @cap-decision F-012 Stripe over Braintree -- better webhook DX</span>
+
+<span class="kw">pub async fn</span> <span class="fn">charge_customer</span>(
+    client: &<span class="type">StripeClient</span>,
+    customer_id: &<span class="type">str</span>,
+    amount: <span class="type">i64</span>,
+) -> <span class="type">Result</span>&lt;<span class="type">PaymentIntent</span>, <span class="type">StripeError</span>&gt; {
+    <span class="cmt">// @cap-todo F-012 Add idempotency key for retries</span>
+    <span class="cmt">// @cap-todo risk:financial F-012 No refund flow yet</span>
+    <span class="kw">let</span> params = <span class="type">CreatePaymentIntent</span> {
+        amount,
+        currency: <span class="type">Currency</span>::USD,
+        customer: <span class="fn">Some</span>(customer_id.into()),
+        ..<span class="type">Default</span>::<span class="fn">default</span>()
+    };
+    client.<span class="fn">create_payment_intent</span>(params).<span class="kw">await</span>
+}</code></pre>
+    </div>
+    <div class="tab-panel" data-tab="sql">
+      <pre><code><span class="cmt">-- @cap-feature F-012 Payment Processing</span>
+<span class="cmt">-- @cap-decision F-012 Using BIGINT cents over DECIMAL -- avoids rounding</span>
+
+<span class="kw">CREATE TABLE</span> <span class="fn">payments</span> (
+  id          <span class="type">UUID</span> <span class="kw">PRIMARY KEY DEFAULT</span> <span class="fn">gen_random_uuid</span>(),
+  customer_id <span class="type">UUID</span> <span class="kw">NOT NULL REFERENCES</span> customers(id),
+  amount      <span class="type">BIGINT</span> <span class="kw">NOT NULL</span>,  <span class="cmt">-- @cap-todo F-012 Add CHECK constraint > 0</span>
+  currency    <span class="type">VARCHAR(3)</span> <span class="kw">NOT NULL DEFAULT</span> <span class="str">'usd'</span>,
+  created_at  <span class="type">TIMESTAMPTZ</span> <span class="kw">NOT NULL DEFAULT NOW</span>()
+);
+
+<span class="cmt">-- @cap-todo risk:performance F-012 Add index on customer_id + created_at</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 6. FEATURE MAP ===== -->
+<section class="section" id="featuremap">
+  <h2 class="section-title"><span class="num">05</span>Feature Map</h2>
+  <p class="section-desc">The single source of truth. Replaces roadmap, requirements doc, and backlog.</p>
+
+  <h3>Lifecycle</h3>
+  <div class="flow">
+    <div class="flow-step" style="border-color: var(--text-muted); color: var(--text-muted);">planned</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--primary);">prototyped</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--orange);">tested</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-step" style="border-color: var(--green);">shipped</div>
+  </div>
+
+  <h3>Structure</h3>
+  <p>Each feature entry in <code>FEATURE-MAP.md</code> contains:</p>
+  <ul>
+    <li><strong>Feature ID</strong> &mdash; <code>F-NNN</code> (zero-padded)</li>
+    <li><strong>Title</strong> &mdash; human-readable name</li>
+    <li><strong>State</strong> &mdash; lifecycle position</li>
+    <li><strong>Acceptance Criteria</strong> &mdash; testable conditions (the contract)</li>
+    <li><strong>Tags found</strong> &mdash; auto-populated by <code>/cap:scan</code></li>
+    <li><strong>Dependencies</strong> &mdash; other feature IDs</li>
+  </ul>
+
+  <h3>Example</h3>
+  <pre><code><span class="cmt">## F-001 User Authentication</span>
+<span class="tag">State:</span> <span class="str">prototyped</span>
+<span class="tag">Group:</span> <span class="str">Core</span>
+<span class="tag">Dependencies:</span> <span class="str">none</span>
+
+<span class="tag">### Acceptance Criteria</span>
+- [ ] Users can register with email and password
+- [x] Passwords are hashed with bcrypt
+- [ ] JWT tokens expire after 24 hours
+- [ ] Rate limiting on login endpoint (5/min)
+
+<span class="tag">### Tags Found</span>
+- <span class="fn">src/auth/login.js</span>: @cap-feature, 2x @cap-todo, 1x @cap-decision
+- <span class="fn">src/auth/register.js</span>: @cap-feature, 1x @cap-todo</code></pre>
+</section>
+
+<!-- ===== 7. PROJECT MEMORY ===== -->
+<section class="section" id="memory">
+  <h2 class="section-title"><span class="num">06</span>Project Memory System</h2>
+  <p class="section-desc">Persistent, code-derived project knowledge that survives context resets and spans developers.</p>
+
+  <!-- 7.1 Overview -->
+  <div id="mem-overview">
+    <h3>Overview</h3>
+    <p>Project Memory captures the <strong>why</strong> behind your code &mdash; decisions, risks, patterns, and hotspots &mdash; extracted directly from the codebase. Unlike chat-based memory that fades with context windows, CAP memory is <strong>git-tracked</strong>, <strong>team-shared</strong>, and <strong>code-derived</strong>.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title" style="color: var(--accent);">Code Tags (Primary)</div>
+        <p style="margin:0;color:var(--text-dim);">@cap-decision and @cap-todo risk: tags are the ground truth. Zero noise, 100% signal. Memory is extracted from code, not guessed from conversations.</p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--orange);">Session Hotspots</div>
+        <p style="margin:0;color:var(--text-dim);">Edit frequency tracking across sessions reveals which files keep changing. Invaluable for onboarding new team members.</p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--purple);">Conversation Threads</div>
+        <p style="margin:0;color:var(--text-dim);">Brainstorm sessions are persisted as threads with branching, revisit detection, and multi-developer support.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7.2 Architecture -->
+  <div id="mem-architecture">
+    <h3>Architecture</h3>
+    <div class="diagram"><span class="hl">Code Tags</span> (@cap-decision, @cap-todo risk:)
+         |
+         v
+<span class="hl2">+---------------------+</span>     <span class="hl3">+------------------+</span>
+<span class="hl2">| Memory Engine       |</span>----><span class="hl3">| Memory Graph     |</span>
+<span class="hl2">| (F-027)             |</span>     <span class="hl3">| (F-034)          |</span>
+<span class="hl2">| accumulateFromCode()|</span>     <span class="hl3">| graph.json       |</span>
+<span class="hl2">+---------------------+</span>     <span class="hl3">| typed nodes      |</span>
+         |                  <span class="hl3">| labeled edges    |</span>
+<span class="hl4">Session JSONL files</span>         <span class="hl3">| temporal queries |</span>
+| (edit frequency)          <span class="hl3">+--------+---------+</span>
+v                                    |
+<span class="hl4">+---------------------+</span>              v
+<span class="hl4">| Session Hotspots    |</span>     <span class="hl3">+------------------+</span>
+<span class="hl4">| Which files edited  |</span>     <span class="hl3">| Flat Views       |</span>
+<span class="hl4">| how often, by whom  |</span>     <span class="hl3">| decisions.md     |</span>
+<span class="hl4">+---------------------+</span>     <span class="hl3">| hotspots.md      |</span>
+                            <span class="hl3">| pitfalls.md      |</span>
+<span class="hl">Brainstorm Threads</span>          <span class="hl3">| patterns.md      |</span>
+|                           <span class="hl3">+------------------+</span>
+v
+<span class="hl">+---------------------+</span>
+<span class="hl">| Thread Tracker      |</span>
+<span class="hl">| (F-031)             |</span>
+<span class="hl">| .cap/memory/threads/|</span>
+<span class="hl">| thread-index.json   |</span>
+<span class="hl">+--------+------------+</span>
+         |
+         v
+<span class="hl2">+---------------------+</span>     <span class="hl4">+------------------+</span>
+<span class="hl2">| Synthesis Engine    |</span>     <span class="hl4">| Impact Analysis  |</span>
+<span class="hl2">| (F-032)             |</span>     <span class="hl4">| (F-033)          |</span>
+<span class="hl2">| merge/supersede/    |</span>     <span class="hl4">| overlap detect   |</span>
+<span class="hl2">| branch/resume       |</span>     <span class="hl4">| dependency chain |</span>
+<span class="hl2">+---------------------+</span>     <span class="hl4">| circular deps    |</span>
+                            <span class="hl4">+------------------+</span></div>
+  </div>
+
+  <!-- 7.3 Code-First Memory -->
+  <div id="mem-codefirst">
+    <h3>Code-First Memory</h3>
+    <p>Memory entries originate from code annotations, not session heuristics. This is the key differentiator: <strong>zero noise, 100% signal</strong>.</p>
+
+    <div class="collapsible open">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>How a @cap-decision becomes a memory entry</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p><strong>Step 1:</strong> Developer writes a decision in code:</p>
+          <pre><code><span class="cmt">// @cap-decision F-001 Using bcrypt over argon2 — broader ecosystem support</span></code></pre>
+          <p><strong>Step 2:</strong> <code>/cap:memory init</code> runs <code>accumulateFromCode()</code>, which scans all files:</p>
+          <pre><code><span class="cmt">// Tag scanner finds the decision tag</span>
+{
+  <span class="attr">type</span>: <span class="str">"decision"</span>,
+  <span class="attr">feature</span>: <span class="str">"F-001"</span>,
+  <span class="attr">text</span>: <span class="str">"Using bcrypt over argon2 -- broader ecosystem support"</span>,
+  <span class="attr">file</span>: <span class="str">"src/auth/login.js"</span>,
+  <span class="attr">line</span>: <span class="num">14</span>,
+  <span class="attr">anchor</span>: <span class="str">"decision-f001-bcrypt-argon2"</span>
+}</code></pre>
+          <p><strong>Step 3:</strong> Entry appears in <code>.cap/memory/decisions.md</code> and as a node in the memory graph:</p>
+          <pre><code><span class="cmt">## F-001: Using bcrypt over argon2</span>
+<span class="tag">Source:</span> src/auth/login.js:14
+<span class="tag">Reason:</span> Broader ecosystem support
+<span class="tag">Anchor:</span> decision-f001-bcrypt-argon2</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Pitfalls from @cap-todo risk: and @cap-risk</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>Risk-tagged todos and explicit @cap-risk annotations become pitfall entries in memory. These persist across sessions so new developers see known hazards immediately.</p>
+          <pre><code><span class="cmt">// @cap-todo risk:security F-001 Token rotation not yet implemented</span>
+<span class="cmt">// @cap-risk F-003 Third-party API has 99.5% SLA, need fallback</span></code></pre>
+          <p>Both become entries in <code>.cap/memory/pitfalls.md</code> with anchor IDs for deduplication.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7.4 Session Hotspots -->
+  <div id="mem-hotspots">
+    <h3>Session Hotspots</h3>
+    <p>Hotspots answer the question: <strong>"Which files keep getting changed?"</strong> This is tracked by analyzing edit frequency across session JSONL files.</p>
+
+    <table>
+      <thead>
+        <tr><th>File</th><th>Edits</th><th>Sessions</th><th>Last Edited</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>src/auth/login.js</code></td><td style="color:var(--red);font-weight:600;">47</td><td>12</td><td>2 hours ago</td></tr>
+        <tr><td><code>src/api/routes.js</code></td><td style="color:var(--orange);font-weight:600;">31</td><td>8</td><td>1 day ago</td></tr>
+        <tr><td><code>src/db/migrations/005.sql</code></td><td style="color:var(--orange);font-weight:600;">28</td><td>6</td><td>3 days ago</td></tr>
+        <tr><td><code>src/utils/validator.js</code></td><td>14</td><td>5</td><td>1 week ago</td></tr>
+        <tr><td><code>tests/auth.test.js</code></td><td>9</td><td>4</td><td>2 days ago</td></tr>
+      </tbody>
+    </table>
+    <p>High-edit files are flagged in <code>.cap/memory/hotspots.md</code>. This helps new team members understand where the active development is concentrated, and may indicate areas that need refactoring.</p>
+  </div>
+
+  <!-- 7.5 Conversation Threads (F-031) -->
+  <div id="mem-threads">
+    <h3>Conversation Threads <span class="badge badge-cyan">F-031</span></h3>
+    <p>Brainstorm sessions are persisted as threads in <code>.cap/memory/threads/</code> with a central <code>thread-index.json</code>.</p>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Thread Persistence</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>Every <code>/cap:brainstorm</code> session creates a thread file. Threads capture:</p>
+          <ul>
+            <li>Feature IDs discussed</li>
+            <li>Acceptance criteria proposed</li>
+            <li>Key decisions made</li>
+            <li>Open questions remaining</li>
+            <li>Timestamp and developer identity</li>
+          </ul>
+          <pre><code><span class="cmt">// .cap/memory/threads/thread-2024-03-15-auth.json</span>
+{
+  <span class="attr">"id"</span>: <span class="str">"thread-2024-03-15-auth"</span>,
+  <span class="attr">"features"</span>: [<span class="str">"F-001"</span>, <span class="str">"F-002"</span>],
+  <span class="attr">"status"</span>: <span class="str">"active"</span>,
+  <span class="attr">"decisions"</span>: [<span class="str">"Use JWT over sessions"</span>],
+  <span class="attr">"openQuestions"</span>: [<span class="str">"Token refresh strategy?"</span>],
+  <span class="attr">"branchedFrom"</span>: <span class="kw">null</span>
+}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Thread Branching</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>When a brainstorm session diverges from an earlier thread, CAP creates a <strong>branch</strong> &mdash; preserving both the original direction and the new one. This is critical for tracking divergent ideas:</p>
+          <pre><code>thread-2024-03-15-auth          <span class="cmt">(original: JWT approach)</span>
+  +-- thread-2024-03-18-auth-v2 <span class="cmt">(branch: session cookies instead)</span></code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Revisit Detection</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>When starting a new brainstorm, CAP checks existing threads for <strong>keyword overlap</strong> and <strong>feature ID overlap</strong>. If a match is found, it surfaces the prior thread so you can resume, branch, or supersede rather than starting from scratch.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Multi-Developer: Git-Tracked Thread Index</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>The <code>thread-index.json</code> is designed for git merge-friendliness. Each thread has a unique ID and anchor, so concurrent additions by different developers merge cleanly.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7.6 Thread Reconnection (F-032) -->
+  <div id="mem-reconnection">
+    <h3>Thread Reconnection <span class="badge badge-purple">F-032</span></h3>
+    <p>When revisiting a previous thread, the Synthesis Engine offers 4 strategies:</p>
+
+    <div class="strategy-grid">
+      <div class="strategy-card" style="border-top: 3px solid var(--green);">
+        <div class="strategy-name" style="color: var(--green);">Merge</div>
+        <div class="strategy-desc">Combine old and new ideas into a single unified thread. Both perspectives preserved.</div>
+      </div>
+      <div class="strategy-card" style="border-top: 3px solid var(--red);">
+        <div class="strategy-name" style="color: var(--red);">Supersede</div>
+        <div class="strategy-desc">New thread replaces old. Original archived with "superseded-by" link.</div>
+      </div>
+      <div class="strategy-card" style="border-top: 3px solid var(--primary);">
+        <div class="strategy-name" style="color: var(--primary);">Branch</div>
+        <div class="strategy-desc">Fork into parallel exploration. Original remains active alongside new direction.</div>
+      </div>
+      <div class="strategy-card" style="border-top: 3px solid var(--orange);">
+        <div class="strategy-name" style="color: var(--orange);">Resume</div>
+        <div class="strategy-desc">Continue the original thread. New entries appended, no structural changes.</div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>AC Conflict Detection</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>When merging or superseding, the engine performs a side-by-side comparison of acceptance criteria. Conflicts are flagged for manual resolution:</p>
+          <pre><code><span class="cmt">CONFLICT in F-001 AC #3:</span>
+  <span class="type">Old:</span> <span class="str">"JWT tokens expire after 24 hours"</span>
+  <span class="type">New:</span> <span class="str">"JWT tokens expire after 1 hour with refresh"</span>
+
+  <span class="tag">Resolution required:</span> merge | keep-old | keep-new</code></pre>
+          <p>All resolutions are logged in the thread for audit trail.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7.7 Impact Analysis (F-033) -->
+  <div id="mem-impact">
+    <h3>Impact Analysis <span class="badge badge-orange">F-033</span></h3>
+    <p>Proactive analysis during brainstorming that detects feature overlap, dependency chains, and circular dependencies.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title" style="color: var(--accent);">Overlap Detection</div>
+        <p style="margin:0;color:var(--text-dim);">When two features touch the same files or acceptance criteria, impact analysis flags the overlap before you start building &mdash; preventing wasted work.</p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--orange);">Dependency Chain Traversal</div>
+        <p style="margin:0;color:var(--text-dim);">Full transitive dependency analysis: if F-005 depends on F-003, which depends on F-001, you see the entire chain and can plan accordingly.</p>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--red);">Circular Dependency Warning</div>
+        <p style="margin:0;color:var(--text-dim);">Detects cycles in feature dependencies (F-001 &rarr; F-003 &rarr; F-007 &rarr; F-001) and proposes resolution strategies.</p>
+      </div>
+    </div>
+
+    <p>Impact analysis is <strong>advisory only</strong> &mdash; it surfaces information and proposes resolutions, but never modifies code or Feature Map entries automatically.</p>
+  </div>
+
+  <!-- 7.8 Memory Graph (F-034) -->
+  <div id="mem-graph">
+    <h3>Memory Graph <span class="badge badge-blue">F-034</span></h3>
+    <p>A connected graph structure stored in <code>.cap/memory/graph.json</code> that links features, threads, decisions, pitfalls, patterns, and hotspots.</p>
+
+    <h4>6 Node Types</h4>
+    <div class="node-types">
+      <span class="chip" style="background: rgba(59,130,246,0.15); color: var(--primary); border-color: var(--primary);">feature</span>
+      <span class="chip" style="background: rgba(167,139,250,0.15); color: var(--purple); border-color: var(--purple);">thread</span>
+      <span class="chip" style="background: rgba(34,211,238,0.15); color: var(--accent); border-color: var(--accent);">decision</span>
+      <span class="chip" style="background: rgba(239,68,68,0.15); color: var(--red); border-color: var(--red);">pitfall</span>
+      <span class="chip" style="background: rgba(34,197,94,0.15); color: var(--green); border-color: var(--green);">pattern</span>
+      <span class="chip" style="background: rgba(245,158,11,0.15); color: var(--orange); border-color: var(--orange);">hotspot</span>
+    </div>
+
+    <h4>6 Edge Types</h4>
+    <div class="edge-types">
+      <span class="chip" style="background: rgba(59,130,246,0.1); color: var(--primary); border-color: var(--border);">depends_on</span>
+      <span class="chip" style="background: rgba(239,68,68,0.1); color: var(--red); border-color: var(--border);">supersedes</span>
+      <span class="chip" style="background: rgba(245,158,11,0.1); color: var(--orange); border-color: var(--border);">conflicts_with</span>
+      <span class="chip" style="background: rgba(167,139,250,0.1); color: var(--purple); border-color: var(--border);">branched_from</span>
+      <span class="chip" style="background: rgba(34,211,238,0.1); color: var(--accent); border-color: var(--border);">informed_by</span>
+      <span class="chip" style="background: rgba(34,197,94,0.1); color: var(--green); border-color: var(--border);">relates_to</span>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Temporal Queries</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>Every node and edge carries a timestamp. This enables temporal queries:</p>
+          <ul>
+            <li>"What decisions were made about F-001 last week?"</li>
+            <li>"Which pitfalls were added since v2.3?"</li>
+            <li>"Show me the evolution of F-012 from planned to shipped"</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Flat Files as Generated Views</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>The graph is the canonical store. Flat markdown files (<code>decisions.md</code>, <code>hotspots.md</code>, <code>pitfalls.md</code>, <code>patterns.md</code>) are <strong>generated views</strong> &mdash; human-readable projections of the graph for quick scanning.</p>
+          <pre><code>.cap/memory/
+  graph.json        <span class="cmt"># Canonical store (nodes + edges)</span>
+  decisions.md      <span class="cmt"># Generated view</span>
+  hotspots.md       <span class="cmt"># Generated view</span>
+  pitfalls.md       <span class="cmt"># Generated view</span>
+  patterns.md       <span class="cmt"># Generated view</span>
+  threads/          <span class="cmt"># Thread files</span>
+    thread-index.json</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Merge-Friendly Serialization</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>The JSON serialization is designed for git merge friendliness:</p>
+          <ul>
+            <li>Each node has a stable <strong>anchor ID</strong> derived from content (not auto-increment)</li>
+            <li>Nodes and edges are stored as sorted arrays (deterministic ordering)</li>
+            <li>Adding a node is an append operation &mdash; no rewriting existing entries</li>
+            <li>Most merges resolve automatically via anchor-ID deduplication</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7.9 Multi-Developer Workflow -->
+  <div id="mem-multidev">
+    <h3>Multi-Developer Workflow</h3>
+    <p>Memory is designed to be shared via git. Here is the typical multi-developer flow:</p>
+
+    <div class="card" style="border-left: 3px solid var(--primary);">
+      <div class="card-title" style="color: var(--primary);">Developer A</div>
+      <pre style="border:none;margin:0;padding:0.75rem 0 0;"><code><span class="cmt"># 1. Bootstrap memory from their sessions + code tags</span>
+/cap:memory init
+
+<span class="cmt"># 2. Memory files generated in .cap/memory/</span>
+git add .cap/memory/
+git commit -m <span class="str">"chore: bootstrap project memory"</span>
+git push</code></pre>
+    </div>
+
+    <div class="card" style="border-left: 3px solid var(--green);">
+      <div class="card-title" style="color: var(--green);">Developer B</div>
+      <pre style="border:none;margin:0;padding:0.75rem 0 0;"><code><span class="cmt"># 1. Pull Developer A's memory</span>
+git pull
+
+<span class="cmt"># 2. Run memory init — MERGES with existing memory</span>
+<span class="cmt">#    Anchor-ID dedup prevents duplicates</span>
+/cap:memory init
+
+<span class="cmt"># 3. Both perspectives now combined</span>
+git add .cap/memory/
+git commit -m <span class="str">"chore: merge Developer B memory"</span>
+git push</code></pre>
+    </div>
+
+    <p>Because anchor IDs are content-derived, the same decision found by both developers produces the same anchor &mdash; it is deduplicated automatically, not doubled.</p>
+  </div>
+
+  <!-- 7.10 Memory Commands -->
+  <div id="mem-commands">
+    <h3>Memory Commands</h3>
+    <table>
+      <thead>
+        <tr><th>Command</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>/cap:memory init</code></td><td>Bootstrap memory from all sessions + code tags. Scans codebase, analyzes session JSONL, generates graph and flat views. Safe to run repeatedly &mdash; idempotent via anchor-ID dedup.</td></tr>
+        <tr><td><code>/cap:memory status</code></td><td>Show memory summary: node counts by type, edge counts, latest entries, staleness warnings.</td></tr>
+        <tr><td><code>/cap:memory pin &lt;id&gt;</code></td><td>Pin a memory entry as permanent. Pinned entries (typically pitfalls) are never pruned or superseded.</td></tr>
+        <tr><td><code>/cap:memory unpin &lt;id&gt;</code></td><td>Remove permanent pin from a memory entry.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== 8. AGENTS ===== -->
+<section class="section" id="agents">
+  <h2 class="section-title"><span class="num">07</span>Agents</h2>
+  <p class="section-desc">5 specialized agents, each with a single responsibility. Communication only via shared artifacts.</p>
+
+  <div class="card-grid">
+    <div class="agent-card">
+      <div class="agent-icon" style="background: rgba(167,139,250,0.15); color: var(--purple);">B</div>
+      <div class="card-title">cap-brainstormer</div>
+      <p style="color:var(--text-dim);margin:0;font-size:0.9rem;">Conversational feature discovery. Guides the developer through questions, produces Feature Map entries with acceptance criteria, feature grouping, and dependency analysis.</p>
+    </div>
+    <div class="agent-card">
+      <div class="agent-icon" style="background: rgba(59,130,246,0.15); color: var(--primary);">P</div>
+      <div class="card-title">cap-prototyper</div>
+      <p style="color:var(--text-dim);margin:0;font-size:0.9rem;">Builds annotated code. 4 modes: <strong>prototype</strong> (new feature), <strong>iterate</strong> (refine existing), <strong>architecture</strong> (system design), <strong>annotate</strong> (tag existing code).</p>
+    </div>
+    <div class="agent-card">
+      <div class="agent-icon" style="background: rgba(34,197,94,0.15); color: var(--green);">T</div>
+      <div class="card-title">cap-tester</div>
+      <p style="color:var(--text-dim);margin:0;font-size:0.9rem;">RED-GREEN discipline with adversarial mindset. Writes tests against Feature Map acceptance criteria. Tests must fail first (RED), then pass (GREEN).</p>
+    </div>
+    <div class="agent-card">
+      <div class="agent-icon" style="background: rgba(245,158,11,0.15); color: var(--orange);">R</div>
+      <div class="card-title">cap-reviewer</div>
+      <p style="color:var(--text-dim);margin:0;font-size:0.9rem;">Two-stage review. <strong>Stage 1:</strong> AC verification (does the code satisfy acceptance criteria?). <strong>Stage 2:</strong> Code quality (only runs if Stage 1 passes).</p>
+    </div>
+    <div class="agent-card">
+      <div class="agent-icon" style="background: rgba(239,68,68,0.15); color: var(--red);">D</div>
+      <div class="card-title">cap-debugger</div>
+      <p style="color:var(--text-dim);margin:0;font-size:0.9rem;">Scientific method debugging. Persistent state across context resets. Hypothesis &rarr; experiment &rarr; observe &rarr; conclude. Deploy-aware workflow minimizes deploy cycles.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 9. TEST QUALITY ===== -->
+<section class="section" id="testquality">
+  <h2 class="section-title"><span class="num">08</span>Test Quality Infrastructure</h2>
+  <p class="section-desc">Beyond coverage: assertion density, mutation testing, and a trust score.</p>
+
+  <div class="collapsible open">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h4>Trust Model</h4>
+      <span class="collapsible-arrow">&#9660;</span>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>The <code>/cap:test-audit</code> command produces a composite <strong>trust score</strong> based on:</p>
+        <table>
+          <thead>
+            <tr><th>Metric</th><th>Weight</th><th>What it measures</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Line coverage</td><td>25%</td><td>Basic coverage via c8</td></tr>
+            <tr><td>Assertion density</td><td>25%</td><td>Assertions per test &mdash; flags empty tests</td></tr>
+            <tr><td>Mutation score</td><td>30%</td><td>% of code mutations caught by tests</td></tr>
+            <tr><td>Anti-pattern score</td><td>20%</td><td>Absence of test smells (no mocks of SUT, no sleep, etc.)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h4>Mutation Testing</h4>
+      <span class="collapsible-arrow">&#9660;</span>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>Mutation testing modifies your source code (mutants) and checks whether your tests catch the change. This reveals tests that pass but do not actually verify behavior.</p>
+        <pre><code><span class="cmt">// Original code</span>
+<span class="kw">if</span> (user.age >= <span class="num">18</span>) { <span class="fn">allowAccess</span>(); }
+
+<span class="cmt">// Mutant: boundary change</span>
+<span class="kw">if</span> (user.age > <span class="num">18</span>) { <span class="fn">allowAccess</span>(); }
+<span class="cmt">// If tests still pass, the boundary isn't tested!</span></code></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h4>Spot Checks</h4>
+      <span class="collapsible-arrow">&#9660;</span>
+    </div>
+    <div class="collapsible-body">
+      <div class="collapsible-content">
+        <p>Spot checks are lightweight, targeted verifications that run as part of the audit. They check for common testing anti-patterns:</p>
+        <ul>
+          <li>Tests without assertions</li>
+          <li>Mocking the system under test</li>
+          <li>Tests that depend on execution order</li>
+          <li>Hardcoded timeouts/sleeps</li>
+          <li>Tests that always pass (tautological assertions)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10. MONOREPO ===== -->
+<section class="section" id="monorepo">
+  <h2 class="section-title"><span class="num">09</span>Monorepo Support</h2>
+  <p class="section-desc">Automatic workspace detection and per-app scoping.</p>
+
+  <h3>Workspace Detection</h3>
+  <p>CAP detects monorepo workspaces automatically from <code>package.json</code> workspaces, <code>pnpm-workspace.yaml</code>, or directory conventions. Each workspace package gets its own tag namespace.</p>
+
+  <pre><code>my-monorepo/
+  packages/
+    api/         <span class="cmt"># /cap:switch-app api</span>
+    web/         <span class="cmt"># /cap:switch-app web</span>
+    shared/      <span class="cmt"># /cap:switch-app shared</span>
+  FEATURE-MAP.md <span class="cmt"># Shared across all apps</span>
+  .cap/
+    SESSION.json <span class="cmt"># Tracks active app</span></code></pre>
+
+  <h3>Per-App Scoping</h3>
+  <p>When you run <code>/cap:switch-app web</code>, all subsequent commands scope to that package:</p>
+  <ul>
+    <li><code>/cap:scan</code> only scans files within <code>packages/web/</code></li>
+    <li><code>/cap:prototype</code> creates files within the active app</li>
+    <li><code>/cap:test</code> runs tests for the active app only</li>
+    <li>The Feature Map remains shared &mdash; features can span apps</li>
+  </ul>
+</section>
+
+<!-- ===== 11. SECURITY ===== -->
+<section class="section" id="security">
+  <h2 class="section-title"><span class="num">10</span>Security</h2>
+  <p class="section-desc">Zero dependencies, provenance tracking, and safe CI integration.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title" style="color: var(--green);">Zero Runtime Dependencies</div>
+      <p style="margin:0;color:var(--text-dim);">CAP uses only Node.js built-in modules (<code>fs</code>, <code>path</code>, <code>crypto</code>). No external npm packages at runtime means zero supply-chain attack surface.</p>
+    </div>
+    <div class="card">
+      <div class="card-title" style="color: var(--primary);">Provenance</div>
+      <p style="margin:0;color:var(--text-dim);">Published with npm provenance attestation. Every published version is verifiably linked to its source commit.</p>
+    </div>
+    <div class="card">
+      <div class="card-title" style="color: var(--accent);">Safe CI</div>
+      <p style="margin:0;color:var(--text-dim);">CAP commands are designed to be CI-safe. No network calls, no file system operations outside the project root, no environment variable exfiltration.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 12. MIGRATION ===== -->
+<section class="section" id="migration">
+  <h2 class="section-title"><span class="num">11</span>Migration from GSD</h2>
+  <p class="section-desc">Upgrading from GSD Code-First v1.x? One command handles it.</p>
+
+  <pre><code>/cap:migrate</code></pre>
+
+  <h3>Tag Conversion</h3>
+  <table>
+    <thead>
+      <tr><th>GSD v1.x Tag</th><th>CAP v2.x Tag</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>@gsd-feature</code></td><td><code>@cap-feature</code></td></tr>
+      <tr><td><code>@gsd-todo</code></td><td><code>@cap-todo</code></td></tr>
+      <tr><td><code>@gsd-risk</code></td><td><code>@cap-risk</code></td></tr>
+      <tr><td><code>@gsd-decision</code></td><td><code>@cap-decision</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>What /cap:migrate Does</h3>
+  <ul>
+    <li>Scans all source files for <code>@gsd-*</code> tags and replaces them with <code>@cap-*</code> equivalents</li>
+    <li>Converts <code>.planning/</code> directory structure to <code>.cap/</code></li>
+    <li>Migrates session format from GSD v1.x to CAP v2.x</li>
+    <li>Preserves all feature IDs and acceptance criteria</li>
+    <li>Generates a migration report showing what changed</li>
+  </ul>
+</section>
+
+<!-- Footer -->
+<footer style="padding: 3rem 2rem; text-align: center; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem;">
+  <p>CAP &mdash; Code as Plan &middot; v2.5.0</p>
+  <p style="margin-top: 0.5rem;">Build first. Plan from code. Ship with confidence.</p>
+</footer>
+
+</div><!-- .main -->
+
+<!-- Back to Top -->
+<button class="back-to-top" id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">&#8593;</button>
+
+<script>
+// ===== COPY INSTALL COMMAND =====
+function copyInstall(el) {
+  navigator.clipboard.writeText('npx code-as-plan@latest').then(function() {
+    el.classList.add('copied');
+    setTimeout(function() { el.classList.remove('copied'); }, 1500);
+  });
+}
+
+// ===== COLLAPSIBLE SECTIONS =====
+function toggleCollapsible(header) {
+  header.parentElement.classList.toggle('open');
+}
+
+// ===== TABS =====
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var group = this.closest('.tabs');
+    group.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    group.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    this.classList.add('active');
+    group.querySelector('.tab-panel[data-tab="' + this.dataset.tab + '"]').classList.add('active');
+  });
+});
+
+// ===== COMMAND FILTER =====
+function filterCommands() {
+  var query = document.getElementById('cmd-search').value.toLowerCase();
+  var rows = document.querySelectorAll('#cmd-table tbody tr');
+  rows.forEach(function(row) {
+    var text = row.textContent.toLowerCase();
+    row.style.display = text.indexOf(query) !== -1 ? '' : 'none';
+  });
+}
+
+// ===== SIDEBAR ACTIVE STATE =====
+var sidebarLinks = document.querySelectorAll('.sidebar nav a');
+var sections = [];
+sidebarLinks.forEach(function(link) {
+  var id = link.getAttribute('href');
+  if (id && id.startsWith('#')) {
+    var el = document.querySelector(id);
+    if (el) sections.push({ el: el, link: link });
+  }
+});
+
+function updateActiveLink() {
+  var scrollPos = window.scrollY + 120;
+  var current = null;
+  for (var i = sections.length - 1; i >= 0; i--) {
+    if (sections[i].el.offsetTop <= scrollPos) {
+      current = sections[i];
+      break;
+    }
+  }
+  sidebarLinks.forEach(function(l) { l.classList.remove('active'); });
+  if (current) current.link.classList.add('active');
+}
+
+// ===== BACK TO TOP =====
+function updateBackToTop() {
+  var btn = document.getElementById('backToTop');
+  if (window.scrollY > 500) {
+    btn.classList.add('visible');
+  } else {
+    btn.classList.remove('visible');
+  }
+}
+
+// ===== MOBILE SIDEBAR CLOSE ON LINK CLICK =====
+sidebarLinks.forEach(function(link) {
+  link.addEventListener('click', function() {
+    if (window.innerWidth <= 900) {
+      document.querySelector('.sidebar').classList.remove('open');
+    }
+  });
+});
+
+// ===== SCROLL LISTENER =====
+var ticking = false;
+window.addEventListener('scroll', function() {
+  if (!ticking) {
+    window.requestAnimationFrame(function() {
+      updateActiveLink();
+      updateBackToTop();
+      ticking = false;
+    });
+    ticking = true;
+  }
+});
+
+// Initial state
+updateActiveLink();
+</script>
+
+</body>
+</html>

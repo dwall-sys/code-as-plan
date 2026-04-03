@@ -185,6 +185,10 @@ Green tests mean verified. No separate verification document.
 | `/cap:migrate` | Migrate from GSD Code-First v1.x to CAP v2.0 (supports `--rescope` for per-app Feature Maps) |
 | `/cap:test-audit` | Test quality analysis: assertion density, coverage, mutation score, spot-check guide, trust score |
 | `/cap:report` | Human-readable project overview for non-technical stakeholders (no IDs, no tag syntax) |
+| `/cap:doctor` | Health check for all required and optional dependencies |
+| `/cap:save` | Save current session context to snapshot file for cross-session continuity |
+| `/cap:continue` | Restore a saved context snapshot |
+| `/cap:memory` | Project memory management -- `init`, `status`, `pin`, `unpin` subcommands |
 
 ---
 
@@ -486,6 +490,139 @@ CAP integrates with Context7 to fetch current library documentation during devel
 
 ```bash
 /cap:refresh-docs          # fetch/update docs for all detected dependencies
+```
+
+---
+
+## Project Memory System
+
+CAP v3.0 introduces a persistent project memory that accumulates knowledge across sessions, developers, and brainstorm conversations. Unlike traditional session logs, CAP memory follows the Code-First principle: **code tags are the primary source**, session data provides only edit frequency metrics.
+
+### How it works
+
+```
+Code Tags                    Session JSONL Files
+@cap-decision ...            (edit frequency only)
+@cap-todo risk: ...                |
+@cap-risk ...                      v
+       |                    +-------------+
+       v                    | Hotspot     |
++----------------+          | Detection   |
+| Memory Engine  |          +------+------+
+| (code-first)   |                 |
++-------+--------+                 |
+        |                          |
+        +----------+---------------+
+                   |
+                   v
+          +--------+--------+
+          | Memory Graph    |
+          | .cap/memory/    |
+          | graph.json      |
+          +--------+--------+
+                   |
+     +-------------+-------------+
+     |             |             |
+     v             v             v
+decisions.md  hotspots.md  pitfalls.md    (human-readable views)
+```
+
+### Three data sources
+
+**1. Code tags (primary, zero noise)**
+
+```javascript
+// @cap-decision Use SQLite over PostgreSQL -- single-node deployment, no ops overhead
+// @cap-todo risk: Connection pool exhaustion under load
+// @cap-risk Regex YAML parsing breaks on complex YAML features
+```
+
+These are explicit developer annotations -- 100% signal, no heuristic extraction needed.
+
+**2. Session hotspots (edit frequency)**
+
+Which files keep getting changed, across how many sessions? Hotspots help new team members understand where the action is.
+
+```
+| File                          | Sessions | Edits |
+|-------------------------------|----------|-------|
+| packages/auth/callback.ts     | 6        | 29    |
+| packages/auth/middleware.ts   | 5        | 24    |
+| apps/hub/AuthContext.tsx       | 3        | 5     |
+```
+
+**3. Conversation threads (brainstorm memory)**
+
+When you brainstorm with CAP, the conversation is persisted as a named thread in `.cap/memory/threads/`. When you return to the same topic days later, CAP detects the connection and offers to resume, merge, or branch the discussion.
+
+### Conversation threading
+
+Brainstorm conversations naturally branch into tangents. Humans track these threads effortlessly; AI assistants lose them when the session ends. CAP solves this with persistent thread tracking:
+
+```
+Session 1: "We need auth for the booking system"
+  -> Thread created: thr-a1b2c3 (Auth Architecture)
+  -> Features: F-AUTH, F-SSO
+  -> Decisions: Supabase over Firebase, cookie-based SSO
+
+Session 2 (next day): "Remember the auth discussion? I have a new idea..."
+  -> CAP detects: 85% keyword overlap with thr-a1b2c3
+  -> Shows: "Found prior thread: Auth Architecture (2 days ago)"
+  -> Proposes: merge | supersede | branch | resume
+```
+
+**Four reconnection strategies:**
+
+| Strategy | When to use |
+|----------|-------------|
+| **Resume** | Continue where you left off |
+| **Merge** | Integrate new ideas into old thread, combine ACs |
+| **Supersede** | New idea replaces old approach entirely |
+| **Branch** | Both approaches coexist as alternatives |
+
+### Impact analysis
+
+When you propose a new feature during brainstorming, CAP automatically checks for overlap with existing features:
+
+- Compares acceptance criteria for semantic similarity
+- Traces full dependency chains (A depends on B depends on C -- changing B surfaces impact on A and C)
+- Detects circular dependency risks
+- Proposes concrete resolutions: merge ACs, split features, adjust dependencies
+
+All proposals are advisory -- CAP never modifies the Feature Map without explicit approval.
+
+### Memory graph
+
+Under the hood, all memory is stored as a connected graph (`.cap/memory/graph.json`):
+
+- **6 node types:** feature, thread, decision, pitfall, pattern, hotspot
+- **6 edge types:** depends_on, supersedes, conflicts_with, branched_from, informed_by, relates_to
+- **Temporal queries:** "What changed between last Tuesday and today?"
+- **Traversal queries:** "Show all decisions that informed F-005 within 2 hops"
+
+The flat markdown files (`decisions.md`, `hotspots.md`, `pitfalls.md`, `patterns.md`) are generated views from the graph -- human-readable and git-diffable.
+
+### Multi-developer workflow
+
+Memory is git-tracked. When multiple developers work on the same project:
+
+```
+Developer A: /cap:memory init  ->  .cap/memory/ generated  ->  commit + push
+Developer B: git pull          ->  has A's memory
+             /cap:memory init  ->  MERGES with A's data (anchor-ID dedup)
+             commit + push     ->  combined team memory
+```
+
+Both developers' decisions, hotspots, and threads are accumulated into a shared project memory that grows over time.
+
+### Commands
+
+```bash
+/cap:memory init      # bootstrap memory from all sessions + code tags (one-time)
+/cap:memory           # incremental update (runs automatically after each session)
+/cap:memory status    # show memory summary (entries per category, last run)
+/cap:memory pin       # mark a pitfall as permanent (immune to aging)
+/cap:memory unpin     # remove permanent mark
 ```
 
 ---
