@@ -401,6 +401,77 @@
 **Files:**
 - `cap/bin/lib/cap-session-extract.cjs`
 
+### F-027: Build Memory Accumulation Engine [planned]
+
+**Depends on:** F-025, F-026
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Read parsed session data from F-025 (parseSession, extractTextContent, extractToolUses) and F-026 (extractDecisionsAll, extractHotspots) as sole input source |
+| AC-2 | pending | Detect four memory categories from session data: decisions, pitfalls, patterns, and hotspots |
+| AC-3 | pending | Enforce cross-session noise threshold — file must be edited in at least 2 separate sessions before qualifying as @cap-history hotspot |
+| AC-4 | pending | Only emit pitfall entries from debug sessions or from explicit @cap-decision tags containing failure/workaround context |
+| AC-5 | pending | Only emit pattern entries when the same approach has been successfully applied in at least 2 sessions |
+| AC-6 | pending | Implement relevance-based aging — annotations without associated file edits within N sessions (default 5) shall be marked stale and queued for removal |
+| AC-7 | pending | Support pinned:true attribute on @cap-pitfall entries that exempts them from aging and expiry |
+| AC-8 | pending | Output structured memory entry objects (category, file, content, metadata) consumable by F-028 and F-029 |
+
+**Files:**
+- `cap/bin/lib/cap-memory-engine.cjs`
+
+### F-028: Implement Code Annotation Writer [planned]
+
+**Depends on:** F-027, F-001
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Insert @cap-history, @cap-pitfall, and @cap-pattern annotations into source files at file-top block alongside existing @cap-feature tags |
+| AC-2 | pending | Detect correct comment syntax for target file based on extension (// for JS/TS/Go/Rust, # for Python/Ruby/Shell, -- for SQL/Lua) |
+| AC-3 | pending | Update existing annotations in-place when metadata changes without creating duplicates |
+| AC-4 | pending | Remove annotations marked as stale by the aging logic in F-027 |
+| AC-5 | pending | Format annotations with parenthesized metadata matching existing tag conventions — e.g., @cap-history(sessions:3, edits:8, since:2026-03-15) |
+| AC-6 | pending | Be parseable by existing tag scanner (F-001) without modifications to scanner regex |
+| AC-7 | pending | Support dry-run mode that reports changes without writing to disk |
+
+**Files:**
+- `cap/bin/lib/cap-annotation-writer.cjs`
+
+### F-029: Manage Cross-File Memory Directory [planned]
+
+**Depends on:** F-027
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Write aggregated memory entries to .cap/memory/ as four markdown files: decisions.md, hotspots.md, patterns.md, pitfalls.md |
+| AC-2 | pending | Auto-generate from accumulated session data — manual edits outside pinned entries are overwritten on regeneration |
+| AC-3 | pending | Each entry shall include source session date, related files, and human-readable summary |
+| AC-4 | pending | hotspots.md shall rank files by cross-session edit frequency with session count and date range |
+| AC-5 | pending | Code annotations written by F-028 shall include cross-reference link to relevant memory file section |
+| AC-6 | pending | Generate stable anchor IDs for each entry so cross-reference links remain valid across regenerations |
+| AC-7 | pending | .cap/memory/ directory shall be git-committable (not gitignored) so project memory persists across clones |
+
+**Files:**
+- `cap/bin/lib/cap-memory-dir.cjs`
+
+### F-030: Wire Memory Automation Hook and Command [planned]
+
+**Depends on:** F-027, F-028, F-029, F-009
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Post-session hook (hooks/cap-memory.js) shall trigger the F-027→F-028→F-029 pipeline automatically after session end |
+| AC-2 | pending | Hook shall register via existing hooks system (F-009) and be installed by multi-runtime installer (F-008) |
+| AC-3 | pending | /cap:memory command shall provide manual trigger of full memory pipeline |
+| AC-4 | pending | /cap:memory pin subcommand to mark @cap-pitfall annotation as pinned:true |
+| AC-5 | pending | /cap:memory unpin subcommand to remove pinned:true from annotation |
+| AC-6 | pending | /cap:memory status subcommand shall display summary: total annotations by category, stale count, pinned count, last-run timestamp |
+| AC-7 | pending | Hook shall complete within 5 seconds for projects with up to 50 session files |
+| AC-8 | pending | Hook shall be skippable via CAP_SKIP_MEMORY=1 environment variable for CI contexts |
+
+**Files:**
+- `hooks/cap-memory.js`
+- `commands/cap/memory.md`
+
 ## Legend
 
 | State | Meaning |
