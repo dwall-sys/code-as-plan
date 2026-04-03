@@ -5,6 +5,7 @@
 
 'use strict';
 
+// @cap-history(sessions:2, edits:7, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 7 edits
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -29,6 +30,27 @@ const COMMENT_PREFIX_MAP = {
 };
 
 // @cap-todo(ref:F-028:AC-2) Detect correct comment syntax for target file based on extension
+
+/** File extensions that must never receive annotations (no valid comment syntax or structured format). */
+const ANNOTATION_BLOCKLIST = new Set([
+  '.md', '.markdown', '.json', '.jsonl', '.lock', '.svg', '.xml', '.html', '.htm',
+  '.css', '.scss', '.less', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2',
+  '.ttf', '.eot', '.map', '.min.js', '.min.css', '.patch', '.diff',
+]);
+
+/**
+ * Check if a file can receive annotations.
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+function canAnnotate(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const basename = path.basename(filePath).toLowerCase();
+  if (ANNOTATION_BLOCKLIST.has(ext)) return false;
+  if (basename === 'package-lock.json' || basename === 'yarn.lock' || basename === 'pnpm-lock.yaml') return false;
+  if (basename.endsWith('.md')) return false;
+  return true;
+}
 
 /**
  * Get the single-line comment prefix for a file.
@@ -238,6 +260,7 @@ function writeAnnotations(fileEntries, options = {}) {
 
   for (const [filePath, entries] of Object.entries(fileEntries)) {
     if (!fs.existsSync(filePath)) continue;
+    if (!canAnnotate(filePath)) continue;
 
     const content = fs.readFileSync(filePath, 'utf8');
     const stale = options.staleByFile?.[filePath] || [];
@@ -295,6 +318,7 @@ function removeStaleAnnotations(staleEntries, options = {}) {
 }
 
 module.exports = {
+  canAnnotate,
   getCommentPrefix,
   parseExistingAnnotations,
   findInsertionPoint,
@@ -303,5 +327,6 @@ module.exports = {
   writeAnnotations,
   removeStaleAnnotations,
   COMMENT_PREFIX_MAP,
+  ANNOTATION_BLOCKLIST,
   MEMORY_TAG_RE,
 };

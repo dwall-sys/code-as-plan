@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // @cap-feature(feature:F-009) Hooks System — build script (syntax validation + dist copy)
+// @cap-history(sessions:3, edits:4, since:2026-04-01, learned:2026-04-03) Frequently modified — 3 sessions, 4 edits
 /**
  * Copy CAP hooks to dist for installation.
  * Validates JavaScript syntax before copying to prevent shipping broken hooks.

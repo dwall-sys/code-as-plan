@@ -5,6 +5,7 @@
 
 'use strict';
 
+// @cap-history(sessions:2, edits:22, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 22 edits
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -19,23 +20,31 @@ const MIN_HOTSPOT_SESSIONS = 2;
 /** Minimum successful applications for a pattern to be recorded. */
 const MIN_PATTERN_CONFIRMATIONS = 2;
 
-/** Regex patterns for detecting decision-related content in assistant messages. */
+/** Regex patterns for detecting decision-related content in assistant messages.
+ * Tightened: require verb+noun combinations, not just isolated keywords. */
 const DECISION_PATTERNS = [
-  /(?:decided|decision|chose|choice|approach|strategy|trade-?off|rationale|conclusion)/i,
-  /(?:the problem|the issue|root cause|the fix|solution|workaround)/i,
+  /(?:(?:I|we) (?:decided|chose|picked|selected|went with)\b)/i,
+  /(?:decision(?:\s+(?:was|is|to))\b)/i,
+  /(?:trade-?off(?:\s+(?:between|is|was))\b)/i,
+  /(?:root cause(?:\s+(?:is|was|:))\b)/i,
+  /(?:the fix(?:\s+(?:is|was|needs|requires))\b)/i,
 ];
 
-/** Regex patterns for detecting pitfall/failure content. */
+/** Regex patterns for detecting pitfall/failure content.
+ * Tightened: require action context, not just isolated words. */
 const PITFALL_PATTERNS = [
-  /(?:bug|failure|crash|broke|broken|breaking|regression|workaround)/i,
-  /(?:don't|do not|avoid|never|careful|watch out|gotcha|trap|pitfall)/i,
-  /(?:hours? (?:of )?debugging|wasted|painful|tricky|subtle)/i,
+  /(?:(?:don't|do not|never|avoid)\s+\w{3,})/i,
+  /(?:(?:watch out|careful|gotcha|pitfall|trap)\s+(?:for|with|when|:))/i,
+  /(?:hours?\s+(?:of\s+)?debugging)/i,
+  /(?:regression\s+(?:in|from|caused|when))/i,
+  /(?:(?:this|the)\s+(?:bug|crash|failure)\s+(?:is|was|happens|occurs|caused))/i,
 ];
 
-/** Regex patterns for detecting successful patterns. */
+/** Regex patterns for detecting successful patterns.
+ * Tightened: require specific recommendation language. */
 const PATTERN_PATTERNS = [
-  /(?:works? well|good approach|better to|prefer|recommend|proven|reliable)/i,
-  /(?:this (?:approach|pattern|strategy|method) (?:works?|is better|solved))/i,
+  /(?:this (?:approach|pattern|method) (?:works?|solved|is better))/i,
+  /(?:(?:proven|reliable)\s+(?:approach|pattern|method|strategy))/i,
 ];
 
 /** Feature ID regex */
@@ -134,8 +143,8 @@ const NOISE_PATTERNS = [
   /^`?(\/gsd:|\/cap:|cap:|gsd:)/,
   // Status/log messages
   /^(Last scan|Shell cwd|Exit code|Session|Commit|What was generated)/i,
-  // German filler
-  /^(Aendere|Weiter mit|Dann |Jetzt |Genau)/i,
+  // German filler / conversational
+  /^(Aendere|Weiter mit|Dann |Jetzt |Genau|Besser|Gut |Ich baue|Soll ich|Oder )/i,
   // Agent workflow noise
   /^(Starting|Spawning|Loading|Checking|Analyzing|Processing|Running|Scanning)/i,
   // Contains only markdown bold + colon (structured output, not prose)
@@ -144,6 +153,28 @@ const NOISE_PATTERNS = [
   /^\*\*\d+-\d+/,
   // Bullet lists that start with "- Discovers", "- Analyzes", etc. (agent workflow descriptions)
   /^- (Discovers|Analyzes|Creates|Produces|Reads|Writes|Returns|Generates|Validates|Checks)/i,
+  // Progress reports (e.g., "Von 235 → 146 Decisions")
+  /(?:Von|From)\s+\d+\s*[→\-]\s*\d+/i,
+  // Lines containing @cap-* or @gsd-* tags (meta-discussion about the system itself)
+  /@(?:cap|gsd)-(?:feature|todo|decision|pitfall|history|pattern|risk|constraint|context|ref|api)\b/,
+  // Code identifiers / function call references (not prose)
+  /^[a-zA-Z_]\w*\.\w+\(|^[a-zA-Z_]\w*\(\)/,
+  // Ergebnis/Result summary lines
+  /^(Ergebnis|Result|Output|Nächste Schritte|Next steps):/i,
+  // Lines that are mostly special characters (ASCII art, box drawing)
+  /[─│┌┐└┘┬┴├┤╔╗╚╝]{3,}/,
+  // AC table fragments
+  /^\|\s*AC-\d/,
+  // Lines starting with file paths
+  /^`?(?:cap\/|hooks\/|bin\/|commands\/|tests\/|scripts\/|src\/)/,
+  // Sentences with trailing markdown code block markers
+  /```\s*$/,
+  // Meta-discussion about regex patterns or test data
+  /(?:Pattern|Regex|regex)\s+`/,
+  // Sentences referencing test fixtures or test sentences
+  /(?:test sentence|test data|Testfall|Test-Satz)/i,
+  // Lines ending with orphaned numbering (e.g., "...visible errors\n4.")
+  /^\d+\.$/,
 ];
 
 /**
@@ -223,7 +254,7 @@ function analyzeSession(parsed, options = {}) {
     // Extract sentences — skip markdown formatting artifacts
     const sentences = text.split(/(?<=[.!?\n])\s+/);
     for (const sentence of sentences) {
-      if (sentence.length < 40 || sentence.length > 500) continue;
+      if (sentence.length < 40 || sentence.length > 300) continue;
       const clean = sentence.trim();
       if (isNoise(clean)) continue;
 

@@ -1,5 +1,10 @@
 // @cap-feature(feature:F-020) Resilient Module Loading with Error Recovery
 // @cap-decision Loader wraps require() with error detection, self-repair, and retry.
+// @cap-history(sessions:2, edits:9, since:2026-04-02, learned:2026-04-03) Frequently modified — 2 sessions, 9 edits
+// @cap-pitfall(learned:2026-04-02) Never silently fall back — always produce visible errors
+4.
+// @cap-pitfall(learned:2026-04-02) The failure is: `Error: CAP module load failed: nonexistent-xyz.cjs` — it's using the real `require` because the test passes `installDir: LIB_DIR` but not `_require`.
+// @cap-pitfall(learned:2026-04-02) Line 4061 is in the manifest generation — it only hashes `cap-` files for the manifest, which is correct (we don't want gsd files in the manifest).
 // Bootstrap problem: if cap-loader.cjs itself is missing, callers need an inline try/catch
 // to show the basic "run npx code-as-plan@latest --force" message. This module handles
 // all other module failures once it is loaded.

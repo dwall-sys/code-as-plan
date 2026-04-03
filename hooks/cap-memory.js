@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // @cap-feature(feature:F-030) Memory Automation Hook — post-session hook that triggers memory accumulation pipeline
+// @cap-history(sessions:2, edits:7, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 7 edits
 // cap-hook-version: {{CAP_VERSION}}
 // Memory Hook - runs after session end to accumulate project memory.
 //
@@ -134,10 +135,13 @@ function run(options = {}) {
     return;
   }
 
-  // F-028: Write annotations into source files
+  // F-028: Write annotations into source files (only annotatable source code)
+  const NON_ANNOTATABLE_EXT = new Set(['.md', '.markdown', '.json', '.jsonl', '.lock', '.svg', '.xml', '.html', '.css', '.scss']);
   const fileEntries = {};
   for (const entry of result.newEntries) {
     if (entry.file && fs.existsSync(entry.file)) {
+      const ext = path.extname(entry.file).toLowerCase();
+      if (NON_ANNOTATABLE_EXT.has(ext)) continue;
       if (!fileEntries[entry.file]) fileEntries[entry.file] = [];
       fileEntries[entry.file].push(entry);
     }

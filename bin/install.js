@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 // @cap-feature(feature:F-008) Multi-Runtime Installer — install agents, commands, and hooks for Claude/OpenCode/Gemini/Codex/Copilot/Cursor/Windsurf
 
+// @cap-history(sessions:4, edits:39, since:2026-04-01, learned:2026-04-03) Frequently modified — 4 sessions, 39 edits
+// @cap-decision(learned:2026-04-01) The fix is to resolve the path relative to the CAP package installation, not the user's CWD.
+// @cap-decision(learned:2026-04-01) The fix needs to happen in `install.js`: add a regex to replace `./cap/bin/lib/` with the resolved `pathPrefix + 'cap/bin/lib/'`.
+// @cap-pitfall(learned:2026-04-01) There it is — the install script replaces `~/.claude/` and `$HOME/.claude/` references, but **never replaces `./cap/bin/lib/`** relative paths.
+// @cap-pitfall(learned:2026-04-01) The `./cap/bin/lib/` paths are never rewritten.
+// @cap-pitfall(learned:2026-04-01) The installer rewrites `~/.claude/` and `$HOME/.claude/` paths, but never touches `./cap/bin/lib/` paths.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
