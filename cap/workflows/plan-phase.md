@@ -532,7 +532,7 @@ Every task MUST include these fields — they are NOT optional:
    - If CONTEXT.md has a comparison table or expected values, copy them into the action verbatim
    - The executor should be able to complete the task from the action text alone, without needing to read CONTEXT.md or reference files (read_first is for verification, not discovery)
 
-**Why this matters:** Executor agents work from the plan text. Vague instructions like "update the config to match production" produce shallow one-line changes. Concrete instructions like "add DATABASE_URL=postgresql://... , set POOL_SIZE=20, add REDIS_URL=redis://..." produce complete work. The cost of verbose plans is far less than the cost of re-doing shallow execution.
+**Why this matters:** Executor agents work from the plan text. Vague instructions like "update the config to match production" produce shallow one-line changes. Concrete instructions like "add DATABASE_URL=<db-connection-string>, set POOL_SIZE=20, add REDIS_URL=<redis-connection-string>" produce complete work. The cost of verbose plans is far less than the cost of re-doing shallow execution.
 </deep_work_rules>
 
 <quality_gate>
