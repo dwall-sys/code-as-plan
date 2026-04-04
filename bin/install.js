@@ -2352,7 +2352,7 @@ function installCodexConfig(targetDir, agentsSrc) {
   const agentsTomlDir = path.join(targetDir, 'agents');
   fs.mkdirSync(agentsTomlDir, { recursive: true });
 
-  const agentEntries = fs.readdirSync(agentsSrc).filter(f => f.startsWith('gsd-') && f.endsWith('.md'));
+  const agentEntries = fs.readdirSync(agentsSrc).filter(f => f.startsWith('cap-') && f.endsWith('.md'));
   const agents = [];
 
   // Compute the Codex CAP install path (absolute, so subagents with empty $HOME work — #820)
@@ -3405,7 +3405,7 @@ function uninstall(isGlobal, runtime = 'claude') {
       let skillCount = 0;
       const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.isDirectory() && entry.name.startsWith('gsd-')) {
+        if (entry.isDirectory() && (entry.name.startsWith('gsd-') || entry.name.startsWith('cap-'))) {
           fs.rmSync(path.join(skillsDir, entry.name), { recursive: true });
           skillCount++;
         }
@@ -3458,7 +3458,7 @@ function uninstall(isGlobal, runtime = 'claude') {
       let skillCount = 0;
       const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.isDirectory() && entry.name.startsWith('gsd-')) {
+        if (entry.isDirectory() && (entry.name.startsWith('gsd-') || entry.name.startsWith('cap-'))) {
           fs.rmSync(path.join(skillsDir, entry.name), { recursive: true });
           skillCount++;
         }
@@ -4074,7 +4074,7 @@ function writeManifest(configDir, runtime = 'claude') {
     }
   }
   if ((isCodex || isCopilot || isAntigravity || isCursor || isWindsurf) && fs.existsSync(codexSkillsDir)) {
-    for (const skillName of listCodexSkillNames(codexSkillsDir)) {
+    for (const skillName of listCodexSkillNames(codexSkillsDir, 'cap-')) {
       const skillRoot = path.join(codexSkillsDir, skillName);
       const skillHashes = generateManifest(skillRoot);
       for (const [rel, hash] of Object.entries(skillHashes)) {
@@ -4095,7 +4095,7 @@ function writeManifest(configDir, runtime = 'claude') {
     const hooksDir = path.join(configDir, 'hooks');
     if (fs.existsSync(hooksDir)) {
       for (const file of fs.readdirSync(hooksDir)) {
-        if (file.startsWith('gsd-') && file.endsWith('.js')) {
+        if ((file.startsWith('cap-') || file.startsWith('gsd-')) && file.endsWith('.js')) {
           manifest.files['hooks/' + file] = fileHash(path.join(hooksDir, file));
         }
       }
@@ -4271,7 +4271,7 @@ function install(isGlobal, runtime = 'claude') {
     const skillsDir = path.join(targetDir, 'skills');
     const capSrc = path.join(src, 'commands', 'cap');
     copyCommandsAsCodexSkills(capSrc, skillsDir, 'cap', pathPrefix, runtime);
-    const installedSkillNames = listCodexSkillNames(skillsDir);
+    const installedSkillNames = listCodexSkillNames(skillsDir, 'cap-');
     if (installedSkillNames.length > 0) {
       console.log(`  ${green}✓${reset} Installed ${installedSkillNames.length} skills to skills/`);
     } else {
@@ -4311,7 +4311,7 @@ function install(isGlobal, runtime = 'claude') {
     const skillsDir = path.join(targetDir, 'skills');
     const capSrc = path.join(src, 'commands', 'cap');
     copyCommandsAsCursorSkills(capSrc, skillsDir, 'cap', pathPrefix, runtime);
-    const installedSkillNames = listCodexSkillNames(skillsDir); // reuse — same dir structure
+    const installedSkillNames = listCodexSkillNames(skillsDir, 'cap-'); // reuse — same dir structure
     if (installedSkillNames.length > 0) {
       console.log(`  ${green}✓${reset} Installed ${installedSkillNames.length} skills to skills/`);
     } else {
@@ -4321,7 +4321,7 @@ function install(isGlobal, runtime = 'claude') {
     const skillsDir = path.join(targetDir, 'skills');
     const capSrc = path.join(src, 'commands', 'cap');
     copyCommandsAsWindsurfSkills(capSrc, skillsDir, 'cap', pathPrefix, runtime);
-    const installedSkillNames = listCodexSkillNames(skillsDir); // reuse — same dir structure
+    const installedSkillNames = listCodexSkillNames(skillsDir, 'cap-'); // reuse — same dir structure
     if (installedSkillNames.length > 0) {
       console.log(`  ${green}✓${reset} Installed ${installedSkillNames.length} skills to skills/`);
     } else {
@@ -4591,14 +4591,14 @@ function install(isGlobal, runtime = 'claude') {
       configContent = setManagedCodexHooksOwnership(codexHooksFeature.content, codexHooksFeature.ownership);
 
       // Add SessionStart hook for update checking
-      const updateCheckScript = path.resolve(targetDir, 'cap', 'hooks', 'gsd-update-check.js').replace(/\\/g, '/');
+      const updateCheckScript = path.resolve(targetDir, 'cap', 'hooks', 'cap-check-update.js').replace(/\\/g, '/');
       const hookBlock =
         `${eol}# CAP Hooks${eol}` +
         `[[hooks]]${eol}` +
         `event = "SessionStart"${eol}` +
         `command = "node ${updateCheckScript}"${eol}`;
 
-      if (hasEnabledCodexHooksFeature(configContent) && !configContent.includes('gsd-update-check')) {
+      if (hasEnabledCodexHooksFeature(configContent) && !configContent.includes('cap-check-update')) {
         configContent += hookBlock;
       }
 
