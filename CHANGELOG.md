@@ -4,6 +4,29 @@ All notable changes to CAP (Code as Plan) will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.2.0] - 2026-04-04
+
+### Added
+- **Thread system wired into brainstorm pipeline** — `/cap:brainstorm` now checks prior threads, persists new threads after approval, and supports `--resume` to continue a previous thread
+- **Memory graph active** — `cap-memory.js` hook builds/updates `.cap/memory/graph.json` after each session (incremental updates, full rebuild on init)
+- **Brainstorm session migration** — `/cap:init` scans past sessions for brainstorm activity and migrates them to conversation threads
+- **Memory bridge** — `initCapDirectory()` creates `.claude/rules/cap-memory.md` so Claude auto-reads `.cap/memory/` for project decisions and pitfalls
+- **`activeThread` in SESSION.json** — tracks current brainstorm thread for `--resume`
+- **`cap/bin/cap-tools.cjs`** — CLI entrypoint restored (was accidentally deleted during GSD→CAP migration), renamed from `gsd-tools.cjs`
+
+### Fixed
+- **Session timestamp extraction** — `getSessionFiles()` now scans first 4KB instead of only line 1, adapting to new Claude Code JSONL header format (`permission-mode`, `file-history-snapshot`)
+- **GSD hook cleanup** — installer `detectAndCleanupGSD()` now removes `gsd-*.js` hook files (not just agents and legacy dirs)
+- **Codex SessionStart hook** — updated from `gsd-update-check.js` to `cap-check-update.js`
+- **Complete GSD→CAP test migration** — all `gsd-*` agent/command references updated to `cap-*` across 95 files, fixing 58 CI test failures
+- **Windows test compatibility** — `HOME=''` and path assertion fixes for Windows CI
+- **Security scan** — removed credential-like URL examples from plan-phase docs
+
+### Changed
+- Brainstormer agent now references prior threads during conversation and includes divergence awareness (Step 2b)
+- `/cap:init` Step 7f builds memory graph from existing Feature Map + memory data
+- `/cap:init` Step 7g migrates past brainstorm sessions to threads (one-time, idempotent)
+
 ## [3.0.0] - 2026-04-03
 
 ### Added
