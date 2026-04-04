@@ -468,8 +468,13 @@ describe('checkPlatformPaths — adversarial edge cases', () => {
       process.env.HOME = '';
       const result = checkPlatformPaths('/tmp');
       assert.equal(result.envHome, '', 'envHome should be empty string');
-      // Both HOME and os.homedir() will be '' so they technically match
-      assert.equal(result.homeMatch, true, 'both are empty so they match');
+      // On Unix, both HOME and os.homedir() will be '' so they match.
+      // On Windows, os.homedir() falls back to USERPROFILE, so they won't match.
+      if (process.platform === 'win32') {
+        assert.equal(result.homeMatch, false, 'on Windows, empty HOME != USERPROFILE');
+      } else {
+        assert.equal(result.homeMatch, true, 'both are empty so they match');
+      }
       assert.ok(typeof result.ok === 'boolean');
     } finally {
       process.env.HOME = originalHome;
