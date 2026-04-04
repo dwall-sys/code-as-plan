@@ -52,7 +52,17 @@ After loading, note internally:
 - Features already defined (to avoid duplicates)
 - Tech stack and conventions
 
-If resume mode was indicated in Task() context, review the previous session state.
+**Thread context (from Task() input):**
+
+If **resuming a prior thread**: The Task() context includes the thread's problem statement, solution shape, boundary decisions, and prior feature IDs. Start the conversation by summarizing what was explored before:
+- "Last time we discussed {thread.problemStatement}. The approach was {thread.solutionShape}. Key decisions: {thread.boundaryDecisions}."
+- Ask: "Want to continue from here, or take a different direction?"
+
+If **prior threads exist** (not resuming): The Task() context lists prior brainstorm threads with their keywords and feature IDs. During conversation, if the user's topic overlaps with a prior thread:
+- Reference it: "This sounds related to a previous brainstorm about {thread.name} — want to build on that, or explore independently?"
+- This avoids duplicate features and surfaces prior decisions.
+
+If no thread context was provided, proceed normally.
 </step>
 
 <step name="conversational_discovery" number="2">
@@ -85,6 +95,19 @@ Phase 3 -- Boundaries (1-3 questions):
 - Reference existing Feature Map entries when relevant ("I see F-001 handles auth -- does this feature interact with it?")
 
 Ask questions using AskUserQuestion. ONE at a time. Wait for each answer before the next question.
+</step>
+
+<step name="divergence_awareness" number="2b">
+**Topic divergence awareness:**
+
+During the conversational discovery phase, pay attention to whether the user shifts topic significantly from where the conversation started. This is natural and expected in brainstorming.
+
+If the user's focus drifts to a clearly different problem area:
+- Acknowledge it: "We started with {original topic} and are now exploring {new topic} — both are valuable."
+- Suggest structuring them as separate features or feature groups rather than merging unrelated concerns.
+- This helps the command layer persist distinct threads for each topic area.
+
+You do NOT need to run any divergence detection code — this is a conversational awareness guideline.
 </step>
 
 <step name="cluster_and_structure" number="3">

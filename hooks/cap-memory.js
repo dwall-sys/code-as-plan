@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @cap-feature(feature:F-030) Memory Automation Hook — post-session hook that triggers memory accumulation pipeline
 // @cap-history(sessions:2, edits:7, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 7 edits
+// @cap-history(sessions:3, edits:9, since:2026-04-03, learned:2026-04-04) Frequently modified — 3 sessions, 9 edits
 // cap-hook-version: {{CAP_VERSION}}
 // Memory Hook - runs after session end to accumulate project memory.
 //
@@ -171,6 +172,28 @@ function run(options = {}) {
 
   // F-029: Write memory directory (merge mode for multi-developer support)
   memDir.writeMemoryDirectory(cwd, allEntries, { merge: !options.init });
+
+  // F-034: Update memory graph
+  const memGraph = tryRequire(path.join(capLib, 'cap-memory-graph.cjs'));
+  if (memGraph) {
+    try {
+      if (options.init) {
+        // Full rebuild from all sources
+        const graph = memGraph.buildFromMemory(cwd);
+        memGraph.saveGraph(cwd, graph);
+      } else {
+        // Incremental update with new entries
+        const graph = memGraph.loadGraph(cwd);
+        const staleNodeIds = sessionResult.staleEntries.map(
+          e => memGraph.generateNodeId(e.category, e.content)
+        );
+        memGraph.incrementalUpdate(graph, allEntries, { staleNodeIds });
+        memGraph.saveGraph(cwd, graph);
+      }
+    } catch (_e) {
+      // Graph update is non-critical — don't block session end
+    }
+  }
 
   // Save last-run timestamp
   writeLastRun(cwd);
