@@ -948,14 +948,18 @@ function getAgentsDir() {
 }
 
 /**
- * Check which GSD agents are installed on disk.
+ * Check which CAP agents are installed on disk.
  * Returns an object with installation status and details.
+ * Detects agents by scanning for cap-*.md files in the agents directory.
  *
- * @returns {{ agents_installed: boolean, missing_agents: string[], installed_agents: string[], agents_dir: string }}
+ * @returns {{ agents_installed: boolean, missing_agents: string[], installed_agents: string[], agents_dir: string, expected: string[] }}
  */
 function checkAgentsInstalled() {
   const agentsDir = getAgentsDir();
-  const expectedAgents = Object.keys(MODEL_PROFILES);
+  // Expected CAP agents (the 5 core agents)
+  const expectedAgents = [
+    'cap-brainstormer', 'cap-prototyper', 'cap-tester', 'cap-reviewer', 'cap-debugger',
+  ];
   const installed = [];
   const missing = [];
 
@@ -965,6 +969,7 @@ function checkAgentsInstalled() {
       missing_agents: expectedAgents,
       installed_agents: [],
       agents_dir: agentsDir,
+      expected: expectedAgents,
     };
   }
 
@@ -982,6 +987,7 @@ function checkAgentsInstalled() {
     missing_agents: missing,
     installed_agents: installed,
     agents_dir: agentsDir,
+    expected: expectedAgents,
   };
 }
 

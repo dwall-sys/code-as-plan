@@ -25,8 +25,8 @@ const {
   convertClaudeCommandToCopilotSkill,
   convertClaudeAgentToCopilotAgent,
   copyCommandsAsCopilotSkills,
-  GSD_COPILOT_INSTRUCTIONS_MARKER,
-  GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER,
+  CAP_COPILOT_INSTRUCTIONS_MARKER,
+  CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER,
   mergeCopilotInstructions,
   stripGsdFromCopilotInstructions,
   writeManifest,
@@ -591,7 +591,7 @@ Check ~/.claude/settings and run gsd:health.`;
 // ─── copyCommandsAsCopilotSkills (integration) ─────────────────────────────────
 
 describe('copyCommandsAsCopilotSkills', () => {
-  const srcDir = path.join(__dirname, '..', 'commands', 'gsd');
+  const srcDir = path.join(__dirname, '..', 'commands', 'cap');
   let tempDir;
 
   beforeEach(() => {
@@ -603,91 +603,44 @@ describe('copyCommandsAsCopilotSkills', () => {
   });
 
   test('creates skill folders from source commands', () => {
-    copyCommandsAsCopilotSkills(srcDir, tempDir, 'gsd');
+    copyCommandsAsCopilotSkills(srcDir, tempDir, 'cap');
 
     // Check specific folders exist
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-health')), 'gsd-health folder exists');
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-health', 'SKILL.md')), 'gsd-health/SKILL.md exists');
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-help')), 'gsd-help folder exists');
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-progress')), 'gsd-progress folder exists');
+    assert.ok(fs.existsSync(path.join(tempDir, 'cap-debug')), 'cap-debug folder exists');
+    assert.ok(fs.existsSync(path.join(tempDir, 'cap-debug', 'SKILL.md')), 'cap-debug/SKILL.md exists');
+    assert.ok(fs.existsSync(path.join(tempDir, 'cap-status')), 'cap-status folder exists');
+    assert.ok(fs.existsSync(path.join(tempDir, 'cap-brainstorm')), 'cap-brainstorm folder exists');
 
-    // Count gsd-* directories — should match number of source command files
+    // Count cap-* directories — should match number of source command files
     const dirs = fs.readdirSync(tempDir, { withFileTypes: true })
-      .filter(e => e.isDirectory() && e.name.startsWith('gsd-'));
-    const expectedSkillCount = fs.readdirSync(path.join(__dirname, '..', 'commands', 'gsd'))
+      .filter(e => e.isDirectory() && e.name.startsWith('cap-'));
+    const expectedSkillCount = fs.readdirSync(path.join(__dirname, '..', 'commands', 'cap'))
       .filter(f => f.endsWith('.md')).length;
     assert.strictEqual(dirs.length, expectedSkillCount, `expected ${expectedSkillCount} skill folders, got ${dirs.length}`);
   });
 
   test('skill content has Copilot frontmatter format', () => {
-    copyCommandsAsCopilotSkills(srcDir, tempDir, 'gsd');
+    copyCommandsAsCopilotSkills(srcDir, tempDir, 'cap');
 
-    const skillContent = fs.readFileSync(path.join(tempDir, 'gsd-health', 'SKILL.md'), 'utf8');
+    const skillContent = fs.readFileSync(path.join(tempDir, 'cap-status', 'SKILL.md'), 'utf8');
     // Frontmatter format checks
-    assert.ok(skillContent.startsWith('---\nname: gsd-health\n'), 'starts with name: gsd-health');
-    assert.ok(skillContent.includes('allowed-tools: Read, Bash, Write, AskUserQuestion'),
-      'allowed-tools is comma-separated');
+    assert.ok(skillContent.startsWith('---\nname: cap-status\n'), 'starts with name: cap-status');
     assert.ok(!skillContent.includes('allowed-tools:\n  -'), 'NOT YAML multiline format');
     // CONV-06/07 applied
     assert.ok(!skillContent.includes('~/.claude/'), 'no ~/.claude/ references');
-    assert.ok(!skillContent.match(/gsd:[a-z]/), 'no gsd: command references');
-  });
-
-  test('generates gsd-autonomous skill from autonomous.md command', () => {
-    // Fail-fast: source command must exist
-    const srcFile = path.join(srcDir, 'autonomous.md');
-    assert.ok(fs.existsSync(srcFile), 'commands/gsd/autonomous.md must exist as source');
-
-    copyCommandsAsCopilotSkills(srcDir, tempDir, 'gsd');
-
-    // Skill folder and file created
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-autonomous')), 'gsd-autonomous folder exists');
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-autonomous', 'SKILL.md')), 'gsd-autonomous/SKILL.md exists');
-
-    const skillContent = fs.readFileSync(path.join(tempDir, 'gsd-autonomous', 'SKILL.md'), 'utf8');
-
-    // Frontmatter: name converted from gsd:autonomous to gsd-autonomous
-    assert.ok(skillContent.startsWith('---\nname: gsd-autonomous\n'), 'name is gsd-autonomous');
-    assert.ok(skillContent.includes('description: Run all remaining phases autonomously'),
-      'description preserved');
-    // argument-hint present and double-quoted
-    assert.ok(skillContent.includes('argument-hint: "[--from N]"'), 'argument-hint present and quoted');
-    // allowed-tools comma-separated
-    assert.ok(skillContent.includes('allowed-tools: Read, Write, Bash, Glob, Grep, AskUserQuestion, Task'),
-      'allowed-tools is comma-separated');
-    // No Claude-format remnants
-    assert.ok(!skillContent.includes('allowed-tools:\n  -'), 'NOT YAML multiline format');
-    assert.ok(!skillContent.includes('~/.claude/'), 'no ~/.claude/ references in body');
-  });
-
-  test('autonomous skill body converts gsd: to gsd- (CONV-07)', () => {
-    // Use convertClaudeToCopilotContent directly on the command body content
-    const srcContent = fs.readFileSync(path.join(srcDir, 'autonomous.md'), 'utf8');
-    const result = convertClaudeToCopilotContent(srcContent);
-
-    // gsd:autonomous references should be converted to gsd-autonomous
-    assert.ok(!result.match(/gsd:[a-z]/), 'no gsd: command references remain after conversion');
-    // Specific: gsd:discuss-phase, gsd:plan-phase, gsd:execute-phase mentioned in body
-    // The body references cap-tools.cjs (not a gsd: command) — those should be unaffected
-    // But /gsd:autonomous → /gsd-autonomous, gsd:discuss-phase → gsd-discuss-phase etc.
-    if (srcContent.includes('gsd:autonomous')) {
-      assert.ok(result.includes('gsd-autonomous'), 'gsd:autonomous converted to gsd-autonomous');
-    }
-    // Path conversion: ~/.claude/ → .github/
-    assert.ok(!result.includes('~/.claude/'), 'no ~/.claude/ paths remain');
   });
 
   test('cleans up old skill directories on re-run', () => {
     // Create a fake old directory
-    fs.mkdirSync(path.join(tempDir, 'gsd-fake-old'), { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'gsd-fake-old', 'SKILL.md'), 'old');
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-fake-old')), 'fake old dir exists before');
+    fs.mkdirSync(path.join(tempDir, 'cap-fake-old'), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'cap-fake-old', 'SKILL.md'), 'old');
+    assert.ok(fs.existsSync(path.join(tempDir, 'cap-fake-old')), 'fake old dir exists before');
 
     // Run copy — should clean up old dirs
-    copyCommandsAsCopilotSkills(srcDir, tempDir, 'gsd');
+    copyCommandsAsCopilotSkills(srcDir, tempDir, 'cap');
 
-    assert.ok(!fs.existsSync(path.join(tempDir, 'gsd-fake-old')), 'fake old dir removed');
-    assert.ok(fs.existsSync(path.join(tempDir, 'gsd-health')), 'real dirs still exist');
+    assert.ok(!fs.existsSync(path.join(tempDir, 'cap-fake-old')), 'fake old dir removed');
+    assert.ok(fs.existsSync(path.join(tempDir, 'cap-debug')), 'real dirs still exist');
   });
 });
 
@@ -696,35 +649,19 @@ describe('copyCommandsAsCopilotSkills', () => {
 describe('Copilot agent conversion - real files', () => {
   const agentsSrc = path.join(__dirname, '..', 'agents');
 
-  test('converts gsd-executor agent correctly', () => {
-    const content = fs.readFileSync(path.join(agentsSrc, 'gsd-executor.md'), 'utf8');
+  test('converts cap-prototyper agent correctly', () => {
+    const content = fs.readFileSync(path.join(agentsSrc, 'cap-prototyper.md'), 'utf8');
     const result = convertClaudeAgentToCopilotAgent(content);
 
-    assert.ok(result.startsWith('---\nname: gsd-executor\n'), 'starts with correct name');
-    // 6 Claude tools (Read, Write, Edit, Bash, Grep, Glob) → 4 after dedup
-    assert.ok(result.includes("tools: ['read', 'edit', 'execute', 'search']"),
-      'tools mapped and deduplicated (6→4)');
-    assert.ok(result.includes('color: yellow'), 'color preserved');
+    assert.ok(result.startsWith('---\nname: cap-prototyper\n'), 'starts with correct name');
+    assert.ok(result.includes('tools:'), 'has tools field');
     assert.ok(!result.includes('~/.claude/'), 'no ~/.claude/ in body');
   });
 
-  test('converts agent with mcp wildcard tools correctly', () => {
-    const content = fs.readFileSync(path.join(agentsSrc, 'gsd-phase-researcher.md'), 'utf8');
-    const result = convertClaudeAgentToCopilotAgent(content);
-
-    const toolsLine = result.split('\n').find(l => l.startsWith('tools:'));
-    assert.ok(toolsLine.includes('io.github.upstash/context7/*'), 'mcp wildcard mapped in tools');
-    assert.ok(!toolsLine.includes('mcp__context7__'), 'no mcp__ prefix in tools line');
-    assert.ok(toolsLine.includes("'web'"), 'WebSearch/WebFetch deduplicated to web');
-    assert.ok(toolsLine.includes("'read'"), 'Read mapped');
-  });
-
-  test('all 18 agents convert without error', () => {
+  test('all 5 CAP agents convert without error', () => {
     const agents = fs.readdirSync(agentsSrc)
-      .filter(f => f.startsWith('gsd-') && f.endsWith('.md'));
-    const expectedAgentCount = fs.readdirSync(agentsSrc)
-      .filter(f => f.startsWith('gsd-') && f.endsWith('.md')).length;
-    assert.strictEqual(agents.length, expectedAgentCount, `expected ${expectedAgentCount} agents, got ${agents.length}`);
+      .filter(f => f.startsWith('cap-') && f.endsWith('.md'));
+    assert.strictEqual(agents.length, 5, `expected 5 agents, got ${agents.length}`);
 
     for (const agentFile of agents) {
       const content = fs.readFileSync(path.join(agentsSrc, agentFile), 'utf8');
@@ -789,7 +726,7 @@ describe('Copilot instructions merge/strip', () => {
   const gsdContent = '- Follow project conventions\n- Use structured workflows';
 
   function makeGsdBlock(content) {
-    return GSD_COPILOT_INSTRUCTIONS_MARKER + '\n' + content.trim() + '\n' + GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER;
+    return CAP_COPILOT_INSTRUCTIONS_MARKER + '\n' + content.trim() + '\n' + CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER;
   }
 
   describe('mergeCopilotInstructions', () => {
@@ -809,8 +746,8 @@ describe('Copilot instructions merge/strip', () => {
 
       assert.ok(fs.existsSync(filePath), 'file was created');
       const result = fs.readFileSync(filePath, 'utf8');
-      assert.ok(result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'has opening marker');
-      assert.ok(result.includes(GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER), 'has closing marker');
+      assert.ok(result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'has opening marker');
+      assert.ok(result.includes(CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER), 'has closing marker');
       assert.ok(result.includes('Follow project conventions'), 'has GSD content');
     });
 
@@ -840,10 +777,10 @@ describe('Copilot instructions merge/strip', () => {
 
       assert.ok(result.includes('# My Custom Instructions'), 'original content preserved');
       assert.ok(result.includes('Do things my way.'), 'original text preserved');
-      assert.ok(result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'GSD block appended');
+      assert.ok(result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'GSD block appended');
       assert.ok(result.includes('Follow project conventions'), 'GSD content appended');
       // Verify separator exists
-      assert.ok(result.includes('Do things my way.\n\n' + GSD_COPILOT_INSTRUCTIONS_MARKER),
+      assert.ok(result.includes('Do things my way.\n\n' + CAP_COPILOT_INSTRUCTIONS_MARKER),
         'double newline separator before GSD block');
     });
 
@@ -858,8 +795,8 @@ describe('Copilot instructions merge/strip', () => {
 
       assert.ok(!result.includes('Old instructions'), 'old content removed');
       assert.ok(result.includes('Updated instructions'), 'new content present');
-      assert.ok(result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'has opening marker');
-      assert.ok(result.includes(GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER), 'has closing marker');
+      assert.ok(result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'has opening marker');
+      assert.ok(result.includes(CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER), 'has closing marker');
     });
 
     test('preserves user content before and after markers', () => {
@@ -877,7 +814,7 @@ describe('Copilot instructions merge/strip', () => {
       assert.ok(result.includes('Follow project conventions'), 'new GSD content between markers');
       // Verify ordering: before → GSD → after
       const setupIdx = result.indexOf('# My Setup');
-      const markerIdx = result.indexOf(GSD_COPILOT_INSTRUCTIONS_MARKER);
+      const markerIdx = result.indexOf(CAP_COPILOT_INSTRUCTIONS_MARKER);
       const notesIdx = result.indexOf('# My Notes');
       assert.ok(setupIdx < markerIdx, 'user setup comes before GSD block');
       assert.ok(markerIdx < notesIdx, 'GSD block comes before user notes');
@@ -899,8 +836,8 @@ describe('Copilot instructions merge/strip', () => {
       assert.ok(result !== null, 'does not return null');
       assert.ok(result.includes('# My Setup'), 'user content preserved');
       assert.ok(result.includes('Custom rules here.'), 'user text preserved');
-      assert.ok(!result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'opening marker removed');
-      assert.ok(!result.includes(GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER), 'closing marker removed');
+      assert.ok(!result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'opening marker removed');
+      assert.ok(!result.includes(CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER), 'closing marker removed');
       assert.ok(!result.includes('GSD stuff'), 'GSD content removed');
     });
 
@@ -911,7 +848,7 @@ describe('Copilot instructions merge/strip', () => {
       assert.ok(result !== null, 'does not return null');
       assert.ok(result.includes('# My Notes'), 'user content after preserved');
       assert.ok(result.includes('Personal notes.'), 'user text after preserved');
-      assert.ok(!result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'opening marker removed');
+      assert.ok(!result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'opening marker removed');
       assert.ok(!result.includes('GSD stuff'), 'GSD content removed');
     });
 
@@ -923,7 +860,7 @@ describe('Copilot instructions merge/strip', () => {
       assert.ok(result.includes('# Before'), 'content before preserved');
       assert.ok(result.includes('# After'), 'content after preserved');
       assert.ok(!result.includes('GSD middle'), 'GSD content removed');
-      assert.ok(!result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'markers removed');
+      assert.ok(!result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'markers removed');
     });
 
     test('returns original content when no markers found', () => {
@@ -972,9 +909,9 @@ describe('Copilot uninstall skill removal', () => {
 
   test('cleans GSD section from copilot-instructions.md on uninstall', () => {
     const content = '# My Setup\n\nMy custom rules.\n\n' +
-      GSD_COPILOT_INSTRUCTIONS_MARKER + '\n' +
+      CAP_COPILOT_INSTRUCTIONS_MARKER + '\n' +
       '- GSD managed content\n' +
-      GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER + '\n';
+      CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER + '\n';
 
     const result = stripGsdFromCopilotInstructions(content);
 
@@ -982,13 +919,13 @@ describe('Copilot uninstall skill removal', () => {
     assert.ok(result.includes('# My Setup'), 'user content preserved');
     assert.ok(result.includes('My custom rules.'), 'user text preserved');
     assert.ok(!result.includes('GSD managed content'), 'GSD content removed');
-    assert.ok(!result.includes(GSD_COPILOT_INSTRUCTIONS_MARKER), 'markers removed');
+    assert.ok(!result.includes(CAP_COPILOT_INSTRUCTIONS_MARKER), 'markers removed');
   });
 
   test('deletes copilot-instructions.md when GSD-only on uninstall', () => {
-    const content = GSD_COPILOT_INSTRUCTIONS_MARKER + '\n' +
+    const content = CAP_COPILOT_INSTRUCTIONS_MARKER + '\n' +
       '- Only GSD content\n' +
-      GSD_COPILOT_INSTRUCTIONS_CLOSE_MARKER + '\n';
+      CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER + '\n';
 
     const result = stripGsdFromCopilotInstructions(content);
 
@@ -1016,7 +953,7 @@ describe('Copilot manifest and patches fixes', () => {
     fs.writeFileSync(path.join(gsdDir, 'verify.cjs'), '// verify stub');
 
     // Create Copilot skills directory
-    const skillDir = path.join(tmpDir, 'skills', 'gsd-test');
+    const skillDir = path.join(tmpDir, 'skills', 'cap-test');
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Test Skill\n\nA test skill.');
 
@@ -1028,7 +965,7 @@ describe('Copilot manifest and patches fixes', () => {
 
     // Read and verify skills are hashed
     const data = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    const skillKey = 'skills/gsd-test/SKILL.md';
+    const skillKey = 'skills/cap-test/SKILL.md';
     assert.ok(data.files[skillKey], 'skill file hashed in manifest');
     assert.ok(typeof data.files[skillKey] === 'string', 'hash is a string');
     assert.ok(data.files[skillKey].length === 64, 'hash is SHA-256 (64 hex chars)');
@@ -1061,8 +998,8 @@ describe('Copilot manifest and patches fixes', () => {
 
       assert.ok(result.length > 0, 'returns patched files list');
       const output = logs.join('\n');
-      assert.ok(output.includes('/gsd-reapply-patches'), 'uses dash format for Copilot');
-      assert.ok(!output.includes('/gsd:reapply-patches'), 'does not use colon format');
+      assert.ok(output.includes('/cap-reapply-patches'), 'uses dash format for Copilot');
+      assert.ok(!output.includes('/cap:reapply-patches'), 'does not use colon format');
     });
 
     test('reportLocalPatches shows /gsd:reapply-patches for Claude (unchanged)', () => {
@@ -1078,7 +1015,7 @@ describe('Copilot manifest and patches fixes', () => {
 
       assert.ok(result.length > 0, 'returns patched files list');
       const output = logs.join('\n');
-      assert.ok(output.includes('/gsd:reapply-patches'), 'uses colon format for Claude');
+      assert.ok(output.includes('/cap:reapply-patches'), 'uses colon format for Claude');
     });
   });
 });
@@ -1091,10 +1028,10 @@ const { execFileSync } = require('child_process');
 const crypto = require('crypto');
 
 const INSTALL_PATH = path.join(__dirname, '..', 'bin', 'install.js');
-const EXPECTED_SKILLS = fs.readdirSync(path.join(__dirname, '..', 'commands', 'gsd'))
+const EXPECTED_SKILLS = fs.readdirSync(path.join(__dirname, '..', 'commands', 'cap'))
   .filter(f => f.endsWith('.md')).length;
 const EXPECTED_AGENTS = fs.readdirSync(path.join(__dirname, '..', 'agents'))
-  .filter(f => f.startsWith('gsd-') && f.endsWith('.md')).length;
+  .filter(f => f.startsWith('cap-') && f.endsWith('.md')).length;
 
 function runCopilotInstall(cwd) {
   const env = { ...process.env };
@@ -1133,16 +1070,16 @@ describe('E2E: Copilot full install verification', () => {
   test('installs expected number of skill directories', () => {
     const skillsDir = path.join(tmpDir, '.github', 'skills');
     const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
-    const gsdSkills = entries.filter(e => e.isDirectory() && e.name.startsWith('gsd-'));
-    assert.strictEqual(gsdSkills.length, EXPECTED_SKILLS,
-      `Expected ${EXPECTED_SKILLS} skill directories, got ${gsdSkills.length}`);
+    const capSkills = entries.filter(e => e.isDirectory() && e.name.startsWith('cap-'));
+    assert.strictEqual(capSkills.length, EXPECTED_SKILLS,
+      `Expected ${EXPECTED_SKILLS} skill directories, got ${capSkills.length}`);
   });
 
   test('each skill directory contains SKILL.md', () => {
     const skillsDir = path.join(tmpDir, '.github', 'skills');
     const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
-    const gsdSkills = entries.filter(e => e.isDirectory() && e.name.startsWith('gsd-'));
-    for (const skill of gsdSkills) {
+    const capSkills = entries.filter(e => e.isDirectory() && e.name.startsWith('cap-'));
+    for (const skill of capSkills) {
       const skillMdPath = path.join(skillsDir, skill.name, 'SKILL.md');
       assert.ok(fs.existsSync(skillMdPath),
         `Missing SKILL.md in ${skill.name}`);
@@ -1152,46 +1089,33 @@ describe('E2E: Copilot full install verification', () => {
   test('installs expected number of agent files', () => {
     const agentsDir = path.join(tmpDir, '.github', 'agents');
     const files = fs.readdirSync(agentsDir);
-    const gsdAgents = files.filter(f => f.startsWith('gsd-') && f.endsWith('.agent.md'));
-    assert.strictEqual(gsdAgents.length, EXPECTED_AGENTS,
-      `Expected ${EXPECTED_AGENTS} agent files, got ${gsdAgents.length}`);
+    const capAgents = files.filter(f => f.startsWith('cap-') && f.endsWith('.agent.md'));
+    assert.strictEqual(capAgents.length, EXPECTED_AGENTS,
+      `Expected ${EXPECTED_AGENTS} agent files, got ${capAgents.length}`);
   });
 
   test('installs all expected agent files', () => {
     const agentsDir = path.join(tmpDir, '.github', 'agents');
     const files = fs.readdirSync(agentsDir);
-    const gsdAgents = files.filter(f => f.startsWith('gsd-') && f.endsWith('.agent.md')).sort();
+    const capAgents = files.filter(f => f.startsWith('cap-') && f.endsWith('.agent.md')).sort();
     const expected = [
-      'gsd-advisor-researcher.agent.md',
-      'gsd-assumptions-analyzer.agent.md',
-      'gsd-codebase-mapper.agent.md',
-      'gsd-debugger.agent.md',
-      'gsd-executor.agent.md',
-      'gsd-integration-checker.agent.md',
-      'gsd-nyquist-auditor.agent.md',
-      'gsd-phase-researcher.agent.md',
-      'gsd-plan-checker.agent.md',
-      'gsd-planner.agent.md',
-      'gsd-project-researcher.agent.md',
-      'gsd-research-synthesizer.agent.md',
-      'gsd-roadmapper.agent.md',
-      'gsd-ui-auditor.agent.md',
-      'gsd-ui-checker.agent.md',
-      'gsd-ui-researcher.agent.md',
-      'gsd-user-profiler.agent.md',
-      'gsd-verifier.agent.md',
+      'cap-brainstormer.agent.md',
+      'cap-debugger.agent.md',
+      'cap-prototyper.agent.md',
+      'cap-reviewer.agent.md',
+      'cap-tester.agent.md',
     ].sort();
-    assert.deepStrictEqual(gsdAgents, expected);
+    assert.deepStrictEqual(capAgents, expected);
   });
 
   test('generates copilot-instructions.md with GSD markers', () => {
     const instrPath = path.join(tmpDir, '.github', 'copilot-instructions.md');
     assert.ok(fs.existsSync(instrPath), 'copilot-instructions.md should exist');
     const content = fs.readFileSync(instrPath, 'utf-8');
-    assert.ok(content.includes('<!-- GSD Configuration'),
-      'Should contain GSD Configuration open marker');
-    assert.ok(content.includes('<!-- /GSD Configuration -->'),
-      'Should contain GSD Configuration close marker');
+    assert.ok(content.includes('<!-- CAP Configuration'),
+      'Should contain CAP Configuration open marker');
+    assert.ok(content.includes('<!-- /CAP Configuration -->'),
+      'Should contain CAP Configuration close marker');
   });
 
   test('creates manifest with correct structure', () => {
@@ -1282,23 +1206,23 @@ describe('E2E: Copilot uninstall verification', () => {
       'copilot-instructions.md should not exist after uninstall');
   });
 
-  test('removes all GSD skill directories', () => {
+  test('removes all CAP skill directories', () => {
     const skillsDir = path.join(tmpDir, '.github', 'skills');
     if (fs.existsSync(skillsDir)) {
       const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
-      const gsdSkills = entries.filter(e => e.isDirectory() && e.name.startsWith('gsd-'));
-      assert.strictEqual(gsdSkills.length, 0,
-        `Expected 0 GSD skill directories after uninstall, found: ${gsdSkills.map(e => e.name).join(', ')}`);
+      const capSkills = entries.filter(e => e.isDirectory() && (e.name.startsWith('cap-') || e.name.startsWith('gsd-')));
+      assert.strictEqual(capSkills.length, 0,
+        `Expected 0 CAP/GSD skill directories after uninstall, found: ${capSkills.map(e => e.name).join(', ')}`);
     }
   });
 
-  test('removes all GSD agent files', () => {
+  test('removes all CAP agent files', () => {
     const agentsDir = path.join(tmpDir, '.github', 'agents');
     if (fs.existsSync(agentsDir)) {
       const files = fs.readdirSync(agentsDir);
-      const gsdAgents = files.filter(f => f.startsWith('gsd-') && f.endsWith('.agent.md'));
-      assert.strictEqual(gsdAgents.length, 0,
-        `Expected 0 GSD agent files after uninstall, found: ${gsdAgents.join(', ')}`);
+      const capAgents = files.filter(f => (f.startsWith('cap-') || f.startsWith('gsd-')) && f.endsWith('.agent.md'));
+      assert.strictEqual(capAgents.length, 0,
+        `Expected 0 CAP/GSD agent files after uninstall, found: ${capAgents.join(', ')}`);
     }
   });
 

@@ -131,7 +131,7 @@ function parseOpenTodos(inventoryContent) {
       continue;
     }
     // Exit todo section on next ### heading
-    if (inTodoSection && /^###\s+@gsd-/.test(line)) {
+    if (inTodoSection && /^###\s+/.test(line) && !/^###\s+@cap-todo/.test(line)) {
       inTodoSection = false;
       continue;
     }

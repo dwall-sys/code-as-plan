@@ -194,7 +194,7 @@ For each hypothesis (most likely first):
 
 1. **Run the test:**
    - Read relevant code files
-   - Run bash commands to reproduce or verify
+   - Use Bash tool to reproduce or verify
    - Check logs, error messages, stack traces
 
 2. **Record the result:**

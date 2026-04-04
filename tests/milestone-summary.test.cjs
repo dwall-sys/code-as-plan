@@ -11,33 +11,10 @@ const fs = require('fs');
 const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..');
-const commandPath = path.join(repoRoot, 'commands', 'gsd', 'milestone-summary.md');
 const workflowPath = path.join(repoRoot, 'cap', 'workflows', 'milestone-summary.md');
 
-describe('milestone-summary command', () => {
-  test('command file exists', () => {
-    assert.ok(fs.existsSync(commandPath), 'commands/gsd/milestone-summary.md should exist');
-  });
-
-  test('command has correct frontmatter name', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(content.includes('name: gsd:milestone-summary'), 'should have correct command name');
-  });
-
-  test('command references workflow in execution_context', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('workflows/milestone-summary.md'),
-      'should reference the milestone-summary workflow'
-    );
-  });
-
-  test('command accepts optional version argument', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(content.includes('argument-hint'), 'should have argument-hint');
-    assert.ok(content.includes('[version]'), 'version should be optional (bracketed)');
-  });
-});
+// NOTE: commands/gsd/milestone-summary.md was removed during GSD→CAP migration.
+// Command-level tests removed; workflow tests below still apply.
 
 describe('milestone-summary workflow', () => {
   test('workflow file exists', () => {
@@ -137,23 +114,7 @@ describe('milestone-summary workflow', () => {
   });
 });
 
-describe('milestone-summary command structure', () => {
-  test('command has success_criteria section', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('<success_criteria>'),
-      'should have success_criteria section (follows complete-milestone pattern)'
-    );
-  });
-
-  test('command context lists RESEARCH.md', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('RESEARCH.md'),
-      'should list RESEARCH.md in context block'
-    );
-  });
-});
+// NOTE: milestone-summary command structure tests removed (commands/gsd/ no longer exists).
 
 describe('milestone-summary artifact path resolution', () => {
   const { createTempProject, cleanup } = require('./helpers.cjs');
@@ -305,11 +266,5 @@ describe('milestone-summary git stats resilience', () => {
     );
   });
 
-  test('command has type: prompt in frontmatter', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('type: prompt'),
-      'should have type: prompt for consistency with complete-milestone.md'
-    );
-  });
+  // NOTE: command frontmatter test removed (commands/gsd/ no longer exists).
 });

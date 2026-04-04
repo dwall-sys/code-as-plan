@@ -315,26 +315,9 @@ describe('workspace worktree integration', () => {
 describe('workspace command files', () => {
   const baseDir = path.join(__dirname, '..');
 
-  test('new-workspace command exists with correct frontmatter', () => {
-    const content = fs.readFileSync(path.join(baseDir, 'commands/gsd/new-workspace.md'), 'utf8');
-    assert.ok(content.includes('name: gsd:new-workspace'));
-    assert.ok(content.includes('--name'));
-    assert.ok(content.includes('--repos'));
-    assert.ok(content.includes('--strategy'));
-    assert.ok(content.includes('workflows/new-workspace.md'));
-  });
-
-  test('list-workspaces command exists with correct frontmatter', () => {
-    const content = fs.readFileSync(path.join(baseDir, 'commands/gsd/list-workspaces.md'), 'utf8');
-    assert.ok(content.includes('name: gsd:list-workspaces'));
-    assert.ok(content.includes('workflows/list-workspaces.md'));
-  });
-
-  test('remove-workspace command exists with correct frontmatter', () => {
-    const content = fs.readFileSync(path.join(baseDir, 'commands/gsd/remove-workspace.md'), 'utf8');
-    assert.ok(content.includes('name: gsd:remove-workspace'));
-    assert.ok(content.includes('workflows/remove-workspace.md'));
-  });
+  // NOTE: commands/gsd/ was removed during GSD→CAP migration.
+  // Workspace commands are not yet part of commands/cap/.
+  // Only testing workflow files which still exist.
 
   test('new-workspace workflow exists', () => {
     const content = fs.readFileSync(path.join(baseDir, 'cap/workflows/new-workspace.md'), 'utf8');

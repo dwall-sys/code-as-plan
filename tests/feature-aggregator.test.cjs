@@ -115,11 +115,11 @@ describe('parsePrd', () => {
 // ── parseOpenTodos ──────────────────────────────────────────────────────────
 
 describe('parseOpenTodos', () => {
-  it('extracts AC IDs from @gsd-todo section in CODE-INVENTORY.md', () => {
+  it('extracts AC IDs from @cap-todo section in CODE-INVENTORY.md', () => {
     const content = [
       '## Tags by Type',
       '',
-      '### @gsd-todo',
+      '### @cap-todo',
       '',
       '#### src/auth.js',
       '',
@@ -128,7 +128,7 @@ describe('parseOpenTodos', () => {
       '| 12 | ref:AC-1, phase:12 | Implement login |',
       '| 25 | ref:AC-3 | Add session handling |',
       '',
-      '### @gsd-context',
+      '### @cap-context',
       '',
       '| Line | Metadata | Description |',
       '| 1 | ref:AC-2 | This should NOT be captured |',
@@ -142,8 +142,8 @@ describe('parseOpenTodos', () => {
     assert.ok(!result.has('AC-2'), 'Should not capture refs from non-todo sections');
   });
 
-  it('returns empty set when no @gsd-todo section exists', () => {
-    const content = '## Tags by Type\n\n### @gsd-context\n\nSome content';
+  it('returns empty set when no @cap-todo section exists', () => {
+    const content = '## Tags by Type\n\n### @cap-context\n\nSome content';
     const result = parseOpenTodos(content);
 
     assert.strictEqual(result.size, 0);
@@ -158,7 +158,7 @@ describe('parseOpenTodos', () => {
 // ── crossReference ──────────────────────────────────────────────────────────
 
 describe('crossReference', () => {
-  it('marks ACs as open when they have open @gsd-todo tags', () => {
+  it('marks ACs as open when they have open @cap-todo tags', () => {
     const acs = [
       { id: 'AC-1', description: 'Login', group: 'Auth', prdSource: 'PRD.md' },
       { id: 'AC-2', description: 'Register', group: 'Auth', prdSource: 'PRD.md' },

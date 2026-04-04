@@ -13,36 +13,12 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const COMMAND_PATH = path.join(__dirname, '..', 'commands', 'gsd', 'execute-phase.md');
 const WORKFLOW_PATH = path.join(__dirname, '..', 'cap', 'workflows', 'execute-phase.md');
 const COMMANDS_DOC_PATH = path.join(__dirname, '..', 'docs', 'COMMANDS.md');
 const HELP_PATH = path.join(__dirname, '..', 'cap', 'workflows', 'help.md');
 
-describe('execute-phase command: --wave flag', () => {
-  test('command file exists', () => {
-    assert.ok(fs.existsSync(COMMAND_PATH), 'commands/gsd/execute-phase.md should exist');
-  });
-
-  test('argument-hint includes --wave, --gaps-only, and --interactive', () => {
-    const content = fs.readFileSync(COMMAND_PATH, 'utf-8');
-    const hintLine = content.split('\n').find(l => l.includes('argument-hint'));
-    assert.ok(hintLine, 'should have argument-hint line');
-    assert.ok(hintLine.includes('--wave N'), 'argument-hint should include --wave N');
-    assert.ok(hintLine.includes('--gaps-only'), 'argument-hint should keep --gaps-only');
-    assert.ok(hintLine.includes('--interactive'), 'argument-hint should preserve --interactive');
-  });
-
-  test('objective describes wave-filter execution', () => {
-    const content = fs.readFileSync(COMMAND_PATH, 'utf-8');
-    const objectiveMatch = content.match(/<objective>([\s\S]*?)<\/objective>/);
-    assert.ok(objectiveMatch, 'should have <objective> section');
-    assert.ok(objectiveMatch[1].includes('--wave N'), 'objective should mention --wave N');
-    assert.ok(
-      objectiveMatch[1].includes('no incomplete plans remain'),
-      'objective should mention phase completion guardrail'
-    );
-  });
-});
+// NOTE: commands/gsd/execute-phase.md was removed during GSD→CAP migration.
+// Command-level tests removed; workflow tests below still apply.
 
 describe('execute-phase workflow: wave filtering', () => {
   test('workflow file exists', () => {
