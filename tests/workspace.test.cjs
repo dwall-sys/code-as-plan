@@ -361,7 +361,7 @@ describe('workspace command files', () => {
 describe('workspace routing in gsd-tools', () => {
   test('init new-workspace is routed correctly', () => {
     const toolsContent = fs.readFileSync(
-      path.join(__dirname, '..', 'cap', 'bin', 'gsd-tools.cjs'),
+      path.join(__dirname, '..', 'cap', 'bin', 'cap-tools.cjs'),
       'utf8'
     );
     assert.ok(toolsContent.includes("case 'new-workspace'"));
@@ -370,7 +370,7 @@ describe('workspace routing in gsd-tools', () => {
 
   test('init list-workspaces is routed correctly', () => {
     const toolsContent = fs.readFileSync(
-      path.join(__dirname, '..', 'cap', 'bin', 'gsd-tools.cjs'),
+      path.join(__dirname, '..', 'cap', 'bin', 'cap-tools.cjs'),
       'utf8'
     );
     assert.ok(toolsContent.includes("case 'list-workspaces'"));
@@ -379,7 +379,7 @@ describe('workspace routing in gsd-tools', () => {
 
   test('init remove-workspace is routed correctly', () => {
     const toolsContent = fs.readFileSync(
-      path.join(__dirname, '..', 'cap', 'bin', 'gsd-tools.cjs'),
+      path.join(__dirname, '..', 'cap', 'bin', 'cap-tools.cjs'),
       'utf8'
     );
     assert.ok(toolsContent.includes("case 'remove-workspace'"));

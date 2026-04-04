@@ -84,7 +84,7 @@ const fg = require('fast-glob'); // DO NOT USE
 
 ### CLI Argument Parsing (AC-96)
 
-CLI arguments SHALL use the existing `parseNamedArgs()` pattern from `gsd-tools.cjs`:
+CLI arguments SHALL use the existing `parseNamedArgs()` pattern from `cap-tools.cjs`:
 
 ```javascript
 // ALLOWED: existing parseNamedArgs() pattern

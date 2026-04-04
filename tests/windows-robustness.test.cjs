@@ -187,7 +187,7 @@ describe('@file: handoff in workflows', () => {
     for (const wf of workflowFiles) {
       const content = fs.readFileSync(path.join(WORKFLOWS_DIR, wf), 'utf-8');
 
-      // Check if this workflow calls gsd-tools.cjs init
+      // Check if this workflow calls cap-tools.cjs init
       if (/INIT=\$\(node.*gsd-tools.*\binit\b/.test(content)) {
         // Must have @file: handler
         if (!content.includes('@file:')) {

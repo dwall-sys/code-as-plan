@@ -19,7 +19,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 Bootstrap via manager init:
 
 ```bash
-INIT=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" init manager)
+INIT=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" init manager)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -53,7 +53,7 @@ Proceed to dashboard step.
 **Every time this step is reached**, re-read state from disk to pick up changes from background agents:
 
 ```bash
-INIT=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" init manager)
+INIT=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" init manager)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -224,7 +224,7 @@ Goal: {goal}
 
 Steps:
 1. Read the plan-phase workflow: cat ~/.claude/cap/workflows/plan-phase.md
-2. Run: node \"$HOME/.claude/cap/bin/gsd-tools.cjs\" init plan-phase {N}
+2. Run: node \"$HOME/.claude/cap/bin/cap-tools.cjs\" init plan-phase {N}
 3. Follow the workflow steps to produce PLAN.md files for this phase.
 4. If research is enabled in config, run the research step first.
 5. Spawn a gsd-planner subagent via Task() to create the plans.
@@ -259,7 +259,7 @@ Goal: {goal}
 
 Steps:
 1. Read the execute-phase workflow: cat ~/.claude/cap/workflows/execute-phase.md
-2. Run: node \"$HOME/.claude/cap/bin/gsd-tools.cjs\" init execute-phase {N}
+2. Run: node \"$HOME/.claude/cap/bin/cap-tools.cjs\" init execute-phase {N}
 3. Follow the workflow steps: discover plans, analyze dependencies, group into waves.
 4. For each wave, spawn gsd-executor subagents via Task() to execute plans in parallel.
 5. After all waves complete, spawn a gsd-verifier subagent if verifier is enabled.

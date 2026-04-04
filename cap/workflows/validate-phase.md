@@ -16,16 +16,16 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 ## 0. Initialize
 
 ```bash
-INIT=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" init phase-op "${PHASE_ARG}")
+INIT=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" init phase-op "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS_AUDITOR=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" agent-skills gsd-nyquist-auditor 2>/dev/null)
+AGENT_SKILLS_AUDITOR=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" agent-skills gsd-nyquist-auditor 2>/dev/null)
 ```
 
 Parse: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`.
 
 ```bash
-AUDITOR_MODEL=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" resolve-model gsd-nyquist-auditor --raw)
-NYQUIST_CFG=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" config-get workflow.nyquist_validation --raw)
+AUDITOR_MODEL=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" resolve-model gsd-nyquist-auditor --raw)
+NYQUIST_CFG=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" config-get workflow.nyquist_validation --raw)
 ```
 
 If `NYQUIST_CFG` is `false`: exit with "Nyquist validation is disabled. Enable via /gsd:settings."
@@ -135,7 +135,7 @@ Handle return:
 git add {test_files}
 git commit -m "test(phase-${PHASE}): add Nyquist validation tests"
 
-node "$HOME/.claude/cap/bin/gsd-tools.cjs" commit "docs(phase-${PHASE}): add/update validation strategy"
+node "$HOME/.claude/cap/bin/cap-tools.cjs" commit "docs(phase-${PHASE}): add/update validation strategy"
 ```
 
 ## 8. Results + Routing

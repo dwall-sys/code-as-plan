@@ -305,7 +305,7 @@ function formatAsMarkdown(tags, projectName) {
 
 /**
  * CLI entry point: scan a target path, format, and write output.
- * Called by gsd-tools.cjs case 'extract-tags'.
+ * Called by cap-tools.cjs case 'extract-tags'.
  *
  * @param {string} cwd - Current working directory
  * @param {string} targetPath - Path to scan (file or directory)

@@ -937,7 +937,7 @@ function getRoadmapPhaseInternal(cwd, phaseNum) {
 
 /**
  * Resolve the agents directory from the GSD install location.
- * gsd-tools.cjs lives at <configDir>/cap/bin/gsd-tools.cjs,
+ * cap-tools.cjs lives at <configDir>/cap/bin/cap-tools.cjs,
  * so agents/ is at <configDir>/agents/.
  *
  * @returns {string} Absolute path to the agents directory

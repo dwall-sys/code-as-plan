@@ -47,12 +47,12 @@ This ensures workstream scope chains automatically through the workflow:
 
 ```bash
 # All gsd-tools commands accept --ws
-node gsd-tools.cjs state json --ws feature-a
-node gsd-tools.cjs find-phase 3 --ws feature-b
+node cap-tools.cjs state json --ws feature-a
+node cap-tools.cjs find-phase 3 --ws feature-b
 
 # Workstream CRUD
-node gsd-tools.cjs workstream create <name>
-node gsd-tools.cjs workstream list
-node gsd-tools.cjs workstream status <name>
-node gsd-tools.cjs workstream complete <name>
+node cap-tools.cjs workstream create <name>
+node cap-tools.cjs workstream list
+node cap-tools.cjs workstream status <name>
+node cap-tools.cjs workstream complete <name>
 ```

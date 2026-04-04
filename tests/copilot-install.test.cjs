@@ -668,7 +668,7 @@ describe('copyCommandsAsCopilotSkills', () => {
     // gsd:autonomous references should be converted to gsd-autonomous
     assert.ok(!result.match(/gsd:[a-z]/), 'no gsd: command references remain after conversion');
     // Specific: gsd:discuss-phase, gsd:plan-phase, gsd:execute-phase mentioned in body
-    // The body references gsd-tools.cjs (not a gsd: command) — those should be unaffected
+    // The body references cap-tools.cjs (not a gsd: command) — those should be unaffected
     // But /gsd:autonomous → /gsd-autonomous, gsd:discuss-phase → gsd-discuss-phase etc.
     if (srcContent.includes('gsd:autonomous')) {
       assert.ok(result.includes('gsd-autonomous'), 'gsd:autonomous converted to gsd-autonomous');

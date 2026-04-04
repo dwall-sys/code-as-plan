@@ -193,7 +193,7 @@ function loadGlobalContextRefs(rootPlanningDir) {
 
 /**
  * Modify extract-tags scan path to scope to an app directory.
- * Used by the --app flag in gsd-tools.cjs extract-tags case.
+ * Used by the --app flag in cap-tools.cjs extract-tags case.
  *
  * @param {string} rootPath - Monorepo root
  * @param {string} appRelativePath - App-scoped path
