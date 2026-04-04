@@ -2,7 +2,7 @@
  * GSD Tools Tests - config.cjs
  *
  * CLI integration tests for config-ensure-section, config-set, and config-get
- * commands exercised through gsd-tools.cjs via execSync.
+ * commands exercised through cap-tools.cjs via execSync.
  *
  * Requirements: TEST-13
  */
@@ -388,7 +388,7 @@ describe('config-new-project command', () => {
     // arc section present with correct defaults (ARC-01)
     assert.ok(config.arc && typeof config.arc === 'object', 'arc section should exist');
     assert.strictEqual(config.arc.enabled, true, 'arc.enabled should default to true');
-    assert.strictEqual(config.arc.tag_prefix, '@gsd-', 'arc.tag_prefix should default to @gsd-');
+    assert.strictEqual(config.arc.tag_prefix, '@cap-', 'arc.tag_prefix should default to @cap-');
   });
 
   test('user choices override defaults', () => {

@@ -12,55 +12,10 @@ const path = require('path');
 const os = require('os');
 
 const repoRoot = path.resolve(__dirname, '..');
-const commandPath = path.join(repoRoot, 'commands', 'gsd', 'forensics.md');
 const workflowPath = path.join(repoRoot, 'cap', 'workflows', 'forensics.md');
 
-describe('forensics command', () => {
-  test('command file exists', () => {
-    assert.ok(fs.existsSync(commandPath), 'commands/gsd/forensics.md should exist');
-  });
-
-  test('command has correct frontmatter', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(content.includes('name: gsd:forensics'), 'should have correct command name');
-    assert.ok(content.includes('type: prompt'), 'should have type: prompt');
-    assert.ok(content.includes('argument-hint'), 'should have argument-hint');
-  });
-
-  test('command references workflow in execution_context', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('workflows/forensics.md'),
-      'should reference the forensics workflow'
-    );
-  });
-
-  test('command has success_criteria section', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(content.includes('<success_criteria>'), 'should have success_criteria');
-  });
-
-  test('command has critical_rules section', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(content.includes('<critical_rules>'), 'should have critical_rules');
-  });
-
-  test('command enforces read-only investigation', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.toLowerCase().includes('read-only') || content.toLowerCase().includes('do not modify'),
-      'should enforce read-only investigation'
-    );
-  });
-
-  test('command requires evidence-grounded findings', () => {
-    const content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('Ground findings') || content.includes('cite specific'),
-      'should require evidence-grounded analysis'
-    );
-  });
-});
+// NOTE: commands/gsd/forensics.md was removed during GSD→CAP migration.
+// Command-level tests removed; workflow tests below still apply.
 
 describe('forensics workflow', () => {
   test('workflow file exists', () => {

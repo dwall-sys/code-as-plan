@@ -1,5 +1,6 @@
 'use strict';
 
+// @cap-history(sessions:2, edits:8, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 8 edits
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');

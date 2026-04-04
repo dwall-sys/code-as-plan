@@ -7,8 +7,8 @@ Orchestrator stays lean: parse gaps, spawn agents, collect results, update UAT.
 </purpose>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
-- gsd-debugger — Diagnoses and fixes issues
+Valid CAP subagent types (use exact names — do not fall back to 'general-purpose'):
+- cap-debugger — Diagnoses and fixes issues
 </available_agent_types>
 
 <paths>
@@ -81,7 +81,7 @@ This runs in parallel - all gaps investigated simultaneously.
 **Load agent skills:**
 
 ```bash
-AGENT_SKILLS_DEBUGGER=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" agent-skills gsd-debugger 2>/dev/null)
+AGENT_SKILLS_DEBUGGER=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" agent-skills gsd-debugger 2>/dev/null)
 ```
 
 **Spawn debug agents in parallel:**
@@ -91,7 +91,7 @@ For each gap, fill the debug-subagent-prompt template and spawn:
 ```
 Task(
   prompt=filled_debug_subagent_prompt + "\n\n<files_to_read>\n- {phase_dir}/{phase_num}-UAT.md\n- .planning/STATE.md\n</files_to_read>\n${AGENT_SKILLS_DEBUGGER}",
-  subagent_type="gsd-debugger",
+  subagent_type="cap-debugger",
   isolation="worktree",
   description="Debug: {truth_short}"
 )
@@ -170,7 +170,7 @@ Update status in frontmatter to "diagnosed".
 
 Commit the updated UAT.md:
 ```bash
-node "$HOME/.claude/cap/bin/gsd-tools.cjs" commit "docs({phase_num}): add root causes from diagnosis" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
+node "$HOME/.claude/cap/bin/cap-tools.cjs" commit "docs({phase_num}): add root causes from diagnosis" --files ".planning/phases/XX-name/{phase_num}-UAT.md"
 ```
 </step>
 

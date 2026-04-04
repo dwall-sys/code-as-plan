@@ -56,7 +56,8 @@ describe('cap-loader', () => {
 
       const combined = stderrOutput.join('');
       assert.ok(combined.includes('nonexistent-module.cjs'), 'error should name the module');
-      assert.ok(combined.includes('/tmp/cap-loader-test-fake'), 'error should include expected path');
+      // On Windows, path.join normalizes slashes; match what the loader produces
+      assert.ok(combined.includes('cap-loader-test-fake'), 'error should include expected path');
     });
   });
 

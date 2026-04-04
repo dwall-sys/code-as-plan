@@ -77,6 +77,42 @@ console.log(JSON.stringify(s));
 
 Store as `session_context`.
 
+## Step 1b: Check for prior brainstorm threads
+
+Check if the user's topic has been explored before. This gives the brainstormer context about prior discussions.
+
+```bash
+node -e "
+const tracker = require('./cap/bin/lib/cap-thread-tracker.cjs');
+const threads = tracker.listThreads(process.cwd());
+console.log(JSON.stringify({ threadCount: threads.length, threads: threads.slice(0, 10) }));
+"
+```
+
+Store as `prior_threads`.
+
+If `resume_mode` and `session_context.activeThread`:
+
+```bash
+node -e "
+const tracker = require('./cap/bin/lib/cap-thread-tracker.cjs');
+const thread = tracker.loadThread(process.cwd(), '{session_context.activeThread}');
+console.log(JSON.stringify(thread));
+"
+```
+
+Store as `resume_thread`. This is the thread from the previous brainstorm session to continue.
+
+If `prior_threads.threadCount > 0` and NOT `resume_mode`:
+- Display prior threads briefly:
+  ```
+  Found {threadCount} prior brainstorm thread(s):
+  {For each thread:}
+    - {thread.name} ({thread.timestamp}) — features: {thread.featureIds.join(', ') || 'none'}
+  {End for}
+  ```
+- The brainstormer agent will receive this context and can reference prior threads during conversation.
+
 ## Step 2: Spawn cap-brainstormer agent
 
 <!-- @cap-todo(ref:AC-37) cap-brainstormer shall produce structured PRD output with numbered acceptance criteria. -->
@@ -94,8 +130,26 @@ Existing features: {existing_features.featureCount} features already in FEATURE-
 Existing IDs: {existing_features.existingIds}
 Next available ID: F-{padded next number}
 
-{If resume_mode and session_context:}
-**Previous session context:**
+{If resume_mode and resume_thread:}
+**Resuming prior thread:**
+Thread ID: {resume_thread.id}
+Thread name: {resume_thread.name}
+Problem statement: {resume_thread.problemStatement}
+Solution shape: {resume_thread.solutionShape}
+Boundary decisions: {resume_thread.boundaryDecisions}
+Prior feature IDs: {resume_thread.featureIds}
+{End if}
+
+{If prior_threads.threadCount > 0 and NOT resume_mode:}
+**Prior brainstorm threads (for reference):**
+{For each thread in prior_threads.threads:}
+- {thread.name} ({thread.timestamp}) — keywords: {thread.keywords.slice(0,8).join(', ')} — features: {thread.featureIds.join(', ') || 'none'}
+{End for}
+NOTE: If the user's topic overlaps with a prior thread, reference it. Ask if they want to continue that line of thinking or explore something new.
+{End if}
+
+{If resume_mode and session_context and NOT resume_thread:}
+**Previous session context (no thread found):**
 Active feature: {session_context.activeFeature}
 Last step: {session_context.step}
 Last command: {session_context.lastCommand}
@@ -206,7 +260,48 @@ console.log('Written ' + newFeatures.length + ' features to FEATURE-MAP.md');
 "
 ```
 
-## Step 5: Update session state
+## Step 5: Persist brainstorm thread
+
+Save this brainstorm session as a conversation thread. This enables future sessions to reference prior discussions.
+
+Build the thread from the brainstorm results:
+- `problemStatement`: The user's initial problem or topic (from the conversation)
+- `solutionShape`: The high-level approach that emerged
+- `boundaryDecisions`: Key scope decisions from the `=== DECISIONS ===` block
+- `featureIds`: The IDs of features written to the Feature Map
+
+```bash
+node -e "
+const tracker = require('./cap/bin/lib/cap-thread-tracker.cjs');
+const resumeThreadId = '{resume_thread?.id || null}';
+const parentThread = resumeThreadId !== 'null' ? tracker.loadThread(process.cwd(), resumeThreadId) : null;
+
+const threadParams = {
+  problemStatement: '{problem_statement from conversation}',
+  solutionShape: '{solution_shape from conversation}',
+  boundaryDecisions: {JSON.stringify(decisions_from_brainstorm)},
+  featureIds: {JSON.stringify(feature_ids_written)},
+};
+
+let thread;
+if (parentThread) {
+  // Branching from resumed thread
+  thread = tracker.branchThread(parentThread, {
+    ...threadParams,
+    divergencePoint: 'Continued from prior session'
+  });
+} else {
+  thread = tracker.createThread(threadParams);
+}
+
+tracker.persistThread(process.cwd(), thread);
+console.log(JSON.stringify({ threadId: thread.id, threadName: thread.name }));
+"
+```
+
+Store as `persisted_thread`.
+
+## Step 5b: Update session state
 
 ```bash
 node -e "
@@ -214,7 +309,8 @@ const session = require('./cap/bin/lib/cap-session.cjs');
 session.updateSession(process.cwd(), {
   lastCommand: '/cap:brainstorm',
   lastCommandTimestamp: new Date().toISOString(),
-  step: 'brainstorm-complete'
+  step: 'brainstorm-complete',
+  activeThread: '{persisted_thread.threadId}'
 });
 "
 ```
@@ -228,11 +324,12 @@ Features written to FEATURE-MAP.md: {feature_count}
   {For each feature: feature.id: feature.title}
 
 Decisions recorded: {decision_count}
+Thread saved: {persisted_thread.threadName} ({persisted_thread.threadId})
 
 Next steps:
   - Run /cap:start to select a feature to work on
   - Run /cap:prototype --features {first_feature_id} to build initial code
-  - Run /cap:brainstorm --resume to continue discovery later
+  - Run /cap:brainstorm --resume to continue this thread later
 ```
 
 </process>

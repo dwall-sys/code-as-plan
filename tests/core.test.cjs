@@ -996,9 +996,9 @@ describe('stale hook filter', () => {
 // ─── stale hook path regression (#1249) ──────────────────────────────────────
 
 describe('stale hook path', () => {
-  test('gsd-check-update.js checks cap/hooks/ not configDir/hooks/', () => {
+  test('cap-check-update.js checks cap/hooks/ not configDir/hooks/', () => {
     const content = fs.readFileSync(
-      path.join(__dirname, '..', 'hooks', 'gsd-check-update.js'), 'utf-8'
+      path.join(__dirname, '..', 'hooks', 'cap-check-update.js'), 'utf-8'
     );
     assert.ok(
       content.includes("path.join(configDir, 'cap', 'hooks')"),

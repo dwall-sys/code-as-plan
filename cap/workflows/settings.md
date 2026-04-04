@@ -12,8 +12,8 @@ Read all files referenced by the invoking prompt's execution_context before star
 Ensure config exists and load current state:
 
 ```bash
-node "$HOME/.claude/cap/bin/gsd-tools.cjs" config-ensure-section
-INIT=$(node "$HOME/.claude/cap/bin/gsd-tools.cjs" state load)
+node "$HOME/.claude/cap/bin/cap-tools.cjs" config-ensure-section
+INIT=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" state load)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 

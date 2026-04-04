@@ -131,7 +131,7 @@ function parseOpenTodos(inventoryContent) {
       continue;
     }
     // Exit todo section on next ### heading
-    if (inTodoSection && /^###\s+@gsd-/.test(line)) {
+    if (inTodoSection && /^###\s+/.test(line) && !/^###\s+@cap-todo/.test(line)) {
       inTodoSection = false;
       continue;
     }
@@ -341,7 +341,7 @@ function discoverPrdFiles(planningDir) {
  * CLI entry point: aggregate features from PRDs and CODE-INVENTORY.md,
  * write .planning/FEATURES.md.
  *
- * Called by gsd-tools.cjs case 'aggregate-features'.
+ * Called by cap-tools.cjs case 'aggregate-features'.
  *
  * @cap-api CLI entry: cmdAggregateFeatures(cwd, opts).
  * opts.outputFile defaults to .planning/FEATURES.md.

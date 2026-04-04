@@ -14,48 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
 
-const COMMANDS_DIR = path.join(__dirname, '..', 'commands', 'gsd');
 const WORKFLOWS_DIR = path.join(__dirname, '..', 'cap', 'workflows');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Command frontmatter: --research flag advertised
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('quick command: --research in frontmatter', () => {
-  const commandPath = path.join(COMMANDS_DIR, 'quick.md');
-  let content;
-
-  test('quick.md exists', () => {
-    assert.ok(fs.existsSync(commandPath), 'commands/gsd/quick.md should exist');
-  });
-
-  test('argument-hint includes --research', () => {
-    content = fs.readFileSync(commandPath, 'utf-8');
-    assert.ok(
-      content.includes('--research'),
-      'quick.md argument-hint should mention --research'
-    );
-  });
-
-  test('argument-hint includes all three flags', () => {
-    content = fs.readFileSync(commandPath, 'utf-8');
-    const hintLine = content.split('\n').find(l => l.includes('argument-hint'));
-    assert.ok(hintLine, 'should have argument-hint line');
-    assert.ok(hintLine.includes('--full'), 'argument-hint should include --full');
-    assert.ok(hintLine.includes('--discuss'), 'argument-hint should include --discuss');
-    assert.ok(hintLine.includes('--research'), 'argument-hint should include --research');
-  });
-
-  test('objective section describes --research flag', () => {
-    content = fs.readFileSync(commandPath, 'utf-8');
-    const objectiveMatch = content.match(/<objective>([\s\S]*?)<\/objective>/);
-    assert.ok(objectiveMatch, 'should have <objective> section');
-    assert.ok(
-      objectiveMatch[1].includes('--research'),
-      'objective should describe --research flag'
-    );
-  });
-});
+// NOTE: commands/gsd/quick.md was removed during GSD→CAP migration.
+// Command-level tests removed; workflow tests below still apply.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Workflow: research step present and correct

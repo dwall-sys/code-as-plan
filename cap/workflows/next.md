@@ -14,7 +14,7 @@ Read project state to determine current position:
 
 ```bash
 # Get state snapshot
-node "$HOME/.claude/cap/bin/gsd-tools.cjs" state json 2>/dev/null || echo "{}"
+node "$HOME/.claude/cap/bin/cap-tools.cjs" state json 2>/dev/null || echo "{}"
 ```
 
 Also read:
