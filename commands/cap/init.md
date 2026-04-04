@@ -268,39 +268,25 @@ This helps CAP track your features across the codebase.
 
 **Do NOT persist the brownfield analysis as a separate document** (AC-87).
 
-## Step 7f: Build memory graph from existing data
+## Step 7f: Build memory graph
 
-If the project already has `.cap/memory/` data (decisions.md, pitfalls.md, etc.) or a FEATURE-MAP.md with features, build the memory graph:
-
-```bash
-node -e "
-const fs = require('fs'), path = require('path'), cwd = process.cwd();
-const memDir = path.join(cwd, '.cap', 'memory');
-const hasFM = fs.existsSync(path.join(cwd, 'FEATURE-MAP.md'));
-const hasMem = fs.existsSync(path.join(memDir, 'decisions.md'));
-if (hasFM || hasMem) {
-  const g = require('./cap/bin/lib/cap-memory-graph.cjs');
-  const graph = g.buildFromMemory(cwd); g.saveGraph(cwd, graph);
-  console.log(JSON.stringify({ built: true, nodes: Object.keys(graph.nodes).length, edges: graph.edges.length }));
-} else { console.log(JSON.stringify({ built: false })); }
-"
-```
-
-Store as `graph_result`.
-
-If `graph_result.built`: Log: "Memory graph built: {nodes} nodes, {edges} edges (.cap/memory/graph.json)"
-
-## Step 7g: Migrate past brainstorm sessions to conversation threads
-
-If prior sessions exist and no threads have been created yet, extract brainstorm sessions and create threads. This uses `cap-thread-migrator.cjs` which scans JSONL session logs for brainstorm markers.
+**MANDATORY** — always run this step. The script auto-detects whether data exists.
 
 ```bash
-node -e "const m = require('./cap/bin/lib/cap-thread-migrator.cjs'); console.log(JSON.stringify(m.migrateBrainstormSessions(process.cwd())));"
+node -e "const fs=require('fs'),p=require('path'),c=process.cwd(),md=p.join(c,'.cap','memory');if(fs.existsSync(p.join(c,'FEATURE-MAP.md'))||fs.existsSync(p.join(md,'decisions.md'))){const g=require('./cap/bin/lib/cap-memory-graph.cjs'),gr=g.buildFromMemory(c);g.saveGraph(c,gr);console.log(JSON.stringify({built:true,nodes:Object.keys(gr.nodes).length,edges:gr.edges.length}))}else{console.log(JSON.stringify({built:false}))}"
 ```
 
-Store as `thread_migration`.
+Log the result. If `built: true`: "Memory graph built: {nodes} nodes, {edges} edges"
 
-If `thread_migration.migrated > 0`: Log: "Migrated {migrated} brainstorm session(s) to conversation threads."
+## Step 7g: Migrate brainstorm sessions to conversation threads
+
+**MANDATORY** — always run this step. The script auto-detects whether migration is needed and handles re-migration of metadata-only threads.
+
+```bash
+node -e "const m=require('./cap/bin/lib/cap-thread-migrator.cjs');console.log(JSON.stringify(m.migrateBrainstormSessions(process.cwd())))"
+```
+
+Log the result. If `migrated > 0`: "Migrated {migrated} brainstorm session(s) to conversation threads."
 
 ## Step 8: Report results
 
