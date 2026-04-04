@@ -341,7 +341,7 @@ flowchart LR
 <pre class="mermaid">
 flowchart TD
     classDef action fill:#7c3aed,color:#fff,stroke:#5b21b6
-    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+    classDef artifact fill:#2a2a3a,color:#fff,stroke:#4d4d5e
 
     INIT["/cap:init"]:::action
     CAP[".cap/ directory"]:::artifact
@@ -379,10 +379,10 @@ flowchart TD
 <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-    classDef agent fill:#fef3c7,color:#000,stroke:#f59e0b
-    classDef user fill:#1e293b,color:#e4e4e7,stroke:#3b82f6
-    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
-    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+    classDef agent fill:#92400e,color:#fff,stroke:#f59e0b
+    classDef user fill:#1e3a5f,color:#fff,stroke:#3b82f6
+    classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
+    classDef artifact fill:#2a2a3a,color:#fff,stroke:#4d4d5e
 
     THREADS{"Prior threads?"}:::decision
     SHOW["Load thread context"]:::agent
@@ -438,8 +438,8 @@ flowchart TD
 <pre class="mermaid">
 flowchart LR
     classDef proto fill:#3b82f6,color:#fff,stroke:#2563eb
-    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
-    classDef tag fill:#1e3a5f,color:#93c5fd,stroke:#3b82f6
+    classDef artifact fill:#2a2a3a,color:#fff,stroke:#4d4d5e
+    classDef tag fill:#1e3a5f,color:#fff,stroke:#3b82f6
 
     CMD["/cap:prototype"]:::proto
     BUILD["Build annotated code"]:::proto
@@ -473,7 +473,7 @@ flowchart LR
 <pre class="mermaid">
 flowchart TD
     classDef iterate fill:#06b6d4,color:#fff,stroke:#0891b2
-    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
+    classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
     classDef done fill:#10b981,color:#fff,stroke:#059669
 
     SCAN1["Scan for gaps"]:::iterate
@@ -520,8 +520,8 @@ flowchart TD
     classDef test fill:#ef4444,color:#fff,stroke:#dc2626
     classDef green fill:#10b981,color:#fff,stroke:#059669
     classDef audit fill:#7c3aed,color:#fff,stroke:#5b21b6
-    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
-    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+    classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
+    classDef artifact fill:#2a2a3a,color:#fff,stroke:#4d4d5e
 
     READ["Read Feature Map ACs"]:::test
     RED["RED: write failing tests"]:::test
@@ -599,10 +599,10 @@ flowchart TD
 <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-    classDef stage fill:#1e2e1e,color:#86efac,stroke:#10b981
-    classDef fail fill:#2e1e1e,color:#fca5a5,stroke:#ef4444
+    classDef stage fill:#064e3b,color:#fff,stroke:#10b981
+    classDef fail fill:#7f1d1d,color:#fff,stroke:#ef4444
     classDef pass fill:#10b981,color:#fff,stroke:#059669
-    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
+    classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
 
     S1["Stage 1: AC Compliance"]:::stage
     S1P{"Pass?"}:::decision
@@ -651,8 +651,8 @@ flowchart TD
 <pre class="mermaid">
 flowchart TD
     classDef session fill:#7c3aed,color:#fff,stroke:#5b21b6
-    classDef hook fill:#2d1f5e,color:#c4b5fd,stroke:#7c3aed
-    classDef memory fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+    classDef hook fill:#4c1d95,color:#fff,stroke:#7c3aed
+    classDef memory fill:#2a2a3a,color:#fff,stroke:#4d4d5e
     classDef thread fill:#f59e0b,color:#000,stroke:#d97706
 
     SESSION["Claude Code Session"]:::session
@@ -770,14 +770,22 @@ flowchart TD
 <script>
   mermaid.initialize({
     startOnLoad: true,
-    theme: 'dark',
+    theme: 'base',
     themeVariables: {
       primaryColor: '#7c3aed',
-      primaryTextColor: '#e4e4e7',
+      primaryTextColor: '#ffffff',
       primaryBorderColor: '#5b21b6',
-      lineColor: '#4b5563',
+      lineColor: '#6b7280',
       secondaryColor: '#1e1e2e',
       tertiaryColor: '#22222e',
+      background: '#1a1a24',
+      mainBkg: '#2d2d3a',
+      nodeBorder: '#4b5563',
+      clusterBkg: '#22222e',
+      clusterBorder: '#3d3d4e',
+      titleColor: '#e4e4e7',
+      edgeLabelBackground: '#1a1a24',
+      nodeTextColor: '#ffffff',
       fontSize: '14px'
     }
   });
