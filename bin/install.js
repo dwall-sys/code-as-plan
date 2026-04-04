@@ -7,6 +7,7 @@
 // @cap-pitfall(learned:2026-04-01) There it is — the install script replaces `~/.claude/` and `$HOME/.claude/` references, but **never replaces `./cap/bin/lib/`** relative paths.
 // @cap-pitfall(learned:2026-04-01) The `./cap/bin/lib/` paths are never rewritten.
 // @cap-pitfall(learned:2026-04-01) The installer rewrites `~/.claude/` and `$HOME/.claude/` paths, but never touches `./cap/bin/lib/` paths.
+// @cap-history(sessions:5, edits:44, since:2026-04-01, learned:2026-04-04) Frequently modified — 5 sessions, 44 edits
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -5041,6 +5042,7 @@ function promptLocation(runtimes) {
  */
 function detectAndCleanupGSD(targetDir, isInteractive, callback) {
   const gsdAgents = [];
+  const gsdHooks = [];
   const gsdDirs = [];
 
   // Check for gsd-* agent files
@@ -5049,6 +5051,15 @@ function detectAndCleanupGSD(targetDir, isInteractive, callback) {
     try {
       const files = fs.readdirSync(agentsDir).filter(f => f.startsWith('gsd-') && f.endsWith('.md'));
       gsdAgents.push(...files);
+    } catch (_e) {}
+  }
+
+  // Check for gsd-* hook files
+  const hooksDir = path.join(targetDir, 'hooks');
+  if (fs.existsSync(hooksDir)) {
+    try {
+      const files = fs.readdirSync(hooksDir).filter(f => f.startsWith('gsd-') && f.endsWith('.js'));
+      gsdHooks.push(...files);
     } catch (_e) {}
   }
 
@@ -5066,7 +5077,7 @@ function detectAndCleanupGSD(targetDir, isInteractive, callback) {
   }
 
   // Nothing to clean
-  if (gsdAgents.length === 0 && gsdDirs.length === 0) {
+  if (gsdAgents.length === 0 && gsdHooks.length === 0 && gsdDirs.length === 0) {
     callback();
     return;
   }
@@ -5076,10 +5087,10 @@ function detectAndCleanupGSD(targetDir, isInteractive, callback) {
 
   CAP (Code as Plan) replaces GSD entirely. The old GSD files are no
   longer needed and may cause conflicts (duplicate agents, outdated
-  commands referencing removed workflows).
+  commands referencing removed workflows, stale hook errors).
 
   Found:
-${gsdAgents.length > 0 ? `    ${cyan}${gsdAgents.length}${reset} GSD agent files (gsd-*.md)\n` : ''}${gsdDirs.map(d => `    ${cyan}${d.label}${reset}\n`).join('')}
+${gsdAgents.length > 0 ? `    ${cyan}${gsdAgents.length}${reset} GSD agent files (gsd-*.md)\n` : ''}${gsdHooks.length > 0 ? `    ${cyan}${gsdHooks.length}${reset} GSD hook files (gsd-*.js)\n` : ''}${gsdDirs.map(d => `    ${cyan}${d.label}${reset}\n`).join('')}
   Removing these is safe — all functionality is covered by CAP.
   Your project files and custom configurations are NOT affected.
 `);
@@ -5096,6 +5107,17 @@ ${gsdAgents.length > 0 ? `    ${cyan}${gsdAgents.length}${reset} GSD agent files
     }
     if (gsdAgents.length > 0) {
       console.log(`  ${green}✓${reset} Removed ${gsdAgents.length} GSD agent files`);
+    }
+
+    // Remove gsd-* hook files
+    for (const file of gsdHooks) {
+      try {
+        fs.unlinkSync(path.join(hooksDir, file));
+        removed++;
+      } catch (_e) {}
+    }
+    if (gsdHooks.length > 0) {
+      console.log(`  ${green}✓${reset} Removed ${gsdHooks.length} GSD hook files`);
     }
 
     // Remove legacy directories

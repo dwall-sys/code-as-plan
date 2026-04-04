@@ -5,6 +5,7 @@
 
 'use strict';
 
+// @cap-history(sessions:2, edits:15, since:2026-04-03, learned:2026-04-04) Frequently modified — 2 sessions, 15 edits
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -141,9 +142,26 @@ function getSessionFiles(projectDir) {
     .map(f => {
       const fp = path.join(projectDir, f);
       const stat = fs.statSync(fp);
-      const firstLine = fs.readFileSync(fp, 'utf8').split('\n')[0];
+      // Scan first few lines for a timestamp — session headers (permission-mode,
+      // file-history-snapshot) don't carry one, but the first user message does.
       let ts = null;
-      try { ts = JSON.parse(firstLine).timestamp; } catch { /* ignore */ }
+      const fd = fs.openSync(fp, 'r');
+      try {
+        const buf = Buffer.alloc(4096);
+        const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);
+        const lines = buf.toString('utf8', 0, bytesRead).split('\n');
+        for (const line of lines) {
+          if (!line) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.timestamp) { ts = parsed.timestamp; break; }
+          } catch { /* partial line or parse error — skip */ }
+        }
+      } finally {
+        fs.closeSync(fd);
+      }
+      // Fallback: use file mtime if no timestamp found in content
+      if (!ts) ts = stat.mtime.toISOString();
       return { file: f, path: fp, date: ts, size: stat.size };
     })
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
