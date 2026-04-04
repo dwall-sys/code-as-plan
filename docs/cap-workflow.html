@@ -308,11 +308,11 @@
 <pre class="mermaid">
 flowchart LR
     classDef init fill:#7c3aed,color:#fff,stroke:#5b21b6,stroke-width:2px
-    classDef brainstorm fill:#f59e0b,color:#000,stroke:#d97706,stroke-width:2px
-    classDef proto fill:#3b82f6,color:#fff,stroke:#2563eb,stroke-width:2px
-    classDef iterate fill:#06b6d4,color:#fff,stroke:#0891b2,stroke-width:2px
+    classDef brainstorm fill:#b45309,color:#fff,stroke:#d97706,stroke-width:2px
+    classDef proto fill:#1d4ed8,color:#fff,stroke:#2563eb,stroke-width:2px
+    classDef iterate fill:#0e7490,color:#fff,stroke:#0891b2,stroke-width:2px
     classDef test fill:#ef4444,color:#fff,stroke:#dc2626,stroke-width:2px
-    classDef review fill:#10b981,color:#fff,stroke:#059669,stroke-width:2px
+    classDef review fill:#047857,color:#fff,stroke:#059669,stroke-width:2px
 
     I["init"]:::init --> B["brainstorm"]:::brainstorm --> P["prototype"]:::proto --> IT["iterate"]:::iterate --> T["test"]:::test --> R["review"]:::review
     R -.->|"corrections"| IT
@@ -437,7 +437,7 @@ flowchart TD
 <div class="diagram">
 <pre class="mermaid">
 flowchart LR
-    classDef proto fill:#3b82f6,color:#fff,stroke:#2563eb
+    classDef proto fill:#1d4ed8,color:#fff,stroke:#2563eb
     classDef artifact fill:#2a2a3a,color:#fff,stroke:#4d4d5e
     classDef tag fill:#1e3a5f,color:#fff,stroke:#3b82f6
 
@@ -472,9 +472,9 @@ flowchart LR
 <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-    classDef iterate fill:#06b6d4,color:#fff,stroke:#0891b2
+    classDef iterate fill:#0e7490,color:#fff,stroke:#0891b2
     classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
-    classDef done fill:#10b981,color:#fff,stroke:#059669
+    classDef done fill:#047857,color:#fff,stroke:#059669
 
     SCAN1["Scan for gaps"]:::iterate
     GAPS{"Uncovered ACs?"}:::decision
@@ -518,7 +518,7 @@ flowchart TD
 <pre class="mermaid">
 flowchart TD
     classDef test fill:#ef4444,color:#fff,stroke:#dc2626
-    classDef green fill:#10b981,color:#fff,stroke:#059669
+    classDef green fill:#047857,color:#fff,stroke:#059669
     classDef audit fill:#7c3aed,color:#fff,stroke:#5b21b6
     classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
     classDef artifact fill:#2a2a3a,color:#fff,stroke:#4d4d5e
@@ -601,7 +601,7 @@ flowchart TD
 flowchart TD
     classDef stage fill:#064e3b,color:#fff,stroke:#10b981
     classDef fail fill:#7f1d1d,color:#fff,stroke:#ef4444
-    classDef pass fill:#10b981,color:#fff,stroke:#059669
+    classDef pass fill:#047857,color:#fff,stroke:#059669
     classDef decision fill:#92400e,color:#fbbf24,stroke:#d97706
 
     S1["Stage 1: AC Compliance"]:::stage
@@ -653,7 +653,7 @@ flowchart TD
     classDef session fill:#7c3aed,color:#fff,stroke:#5b21b6
     classDef hook fill:#4c1d95,color:#fff,stroke:#7c3aed
     classDef memory fill:#2a2a3a,color:#fff,stroke:#4d4d5e
-    classDef thread fill:#f59e0b,color:#000,stroke:#d97706
+    classDef thread fill:#b45309,color:#fff,stroke:#d97706
 
     SESSION["Claude Code Session"]:::session
     TAGS["@cap-decision + @cap-todo risk:"]:::session
