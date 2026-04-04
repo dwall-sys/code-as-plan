@@ -242,30 +242,46 @@ flowchart TD
 ### `/cap:test` — Adversarial RED-GREEN testing
 
 ```mermaid
-flowchart LR
+flowchart TD
     classDef test fill:#ef4444,color:#fff,stroke:#dc2626
-    classDef agent fill:#fee2e2,color:#000,stroke:#ef4444
-    classDef pass fill:#10b981,color:#fff,stroke:#059669
-    classDef fail fill:#ef4444,color:#fff,stroke:#dc2626
+    classDef green fill:#10b981,color:#fff,stroke:#059669
+    classDef audit fill:#7c3aed,color:#fff,stroke:#5b21b6
 
-    CMD["/cap:test<br/>--features F-001"]:::test
-    READ["Read Feature Map ACs<br/>+ implementation"]:::agent
-    RED["RED phase:<br/>Write failing tests<br/>for each AC"]:::fail
-    GREEN["GREEN phase:<br/>Verify tests pass<br/>against implementation"]:::pass
-    REPORT["Test report<br/>with coverage"]:::agent
+    READ["Read Feature Map ACs"]:::test
+    RED["RED: write failing tests"]:::test
+    GREEN["GREEN: verify they pass"]:::green
+    DEEP{"--deep?"}
+    AUDIT["Trust Score Audit<br/>density + coverage + mutations"]:::audit
+    LOW{"< 70%?"}
+    SUGGEST["Improvement suggestions<br/>prioritized by point gain"]:::audit
+    DONE["Done"]:::green
 
-    CMD --> READ --> RED --> GREEN --> REPORT
+    READ --> RED --> GREEN --> DEEP
+    DEEP -->|"no"| DONE
+    DEEP -->|"yes"| AUDIT --> LOW
+    LOW -->|"yes"| SUGGEST
+    LOW -->|"no"| DONE
 ```
 
 **When:** After prototype/iterate, when code is ready for verification.
+
+**Flags:**
+| Flag | Effect |
+|------|--------|
+| `--features F-001` | Scope to specific features |
+| `--red-only` | Stop after RED phase (TDD workflow) |
+| `--deep` | Run test audit after GREEN — trust score < 70% triggers improvement suggestions |
 
 **What it does:**
 1. Reads Feature Map ACs for target features
 2. **RED phase:** Writes tests that SHOULD fail if the AC isn't implemented
 3. **GREEN phase:** Runs tests against actual code, verifies they pass
-4. Reports which ACs pass/fail with specific test results
+4. **DEEP mode** (`--deep`): Runs full audit — assertion density, coverage, mutations, anti-patterns
+5. Trust score < 70% shows prioritized suggestions with estimated point gains
 
-**Best practice:** Run `/cap:test` before `/cap:review` — the reviewer checks test results as part of AC compliance.
+**Trust score components:** Assertion density (30pts), Coverage (30pts), Mutation score (25pts), Anti-pattern penalty (-15pts), Empty test penalty (-10pts)
+
+**Best practice:** Use `--deep` for important features. The trust score catches weak tests that pass but don't actually verify anything.
 
 ---
 
@@ -432,7 +448,7 @@ New Feature:
   /cap:brainstorm         # Discover and define features
   /cap:prototype F-042    # Build the feature
   /cap:iterate            # Fill in gaps
-  /cap:test F-042         # Verify against ACs
+  /cap:test F-042 --deep  # Verify ACs + audit trust score
   /cap:review             # Quality gate
   git push                # Ship it
 

@@ -496,28 +496,88 @@ flowchart TD
     <div class="phase-number" style="background:rgba(239,68,68,0.2);color:var(--red)">5</div>
     <div>
       <h3>Adversarial RED-GREEN Testing</h3>
-      <div class="cmd">/cap:test --features F-001</div>
+      <div class="cmd">/cap:test --features F-001 [--deep]</div>
     </div>
   </div>
   <p><strong>When:</strong> After prototype/iterate, when code is ready for verification.</p>
   <p><span class="badge badge-red">RED</span> Write tests that SHOULD fail if the AC isn't implemented.<br>
-  <span class="badge badge-green">GREEN</span> Run tests against actual code, verify they pass.</p>
+  <span class="badge badge-green">GREEN</span> Run tests against actual code, verify they pass.<br>
+  <span class="badge badge-purple">DEEP</span> Run test audit: assertion density, coverage, mutations, anti-patterns, trust score.</p>
 </div>
+
+<table>
+  <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td>--features F-001</td><td>Scope to specific features</td></tr>
+    <tr><td>--red-only</td><td>Stop after RED phase (TDD workflow)</td></tr>
+    <tr><td>--deep</td><td>Run full test audit after GREEN. Trust score &lt; 70% triggers improvement suggestions.</td></tr>
+  </tbody>
+</table>
 
 <div class="diagram">
 <pre class="mermaid">
-flowchart LR
+flowchart TD
     classDef test fill:#ef4444,color:#fff,stroke:#dc2626
     classDef green fill:#10b981,color:#fff,stroke:#059669
+    classDef audit fill:#7c3aed,color:#fff,stroke:#5b21b6
+    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
     classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
 
     READ["Read Feature Map ACs"]:::test
     RED["RED: write failing tests"]:::test
     GREEN["GREEN: verify they pass"]:::green
-    REPORT["Coverage report"]:::artifact
+    DEEP{"--deep?"}:::decision
+    AUDIT["Test Audit"]:::audit
+    DENSITY["Assertion density"]:::artifact
+    COVERAGE["Code coverage"]:::artifact
+    MUTATIONS["Mutation testing"]:::artifact
+    ANTI["Anti-patterns"]:::artifact
+    TRUST{"Trust score"}:::decision
+    LOW["Score < 70%"]:::test
+    OK["Score >= 70%"]:::green
+    SUGGEST["Improvement suggestions<br/>prioritized by point gain"]:::audit
+    FIX["Fix top issue<br/>and re-audit"]:::audit
 
-    READ --> RED --> GREEN --> REPORT
+    READ --> RED --> GREEN --> DEEP
+    DEEP -->|"no"| DONE["Done"]:::green
+    DEEP -->|"yes"| AUDIT
+    AUDIT --> DENSITY & COVERAGE & MUTATIONS & ANTI
+    DENSITY & COVERAGE & MUTATIONS & ANTI --> TRUST
+    TRUST -->|"< 70"| LOW --> SUGGEST --> FIX
+    TRUST -->|">= 70"| OK
+    FIX -.->|"re-run"| AUDIT
 </pre>
+</div>
+
+<h3>Trust Score Breakdown</h3>
+<table>
+  <thead><tr><th>Component</th><th>Max Points</th><th>What it measures</th></tr></thead>
+  <tbody>
+    <tr><td>Assertion density</td><td>30</td><td>Assertions per test (2+ = full marks)</td></tr>
+    <tr><td>Code coverage</td><td>30</td><td>Lines (15), branches (10), functions (5)</td></tr>
+    <tr><td>Mutation score</td><td>25</td><td>% of code mutations caught by tests</td></tr>
+    <tr><td>Anti-patterns</td><td>-15</td><td>Penalty for weak assertions, snapshot abuse, etc.</td></tr>
+    <tr><td>Empty tests</td><td>-10</td><td>Penalty for tests with 0 assertions</td></tr>
+  </tbody>
+</table>
+
+<div class="phase-card" style="border-left: 4px solid var(--purple);">
+  <h3 style="margin-top:0;">When trust score is below 70%</h3>
+  <p>The audit generates <strong>prioritized improvement suggestions</strong> sorted by potential point gain:</p>
+  <div class="tag-example">
+<span class="comment">IMPROVEMENT SUGGESTIONS</span><br>
+<span class="comment">  Current score: 52/100 (target: 70+)</span><br>
+<br>
+<span class="ref">  1. Increase assertion density (+20 pts)</span><br>
+<span class="comment">     Tests average 0.8 assertions each. Add specific value checks...</span><br>
+<br>
+<span class="ref">  2. Fix 3 empty test(s) (+6 pts)</span><br>
+<span class="comment">     tests/core.test.cjs:42, tests/auth.test.cjs:15...</span><br>
+<br>
+<span class="ref">  3. Fix 5 anti-pattern(s) (+10 pts)</span><br>
+<span class="comment">     Top issue: Weak assertion: only checks value is defined...</span>
+  </div>
+  <p>Claude will ask: <em>"Trust score is 52/100. Want me to address the top suggestion now?"</em> — and iteratively fix issues until the score reaches 70+.</p>
 </div>
 
 <!-- REVIEW -->
@@ -628,6 +688,7 @@ flowchart TD
     <tr><td>/cap:status</td><td>Feature completion dashboard</td><td>Anytime</td></tr>
     <tr><td>/cap:debug</td><td>Scientific method debugging</td><td>Bugs found</td></tr>
     <tr><td>/cap:annotate</td><td>Tag existing code</td><td>Brownfield projects</td></tr>
+    <tr><td>/cap:test-audit</td><td>Standalone trust score analysis</td><td>Deep quality check</td></tr>
     <tr><td>/cap:doctor</td><td>Environment health check</td><td>Setup issues</td></tr>
     <tr><td>/cap:memory init</td><td>Bootstrap memory from all sessions</td><td>First time / reset</td></tr>
     <tr><td>/cap:refresh-docs</td><td>Update Context7 stack docs</td><td>Dependency updates</td></tr>
@@ -652,7 +713,7 @@ flowchart TD
     <span class="cmd">/cap:brainstorm</span> <span class="cmt"># Discover and define</span><br>
     <span class="cmd">/cap:prototype F-042</span> <span class="cmt"># Build it</span><br>
     <span class="cmd">/cap:iterate</span> <span class="cmt"># Fill gaps</span><br>
-    <span class="cmd">/cap:test F-042</span> <span class="cmt"># Verify against ACs</span><br>
+    <span class="cmd">/cap:test F-042 --deep</span> <span class="cmt"># Verify ACs + audit trust score</span><br>
     <span class="cmd">/cap:review</span> <span class="cmt"># Quality gate</span><br>
     <span class="cmt">git push</span> <span class="cmt"># Ship it</span>
   </code>
