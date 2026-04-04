@@ -37,14 +37,32 @@ const MAX_DECISIONS = 8;
  * @param {string} cwd - Project root
  * @returns {{ migrated: number, totalSessions: number, reason?: string }}
  */
-function migrateBrainstormSessions(cwd) {
+function migrateBrainstormSessions(cwd, options = {}) {
   const tracker = require('./cap-thread-tracker.cjs');
   const extract = require('./cap-session-extract.cjs');
+  const force = options.force === true;
 
-  // Skip if threads already exist
   const index = tracker.loadIndex(cwd);
-  if (index.threads.length > 0) {
-    return { migrated: 0, totalSessions: 0, reason: 'threads already exist' };
+
+  // If threads exist and not forcing, check if they need enrichment
+  if (index.threads.length > 0 && !force) {
+    // Re-migrate if existing threads have empty solutionShape (old metadata-only migration)
+    const needsEnrichment = index.threads.some(t => {
+      const full = tracker.loadThread(cwd, t.id);
+      return full && !full.solutionShape;
+    });
+    if (!needsEnrichment) {
+      return { migrated: 0, totalSessions: 0, reason: 'threads already enriched' };
+    }
+    // Clear old metadata-only threads before re-migrating
+    for (const t of index.threads) {
+      tracker.deleteThread(cwd, t.id);
+    }
+  } else if (index.threads.length > 0 && force) {
+    // Force: clear all existing threads
+    for (const t of [...index.threads]) {
+      tracker.deleteThread(cwd, t.id);
+    }
   }
 
   const projectDir = extract.getProjectDir(cwd);
