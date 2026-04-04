@@ -33,6 +33,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-stack-docs.cjs',
   'cap-tag-scanner.cjs',
   'cap-test-audit.cjs',
+  'cap-thread-migrator.cjs',
   'cap-thread-synthesis.cjs',
   'cap-thread-tracker.cjs',
   'commands.cjs',

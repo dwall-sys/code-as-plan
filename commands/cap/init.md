@@ -274,24 +274,15 @@ If the project already has `.cap/memory/` data (decisions.md, pitfalls.md, etc.)
 
 ```bash
 node -e "
-const fs = require('node:fs');
-const path = require('node:path');
-const cwd = process.cwd();
+const fs = require('fs'), path = require('path'), cwd = process.cwd();
 const memDir = path.join(cwd, '.cap', 'memory');
-const graphPath = path.join(memDir, 'graph.json');
 const hasFM = fs.existsSync(path.join(cwd, 'FEATURE-MAP.md'));
-const hasMemory = fs.existsSync(path.join(memDir, 'decisions.md')) || fs.existsSync(path.join(memDir, 'pitfalls.md'));
-
-if (hasFM || hasMemory) {
-  const memGraph = require('./cap/bin/lib/cap-memory-graph.cjs');
-  const graph = memGraph.buildFromMemory(cwd);
-  memGraph.saveGraph(cwd, graph);
-  const nodeCount = Object.keys(graph.nodes).length;
-  const edgeCount = graph.edges.length;
-  console.log(JSON.stringify({ built: true, nodes: nodeCount, edges: edgeCount }));
-} else {
-  console.log(JSON.stringify({ built: false, reason: 'no existing data' }));
-}
+const hasMem = fs.existsSync(path.join(memDir, 'decisions.md'));
+if (hasFM || hasMem) {
+  const g = require('./cap/bin/lib/cap-memory-graph.cjs');
+  const graph = g.buildFromMemory(cwd); g.saveGraph(cwd, graph);
+  console.log(JSON.stringify({ built: true, nodes: Object.keys(graph.nodes).length, edges: graph.edges.length }));
+} else { console.log(JSON.stringify({ built: false })); }
 "
 ```
 
@@ -301,93 +292,10 @@ If `graph_result.built`: Log: "Memory graph built: {nodes} nodes, {edges} edges 
 
 ## Step 7g: Migrate past brainstorm sessions to conversation threads
 
-If prior sessions exist and no threads have been created yet, extract brainstorm sessions and create threads:
+If prior sessions exist and no threads have been created yet, extract brainstorm sessions and create threads. This uses `cap-thread-migrator.cjs` which scans JSONL session logs for brainstorm markers.
 
 ```bash
-node -e "
-const fs = require('node:fs');
-const path = require('node:path');
-const cwd = process.cwd();
-const tracker = require('./cap/bin/lib/cap-thread-tracker.cjs');
-const extract = require('./cap/bin/lib/cap-session-extract.cjs');
-
-// Skip if threads already exist
-const index = tracker.loadIndex(cwd);
-if (index.threads.length > 0) {
-  console.log(JSON.stringify({ migrated: 0, reason: 'threads already exist' }));
-  process.exit(0);
-}
-
-// Find project sessions
-const projectDir = extract.getProjectDir(cwd);
-if (!projectDir) {
-  console.log(JSON.stringify({ migrated: 0, reason: 'no session directory' }));
-  process.exit(0);
-}
-
-const sessionFiles = extract.getSessionFiles(projectDir);
-if (sessionFiles.length === 0) {
-  console.log(JSON.stringify({ migrated: 0, reason: 'no sessions' }));
-  process.exit(0);
-}
-
-// Scan sessions for brainstorm activity (look for brainstorm command or feature discovery patterns)
-let migrated = 0;
-for (const sf of sessionFiles) {
-  try {
-    const content = fs.readFileSync(sf.path, 'utf8');
-    const lines = content.split('\n').filter(l => l.trim());
-
-    // Check if this session contained a brainstorm
-    const hasBrainstorm = lines.some(l => {
-      try {
-        const msg = JSON.parse(l);
-        const text = typeof msg.message?.content === 'string' ? msg.message.content :
-          Array.isArray(msg.message?.content) ? msg.message.content.filter(c => c.type === 'text').map(c => c.text).join(' ') : '';
-        return text.includes('/cap:brainstorm') || text.includes('BRAINSTORM OUTPUT') || text.includes('=== FEATURE:');
-      } catch { return false; }
-    });
-
-    if (!hasBrainstorm) continue;
-
-    // Extract a problem statement from the first user message after brainstorm invocation
-    let problemStatement = '';
-    let featureIds = [];
-    for (const l of lines) {
-      try {
-        const msg = JSON.parse(l);
-        const text = typeof msg.message?.content === 'string' ? msg.message.content :
-          Array.isArray(msg.message?.content) ? msg.message.content.filter(c => c.type === 'text').map(c => c.text).join(' ') : '';
-
-        // Extract feature IDs from output
-        const fMatches = text.match(/F-\\d{3}/g);
-        if (fMatches) featureIds.push(...fMatches);
-
-        // First substantive user message as problem statement
-        if (msg.type === 'user' && text.length > 20 && !problemStatement && !text.includes('/cap:')) {
-          problemStatement = text.substring(0, 200);
-        }
-      } catch { /* skip */ }
-    }
-
-    if (!problemStatement) problemStatement = 'Brainstorm session from ' + (sf.date || 'unknown date');
-    featureIds = [...new Set(featureIds)];
-
-    const thread = tracker.createThread({
-      problemStatement,
-      solutionShape: '',
-      boundaryDecisions: [],
-      featureIds,
-    });
-    // Override timestamp to match session date
-    if (sf.date) thread.timestamp = sf.date;
-    tracker.persistThread(cwd, thread);
-    migrated++;
-  } catch { /* skip unparseable sessions */ }
-}
-
-console.log(JSON.stringify({ migrated, totalSessions: sessionFiles.length }));
-"
+node -e "const m = require('./cap/bin/lib/cap-thread-migrator.cjs'); console.log(JSON.stringify(m.migrateBrainstormSessions(process.cwd())));"
 ```
 
 Store as `thread_migration`.
