@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAP Workflow Guide</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f14;
+    --surface: #1a1a24;
+    --surface2: #22222e;
+    --border: #2d2d3a;
+    --text: #e4e4e7;
+    --text-dim: #9ca3af;
+    --purple: #7c3aed;
+    --purple-light: #a78bfa;
+    --yellow: #f59e0b;
+    --blue: #3b82f6;
+    --cyan: #06b6d4;
+    --red: #ef4444;
+    --green: #10b981;
+    --gray: #6b7280;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    overflow-y: auto;
+    z-index: 100;
+  }
+
+  nav h1 {
+    font-size: 18px;
+    font-weight: 700;
+    padding: 0 20px 16px;
+    color: var(--purple-light);
+    letter-spacing: -0.5px;
+  }
+
+  nav h1 span { color: var(--text-dim); font-weight: 400; font-size: 13px; }
+
+  nav a {
+    display: block;
+    padding: 8px 20px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 14px;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+  }
+
+  nav a:hover { color: var(--text); background: var(--surface2); }
+  nav a.active { color: var(--purple-light); border-left-color: var(--purple); background: var(--surface2); }
+
+  nav .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    padding: 16px 20px 6px;
+    opacity: 0.6;
+  }
+
+  /* Main content */
+  main {
+    margin-left: 260px;
+    flex: 1;
+    max-width: 900px;
+    padding: 48px 48px 120px;
+  }
+
+  h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 64px 0 8px;
+    color: var(--text);
+    letter-spacing: -0.5px;
+    scroll-margin-top: 24px;
+  }
+
+  h2:first-of-type { margin-top: 0; }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 32px 0 12px;
+    color: var(--text);
+  }
+
+  p { margin: 12px 0; color: var(--text-dim); }
+  strong { color: var(--text); }
+
+  /* Phase cards */
+  .phase-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 20px 0;
+    transition: border-color 0.3s;
+  }
+
+  .phase-card:hover { border-color: var(--purple); }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .phase-number {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .phase-header h3 { margin: 0; }
+  .phase-header .cmd { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; color: var(--purple-light); }
+
+  /* Diagram containers */
+  .diagram {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 24px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+
+  .diagram .mermaid { display: flex; justify-content: center; }
+
+  /* Tag examples */
+  .tag-example {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 13px;
+    line-height: 2;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+
+  .tag-example .tag { color: var(--purple-light); }
+  .tag-example .ref { color: var(--yellow); }
+  .tag-example .comment { color: var(--text-dim); }
+
+  /* Command table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--border);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  td:first-child {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 13px;
+    color: var(--purple-light);
+    white-space: nowrap;
+  }
+
+  /* Workflow cheatsheet */
+  .cheatsheet {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 20px 0;
+  }
+
+  .cheatsheet h4 {
+    font-size: 14px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  .cheatsheet code {
+    display: block;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: var(--text);
+  }
+
+  .cheatsheet code .cmd { color: var(--purple-light); }
+  .cheatsheet code .cmt { color: var(--text-dim); }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .badge-purple { background: rgba(124,58,237,0.2); color: var(--purple-light); }
+  .badge-yellow { background: rgba(245,158,11,0.2); color: var(--yellow); }
+  .badge-blue { background: rgba(59,130,246,0.2); color: var(--blue); }
+  .badge-cyan { background: rgba(6,182,212,0.2); color: var(--cyan); }
+  .badge-red { background: rgba(239,68,68,0.2); color: var(--red); }
+  .badge-green { background: rgba(16,185,129,0.2); color: var(--green); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    nav { display: none; }
+    main { margin-left: 0; padding: 24px; }
+  }
+
+  /* Principles */
+  .principle {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .principle:last-child { border-bottom: none; }
+
+  .principle-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--purple);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>CAP <span>Code as Plan</span></h1>
+  <div class="section-label">Pipeline</div>
+  <a href="#overview">Overview</a>
+  <a href="#init">1. Init</a>
+  <a href="#brainstorm">2. Brainstorm</a>
+  <a href="#prototype">3. Prototype</a>
+  <a href="#iterate">4. Iterate</a>
+  <a href="#test">5. Test</a>
+  <a href="#review">6. Review</a>
+  <div class="section-label">System</div>
+  <a href="#tags">Tag System</a>
+  <a href="#memory">Memory</a>
+  <a href="#support">Support Commands</a>
+  <a href="#daily">Daily Workflow</a>
+  <a href="#principles">Principles</a>
+</nav>
+
+<main>
+
+<h2 id="overview">The CAP Pipeline</h2>
+<p>Six phases, linear by default, re-entrant by design. Every phase feeds the next, every artifact is traceable.</p>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    classDef init fill:#7c3aed,color:#fff,stroke:#5b21b6,stroke-width:2px
+    classDef brainstorm fill:#f59e0b,color:#000,stroke:#d97706,stroke-width:2px
+    classDef proto fill:#3b82f6,color:#fff,stroke:#2563eb,stroke-width:2px
+    classDef iterate fill:#06b6d4,color:#fff,stroke:#0891b2,stroke-width:2px
+    classDef test fill:#ef4444,color:#fff,stroke:#dc2626,stroke-width:2px
+    classDef review fill:#10b981,color:#fff,stroke:#059669,stroke-width:2px
+
+    I["init"]:::init --> B["brainstorm"]:::brainstorm --> P["prototype"]:::proto --> IT["iterate"]:::iterate --> T["test"]:::test --> R["review"]:::review
+    R -.->|"corrections"| IT
+    T -.->|"fails"| IT
+    IT -.->|"new requirements"| B
+</pre>
+</div>
+
+<!-- INIT -->
+<h2 id="init">Phase 1: Project Setup</h2>
+
+<div class="phase-card" style="border-left: 4px solid var(--purple);">
+  <div class="phase-header">
+    <div class="phase-number" style="background:rgba(124,58,237,0.2);color:var(--purple-light)">1</div>
+    <div>
+      <h3>Initialize Project</h3>
+      <div class="cmd">/cap:init</div>
+    </div>
+  </div>
+  <p><strong>When:</strong> Once per project, or when joining an existing project.</p>
+  <p>Creates <code>.cap/</code> structure, fetches library docs via Context7, detects monorepo, performs brownfield analysis, builds memory graph from existing data, and migrates past brainstorm sessions to conversation threads.</p>
+  <p><strong>Best practice:</strong> Run even on existing CAP projects — it's idempotent and picks up new dependencies.</p>
+</div>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    classDef action fill:#7c3aed,color:#fff,stroke:#5b21b6
+    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+
+    INIT["/cap:init"]:::action
+    CAP[".cap/ directory"]:::artifact
+    FM["FEATURE-MAP.md"]:::artifact
+    DOCS[".cap/stack-docs/"]:::artifact
+    GRAPH[".cap/memory/graph.json"]:::artifact
+    THREADS[".cap/memory/threads/"]:::artifact
+    RULES[".claude/rules/cap-memory.md"]:::artifact
+
+    INIT --> CAP
+    INIT --> FM
+    INIT -->|"Context7"| DOCS
+    INIT -->|"existing data"| GRAPH
+    INIT -->|"past sessions"| THREADS
+    INIT --> RULES
+</pre>
+</div>
+
+<!-- BRAINSTORM -->
+<h2 id="brainstorm">Phase 2: Feature Discovery</h2>
+
+<div class="phase-card" style="border-left: 4px solid var(--yellow);">
+  <div class="phase-header">
+    <div class="phase-number" style="background:rgba(245,158,11,0.2);color:var(--yellow)">2</div>
+    <div>
+      <h3>Conversational Feature Design</h3>
+      <div class="cmd">/cap:brainstorm [--resume] [--multi]</div>
+    </div>
+  </div>
+  <p><strong>When:</strong> Starting new work, exploring a feature area, or when requirements are unclear.</p>
+  <p>The brainstormer agent asks <strong>one question at a time</strong>, references prior threads, and produces structured Feature Map entries with numbered acceptance criteria.</p>
+  <p><strong>Nothing is written until you explicitly approve.</strong></p>
+</div>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    classDef agent fill:#fef3c7,color:#000,stroke:#f59e0b
+    classDef user fill:#1e293b,color:#e4e4e7,stroke:#3b82f6
+    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
+    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+
+    THREADS{"Prior threads?"}:::decision
+    SHOW["Load thread context"]:::agent
+    FRESH["Start fresh"]:::agent
+    THREADS -->|"yes"| SHOW
+    THREADS -->|"no"| FRESH
+    SHOW --> CONV
+    FRESH --> CONV
+
+    CONV["Conversational discovery"]:::agent
+    P1["Problem Space"]:::user
+    P2["Solution Shape"]:::user
+    P3["Boundaries"]:::user
+    CONV --> P1 --> P2 --> P3
+
+    CLUSTER["Cluster + ACs"]:::agent
+    APPROVE{"Approve?"}:::decision
+    WRITE["Write FEATURE-MAP.md"]:::artifact
+    THREAD["Save thread"]:::artifact
+
+    P3 --> CLUSTER --> APPROVE
+    APPROVE -->|"yes"| WRITE --> THREAD
+    APPROVE -->|"corrections"| CONV
+</pre>
+</div>
+
+<!-- PROTOTYPE -->
+<h2 id="prototype">Phase 3: Build</h2>
+
+<div class="phase-card" style="border-left: 4px solid var(--blue);">
+  <div class="phase-header">
+    <div class="phase-number" style="background:rgba(59,130,246,0.2);color:var(--blue)">3</div>
+    <div>
+      <h3>Code-First Development</h3>
+      <div class="cmd">/cap:prototype --features F-001</div>
+    </div>
+  </div>
+  <p><strong>When:</strong> After brainstorm, when features have ACs in the Feature Map.</p>
+  <p>Builds working, annotated code with <code>@cap-feature</code> and <code>@cap-todo</code> tags. Auto-runs <code>/cap:scan</code> to sync tag state back to Feature Map.</p>
+</div>
+
+<table>
+  <thead><tr><th>Mode</th><th>Flag</th><th>Use case</th></tr></thead>
+  <tbody>
+    <tr><td>prototype</td><td><em>(default)</em></td><td>Build new feature from scratch</td></tr>
+    <tr><td>iterate</td><td>--iterate</td><td>Refine existing prototype</td></tr>
+    <tr><td>architecture</td><td>--architecture</td><td>Design structure without implementation</td></tr>
+    <tr><td>annotate</td><td>--annotate</td><td>Tag existing code retroactively</td></tr>
+  </tbody>
+</table>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    classDef proto fill:#3b82f6,color:#fff,stroke:#2563eb
+    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+    classDef tag fill:#1e3a5f,color:#93c5fd,stroke:#3b82f6
+
+    CMD["/cap:prototype"]:::proto
+    BUILD["Build annotated code"]:::proto
+    TAG1["@cap-feature"]:::tag
+    TAG2["@cap-todo(ref:AC-N)"]:::tag
+    SCAN["/cap:scan"]:::proto
+    FM["Feature Map updated"]:::artifact
+
+    CMD --> BUILD --> TAG1 & TAG2
+    TAG1 & TAG2 --> SCAN --> FM
+</pre>
+</div>
+
+<!-- ITERATE -->
+<h2 id="iterate">Phase 4: Refine</h2>
+
+<div class="phase-card" style="border-left: 4px solid var(--cyan);">
+  <div class="phase-header">
+    <div class="phase-number" style="background:rgba(6,182,212,0.2);color:var(--cyan)">4</div>
+    <div>
+      <h3>Close the Gaps</h3>
+      <div class="cmd">/cap:iterate</div>
+    </div>
+  </div>
+  <p><strong>When:</strong> After initial prototype, to fill in missing acceptance criteria.</p>
+  <p>Scans for uncovered ACs, spawns prototyper in iterate mode, re-scans, repeats until all ACs are satisfied.</p>
+  <p><strong>Best practice:</strong> Run before testing — catches missing ACs that would fail tests.</p>
+</div>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    classDef iterate fill:#06b6d4,color:#fff,stroke:#0891b2
+    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
+    classDef done fill:#10b981,color:#fff,stroke:#059669
+
+    SCAN1["Scan for gaps"]:::iterate
+    GAPS{"Uncovered ACs?"}:::decision
+    BUILD["Iterate on code"]:::iterate
+    SCAN2["Re-scan"]:::iterate
+    DONE["All ACs covered"]:::done
+
+    SCAN1 --> GAPS
+    GAPS -->|"yes"| BUILD --> SCAN2 --> GAPS
+    GAPS -->|"no"| DONE
+</pre>
+</div>
+
+<!-- TEST -->
+<h2 id="test">Phase 5: Test</h2>
+
+<div class="phase-card" style="border-left: 4px solid var(--red);">
+  <div class="phase-header">
+    <div class="phase-number" style="background:rgba(239,68,68,0.2);color:var(--red)">5</div>
+    <div>
+      <h3>Adversarial RED-GREEN Testing</h3>
+      <div class="cmd">/cap:test --features F-001</div>
+    </div>
+  </div>
+  <p><strong>When:</strong> After prototype/iterate, when code is ready for verification.</p>
+  <p><span class="badge badge-red">RED</span> Write tests that SHOULD fail if the AC isn't implemented.<br>
+  <span class="badge badge-green">GREEN</span> Run tests against actual code, verify they pass.</p>
+</div>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    classDef test fill:#ef4444,color:#fff,stroke:#dc2626
+    classDef green fill:#10b981,color:#fff,stroke:#059669
+    classDef artifact fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+
+    READ["Read Feature Map ACs"]:::test
+    RED["RED: write failing tests"]:::test
+    GREEN["GREEN: verify they pass"]:::green
+    REPORT["Coverage report"]:::artifact
+
+    READ --> RED --> GREEN --> REPORT
+</pre>
+</div>
+
+<!-- REVIEW -->
+<h2 id="review">Phase 6: Review</h2>
+
+<div class="phase-card" style="border-left: 4px solid var(--green);">
+  <div class="phase-header">
+    <div class="phase-number" style="background:rgba(16,185,129,0.2);color:var(--green)">6</div>
+    <div>
+      <h3>Two-Stage Quality Gate</h3>
+      <div class="cmd">/cap:review</div>
+    </div>
+  </div>
+  <p><strong>When:</strong> Before merging, after tests pass.</p>
+  <p><strong>Stage 1:</strong> AC compliance — every acceptance criterion verified against code.<br>
+  <strong>Stage 2:</strong> Code quality — security, patterns, performance. <em>Only runs if Stage 1 passes.</em></p>
+</div>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    classDef stage fill:#1e2e1e,color:#86efac,stroke:#10b981
+    classDef fail fill:#2e1e1e,color:#fca5a5,stroke:#ef4444
+    classDef pass fill:#10b981,color:#fff,stroke:#059669
+    classDef decision fill:#fbbf24,color:#000,stroke:#d97706
+
+    S1["Stage 1: AC Compliance"]:::stage
+    S1P{"Pass?"}:::decision
+    S1F["STOP - fix ACs first"]:::fail
+    S2["Stage 2: Code Quality"]:::stage
+    S2P{"Pass?"}:::decision
+    S2F["Quality issues"]:::fail
+    SHIP["Ready to ship"]:::pass
+
+    S1 --> S1P
+    S1P -->|"no"| S1F
+    S1P -->|"yes"| S2 --> S2P
+    S2P -->|"no"| S2F
+    S2P -->|"yes"| SHIP
+</pre>
+</div>
+
+<!-- TAGS -->
+<h2 id="tags">Tag System</h2>
+<p>Tags in source code are the <strong>traceability link</strong> between Feature Map and implementation.</p>
+
+<div class="tag-example">
+<span class="comment">// Source Code</span>                           <span class="comment">Feature Map</span><br>
+<span class="tag">@cap-feature</span>(<span class="ref">feature:F-001</span>)    &harr;  <span class="ref">F-001</span>: Implement Auth<br>
+&nbsp;&nbsp;<span class="tag">@cap-todo</span>(<span class="ref">ref:F-001:AC-1</span>)   &harr;    AC-1: Login endpoint<br>
+&nbsp;&nbsp;<span class="tag">@cap-todo</span>(<span class="ref">ref:F-001:AC-2</span>)   &harr;    AC-2: JWT tokens<br>
+&nbsp;&nbsp;<span class="tag">@cap-todo</span> <span class="ref">risk:</span> session...  &rarr;  .cap/memory/pitfalls.md<br>
+&nbsp;&nbsp;<span class="tag">@cap-todo</span> <span class="ref">decision:</span> bcrypt  &rarr;  .cap/memory/decisions.md
+</div>
+
+<table>
+  <thead><tr><th>Tag</th><th>Purpose</th><th>Required?</th></tr></thead>
+  <tbody>
+    <tr><td>@cap-feature</td><td>Marks file as belonging to a feature</td><td>Yes</td></tr>
+    <tr><td>@cap-todo(ref:)</td><td>Marks implementation of a specific AC</td><td>Yes</td></tr>
+    <tr><td>@cap-todo risk:</td><td>Known risk or concern</td><td>Optional</td></tr>
+    <tr><td>@cap-todo decision:</td><td>Architectural decision with rationale</td><td>Optional</td></tr>
+  </tbody>
+</table>
+
+<!-- MEMORY -->
+<h2 id="memory">Memory System</h2>
+<p>Cross-session intelligence — decisions, pitfalls, and conversation threads persist across context resets.</p>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TD
+    classDef session fill:#7c3aed,color:#fff,stroke:#5b21b6
+    classDef hook fill:#2d1f5e,color:#c4b5fd,stroke:#7c3aed
+    classDef memory fill:#1e1e2e,color:#e4e4e7,stroke:#3d3d4e
+    classDef thread fill:#f59e0b,color:#000,stroke:#d97706
+
+    SESSION["Claude Code Session"]:::session
+    TAGS["@cap-decision + @cap-todo risk:"]:::session
+    HOOK["cap-memory.js hook"]:::hook
+
+    D["decisions.md"]:::memory
+    P["pitfalls.md"]:::memory
+    H["hotspots.md"]:::memory
+    G["graph.json"]:::memory
+
+    SESSION -->|"session end"| HOOK
+    TAGS -->|"scanned"| HOOK
+    HOOK --> D & P & H & G
+
+    BS["/cap:brainstorm"]:::thread
+    TH["threads/"]:::thread
+    BS -->|"persist"| TH
+    BS -->|"load prior"| TH
+
+    RULE[".claude/rules/cap-memory.md"]:::hook
+    D & P -.->|"auto-read"| RULE
+</pre>
+</div>
+
+<!-- SUPPORT -->
+<h2 id="support">Support Commands</h2>
+
+<table>
+  <thead><tr><th>Command</th><th>What it does</th><th>When to use</th></tr></thead>
+  <tbody>
+    <tr><td>/cap:scan</td><td>Sync @cap-* tags with Feature Map</td><td>After code changes</td></tr>
+    <tr><td>/cap:status</td><td>Feature completion dashboard</td><td>Anytime</td></tr>
+    <tr><td>/cap:debug</td><td>Scientific method debugging</td><td>Bugs found</td></tr>
+    <tr><td>/cap:annotate</td><td>Tag existing code</td><td>Brownfield projects</td></tr>
+    <tr><td>/cap:doctor</td><td>Environment health check</td><td>Setup issues</td></tr>
+    <tr><td>/cap:memory init</td><td>Bootstrap memory from all sessions</td><td>First time / reset</td></tr>
+    <tr><td>/cap:refresh-docs</td><td>Update Context7 stack docs</td><td>Dependency updates</td></tr>
+    <tr><td>/cap:start</td><td>Resume previous session</td><td>Start of day</td></tr>
+    <tr><td>/cap:save</td><td>Snapshot session context</td><td>Before long break</td></tr>
+  </tbody>
+</table>
+
+<!-- DAILY -->
+<h2 id="daily">Daily Workflow</h2>
+
+<div class="cheatsheet">
+  <h4>Morning</h4>
+  <code>
+    <span class="cmd">/cap:start</span> <span class="cmt"># Restore session state</span>
+  </code>
+</div>
+
+<div class="cheatsheet">
+  <h4>New Feature</h4>
+  <code>
+    <span class="cmd">/cap:brainstorm</span> <span class="cmt"># Discover and define</span><br>
+    <span class="cmd">/cap:prototype F-042</span> <span class="cmt"># Build it</span><br>
+    <span class="cmd">/cap:iterate</span> <span class="cmt"># Fill gaps</span><br>
+    <span class="cmd">/cap:test F-042</span> <span class="cmt"># Verify against ACs</span><br>
+    <span class="cmd">/cap:review</span> <span class="cmt"># Quality gate</span><br>
+    <span class="cmt">git push</span> <span class="cmt"># Ship it</span>
+  </code>
+</div>
+
+<div class="cheatsheet">
+  <h4>Bug Found</h4>
+  <code>
+    <span class="cmd">/cap:debug</span> <span class="cmt"># Hypothesize, test, conclude</span>
+  </code>
+</div>
+
+<div class="cheatsheet">
+  <h4>Joining Existing Project</h4>
+  <code>
+    <span class="cmd">/cap:init</span> <span class="cmt"># Setup + detect stack + build memory</span><br>
+    <span class="cmd">/cap:status</span> <span class="cmt"># See where things stand</span><br>
+    <span class="cmd">/cap:annotate</span> <span class="cmt"># Tag existing code</span>
+  </code>
+</div>
+
+<!-- PRINCIPLES -->
+<h2 id="principles">Core Principles</h2>
+
+<div class="phase-card">
+  <div class="principle">
+    <div class="principle-num">1</div>
+    <div><strong>Code is the plan</strong><br><span style="color:var(--text-dim)">Build first, extract structure from annotated code. No upfront document-heavy planning.</span></div>
+  </div>
+  <div class="principle">
+    <div class="principle-num">2</div>
+    <div><strong>Feature Map is the single source of truth</strong><br><span style="color:var(--text-dim)">Not PRDs, not Jira, not Confluence. One file, human-readable, git-diffable.</span></div>
+  </div>
+  <div class="principle">
+    <div class="principle-num">3</div>
+    <div><strong>Tags create traceability</strong><br><span style="color:var(--text-dim)">Every line of code links back to a requirement. Scan extracts truth from code.</span></div>
+  </div>
+  <div class="principle">
+    <div class="principle-num">4</div>
+    <div><strong>Agents are stateless</strong><br><span style="color:var(--text-dim)">All state lives in Feature Map, SESSION.json, and code tags. Agents read and produce artifacts.</span></div>
+  </div>
+  <div class="principle">
+    <div class="principle-num">5</div>
+    <div><strong>Nothing is written without approval</strong><br><span style="color:var(--text-dim)">Brainstorm and review have explicit confirmation gates. You are always in control.</span></div>
+  </div>
+  <div class="principle">
+    <div class="principle-num">6</div>
+    <div><strong>Memory persists across sessions</strong><br><span style="color:var(--text-dim)">Decisions, pitfalls, and conversation threads survive context resets and compression.</span></div>
+  </div>
+</div>
+
+</main>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#7c3aed',
+      primaryTextColor: '#e4e4e7',
+      primaryBorderColor: '#5b21b6',
+      lineColor: '#4b5563',
+      secondaryColor: '#1e1e2e',
+      tertiaryColor: '#22222e',
+      fontSize: '14px'
+    }
+  });
+
+  // Active nav tracking
+  const sections = document.querySelectorAll('h2[id]');
+  const navLinks = document.querySelectorAll('nav a');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => link.classList.remove('active'));
+        const active = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 ---
 name: cap:test
 description: Spawn cap-tester agent to write runnable tests against Feature Map acceptance criteria using RED-GREEN discipline.
-argument-hint: "[--features NAME] [--red-only]"
+argument-hint: "[--features NAME] [--red-only] [--deep]"
 allowed-tools:
   - Read
   - Write
@@ -25,6 +25,7 @@ Spawns cap-tester to write tests against Feature Map acceptance criteria. Tests 
 **Arguments:**
 - `--features NAME` -- scope to specific Feature Map entries
 - `--red-only` -- stop after RED phase (tests written, confirmed failing)
+- `--deep` -- run test audit after tests pass (assertion density, coverage, mutations, anti-patterns, trust score). If trust score < 70%, shows prioritized improvement suggestions.
 </objective>
 
 <context>
@@ -41,6 +42,7 @@ $ARGUMENTS
 Check `$ARGUMENTS` for:
 - `--features NAME` -- if present, store as `feature_filter`
 - `--red-only` -- if present, set `red_only = true`
+- `--deep` -- if present, set `deep_mode = true`
 
 ## Step 1: Read Feature Map and extract ACs for test generation
 
@@ -329,6 +331,47 @@ Verified by: ________________  Date: ________________
 ```
 
 **Note:** The checklist is displayed in the terminal only. If the user wants to save it, they can run `/cap:review` which writes it to `.cap/MANUAL-TESTS.md`.
+
+## Step 8: Deep audit (if --deep)
+
+If `deep_mode` is true and tests passed (not `red_only`):
+
+```bash
+node -e "const a = require('./cap/bin/lib/cap-test-audit.cjs'); const r = a.generateAuditReport(process.cwd()); const fs = require('fs'); fs.writeFileSync('.cap/TEST-AUDIT.md', a.formatAuditReport(r), 'utf8'); console.log(JSON.stringify({ trustScore: r.trustScore, assertions: r.assertions.totalAssertions, density: r.assertions.assertionDensity, emptyTests: r.assertions.emptyTests.length, antiPatterns: r.antiPatterns.flags.length, coverageLines: r.coverage ? r.coverage.lines : null }));"
+```
+
+Store as `audit`.
+
+Display the audit summary:
+
+```
+Test Audit (--deep)
+  Trust score: {audit.trustScore}/100
+  Assertions: {audit.assertions} total ({audit.density} per test)
+  Empty tests: {audit.emptyTests}
+  Anti-patterns: {audit.antiPatterns}
+  Coverage: {audit.coverageLines ?? 'not available'}%
+  Report: .cap/TEST-AUDIT.md
+```
+
+**If `audit.trustScore < 70`:**
+
+Read and display the IMPROVEMENT SUGGESTIONS section from `.cap/TEST-AUDIT.md`:
+
+```bash
+node -e "const fs = require('fs'); const c = fs.readFileSync('.cap/TEST-AUDIT.md', 'utf8'); const idx = c.indexOf('IMPROVEMENT SUGGESTIONS'); if (idx >= 0) console.log(c.substring(idx, c.indexOf('Generated:', idx))); else console.log('No suggestions — score is adequate.');"
+```
+
+Display suggestions and ask the user:
+> "Trust score is {audit.trustScore}/100 (target: 70+). Want me to address the top suggestion now?"
+
+If user agrees, implement the top suggestion (add assertions, fix empty tests, or address anti-patterns) and re-run the audit.
+
+**If `audit.trustScore >= 70`:**
+
+```
+Trust score {audit.trustScore}/100 — tests are reliable.
+```
 
 ```
 Next steps:

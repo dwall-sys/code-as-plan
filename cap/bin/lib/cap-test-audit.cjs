@@ -818,10 +818,121 @@ function formatAuditReport(report, projectName = 'project') {
   }
 
   lines.push(`TRUST SCORE: ${report.trustScore}/100`);
+
+  // Improvement suggestions for low trust scores
+  if (report.trustScore < 70) {
+    lines.push('');
+    const suggestions = generateImprovementSuggestions(report);
+    lines.push('IMPROVEMENT SUGGESTIONS');
+    lines.push(`  Current score: ${report.trustScore}/100 (target: 70+)`);
+    lines.push('');
+    for (const s of suggestions) {
+      lines.push(`  ${s.priority}. ${s.title} (+${s.points} pts)`);
+      lines.push(`     ${s.action}`);
+      if (s.command) lines.push(`     Run: ${s.command}`);
+      lines.push('');
+    }
+  }
+
   lines.push('');
   lines.push(`Generated: ${report.timestamp}`);
 
   return lines.join('\n');
+}
+
+/**
+ * Generate prioritized improvement suggestions based on audit report.
+ * Returns suggestions sorted by potential point gain (highest first).
+ *
+ * @param {Object} report - from generateAuditReport
+ * @returns {Array<{priority: number, title: string, points: number, action: string, command?: string}>}
+ */
+function generateImprovementSuggestions(report) {
+  const suggestions = [];
+
+  // Assertion density
+  if (report.assertions.assertionDensity < 2) {
+    const currentPts = report.assertions.assertionDensity >= 1 ? 20 : report.assertions.assertionDensity >= 0.5 ? 10 : 0;
+    const gain = 30 - currentPts;
+    if (gain > 0) {
+      suggestions.push({
+        title: 'Increase assertion density',
+        points: gain,
+        action: report.assertions.assertionDensity < 1
+          ? `Tests average ${report.assertions.assertionDensity.toFixed(1)} assertions each. Add specific value checks (assert.strictEqual, assert.deepStrictEqual) — aim for 2+ assertions per test.`
+          : `Tests average ${report.assertions.assertionDensity.toFixed(1)} assertions each. Add edge case checks and boundary assertions to reach 2+ per test.`,
+      });
+    }
+  }
+
+  // Empty tests
+  if (report.assertions.emptyTests.length > 0) {
+    const emptyRatio = report.assertions.emptyTests.length / Math.max(1, report.assertions.totalTests);
+    const penalty = Math.round(emptyRatio * 10);
+    suggestions.push({
+      title: `Fix ${report.assertions.emptyTests.length} empty test(s)`,
+      points: penalty,
+      action: `These tests have 0 assertions: ${report.assertions.emptyTests.slice(0, 3).map(t => t.file + ':' + t.line).join(', ')}${report.assertions.emptyTests.length > 3 ? '...' : ''}. Add at least one assert per test.`,
+    });
+  }
+
+  // Coverage
+  if (report.coverage && !report.coverage.error) {
+    if (report.coverage.lines < 70) {
+      const currentPts = Math.round(report.coverage.lines * 0.15) + Math.round(report.coverage.branches * 0.10) + Math.round(report.coverage.functions * 0.05);
+      const targetPts = Math.round(70 * 0.15) + Math.round(50 * 0.10) + Math.round(60 * 0.05);
+      const gain = Math.max(0, targetPts - currentPts);
+      suggestions.push({
+        title: 'Increase code coverage',
+        points: gain,
+        action: `Lines: ${report.coverage.lines}% (target: 70%+). Focus on uncovered critical files first.`,
+        command: 'npm run test:coverage',
+      });
+    }
+    if (report.coverage.branches < 50) {
+      suggestions.push({
+        title: 'Improve branch coverage',
+        points: 5,
+        action: `Branch coverage is ${report.coverage.branches}%. Add tests for if/else, switch, and ternary branches — especially error paths.`,
+      });
+    }
+  }
+
+  // Mutations
+  if (report.mutations && report.mutations.mutationsTotal > 0 && report.mutations.mutationScore < 60) {
+    const currentPts = Math.round(report.mutations.mutationScore * 0.25);
+    const targetPts = Math.round(80 * 0.25);
+    const gain = Math.max(0, targetPts - currentPts);
+    if (report.mutations.survived.length > 0) {
+      suggestions.push({
+        title: 'Catch surviving mutations',
+        points: gain,
+        action: `${report.mutations.survived.length} mutation(s) survived — tests didn't detect code changes. Add assertions for: ${report.mutations.survived.slice(0, 2).map(s => s.file + ':' + s.line + ' (' + s.description + ')').join('; ')}.`,
+        command: '/cap:test-audit --mutations 20',
+      });
+    }
+  }
+
+  // Anti-patterns
+  if (report.antiPatterns && report.antiPatterns.flags.length > 0) {
+    const errors = report.antiPatterns.flags.filter(f => f.severity === 'error');
+    const warnings = report.antiPatterns.flags.filter(f => f.severity === 'warning');
+    const penalty = Math.min(15, errors.length * 5 + warnings.length * 2);
+    if (penalty > 0) {
+      const topIssue = errors[0] || warnings[0];
+      suggestions.push({
+        title: `Fix ${errors.length + warnings.length} anti-pattern(s)`,
+        points: penalty,
+        action: `Top issue: ${topIssue.description} (${topIssue.file}:${topIssue.line}). Replace weak assertions with specific value checks.`,
+      });
+    }
+  }
+
+  // Sort by potential points gained (highest first)
+  suggestions.sort((a, b) => b.points - a.points);
+
+  // Add priority numbers
+  return suggestions.map((s, i) => ({ ...s, priority: i + 1 }));
 }
 
 module.exports = {
@@ -833,6 +944,7 @@ module.exports = {
   generateAuditReport,
   formatAuditReport,
   computeTrustScore,
+  generateImprovementSuggestions,
   findTestFiles,
   applyMutation,
   ASSERTION_PATTERNS,
