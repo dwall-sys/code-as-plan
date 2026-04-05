@@ -451,3 +451,371 @@ describe('accumulateFromCode', () => {
     assert.strictEqual(entries.length, 0);
   });
 });
+
+// --- Branch coverage: extractText edge cases ---
+
+describe('extractText edge cases', () => {
+  it('returns empty for null content', () => {
+    assert.strictEqual(extractText({ message: {} }), '');
+    assert.strictEqual(extractText({ message: { content: null } }), '');
+  });
+
+  it('returns empty for non-string non-array content', () => {
+    assert.strictEqual(extractText({ message: { content: 42 } }), '');
+    assert.strictEqual(extractText({ message: { content: { type: 'text', text: 'hi' } } }), '');
+  });
+
+  it('handles array with missing text field', () => {
+    const msg = { message: { content: [{ type: 'text' }, { type: 'text', text: 'ok' }] } };
+    assert.strictEqual(extractText(msg), '\nok');
+  });
+});
+
+// --- Branch coverage: extractTools edge cases ---
+
+describe('extractTools edge cases', () => {
+  it('returns empty for string content', () => {
+    assert.deepStrictEqual(extractTools({ message: { content: 'text' } }), []);
+  });
+
+  it('returns empty for null content', () => {
+    assert.deepStrictEqual(extractTools({ message: {} }), []);
+  });
+});
+
+// --- Branch coverage: normalizeFilePath ---
+
+const { normalizeFilePath } = require('../cap/bin/lib/cap-memory-engine.cjs');
+
+describe('normalizeFilePath', () => {
+  it('returns falsy input unchanged', () => {
+    assert.strictEqual(normalizeFilePath(null, null), null);
+    assert.strictEqual(normalizeFilePath('', null), '');
+  });
+
+  it('strips worktree prefix', () => {
+    const fp = '/project/.claude/worktrees/abc123/src/file.js';
+    const result = normalizeFilePath(fp, null);
+    assert.strictEqual(result, '/project/src/file.js');
+  });
+
+  it('strips /private/var/folders temp path', () => {
+    const fp = '/private/var/folders/abc/T/myproject/src/app.js';
+    const result = normalizeFilePath(fp, null);
+    // Regex captures group2 = everything after second group: T/myproject/src/app.js
+    assert.strictEqual(result, 'T/myproject/src/app.js');
+  });
+
+  it('makes path relative to projectRoot', () => {
+    const fp = '/home/user/project/src/auth.js';
+    const result = normalizeFilePath(fp, '/home/user/project');
+    assert.strictEqual(result, 'src/auth.js');
+  });
+
+  it('handles path already relative (no projectRoot match)', () => {
+    const fp = 'src/file.js';
+    const result = normalizeFilePath(fp, '/other/root');
+    assert.strictEqual(result, 'src/file.js');
+  });
+});
+
+// --- Branch coverage: analyzeSession edge cases ---
+
+describe('analyzeSession edge cases', () => {
+  it('skips planning/memory/config artifacts', () => {
+    const session = makeSession({
+      messages: [
+        assistantMsg('Editing.', [
+          { tool: 'Edit', input: { file_path: '/project/.cap/memory/decisions.md', old_string: 'a', new_string: 'b' } },
+          { tool: 'Write', input: { file_path: '/project/SESSION.json', content: '{}' } },
+          { tool: 'Edit', input: { file_path: '/project/.claude/settings.json', old_string: 'x', new_string: 'y' } },
+          { tool: 'Write', input: { file_path: '/project/MEMORY.md', content: 'mem' } },
+        ]),
+      ],
+    });
+    const result = analyzeSession(session);
+    assert.deepStrictEqual(result.editedFiles, {});
+  });
+
+  it('handles MultiEdit tool', () => {
+    const session = makeSession({
+      messages: [
+        assistantMsg('Multi-editing.', [
+          { tool: 'MultiEdit', input: { file_path: '/src/real.js' } },
+        ]),
+      ],
+    });
+    const result = analyzeSession(session);
+    assert.strictEqual(result.editedFiles['/src/real.js'], 1);
+  });
+
+  it('handles tool with filePath (camelCase) instead of file_path', () => {
+    const session = makeSession({
+      messages: [
+        assistantMsg('Editing.', [
+          { tool: 'Write', input: { filePath: '/src/camel.js', content: '...' } },
+        ]),
+      ],
+    });
+    const result = analyzeSession(session);
+    assert.strictEqual(result.editedFiles['/src/camel.js'], 1);
+  });
+
+  it('handles tool with no file_path or filePath', () => {
+    const session = makeSession({
+      messages: [
+        assistantMsg('Editing.', [
+          { tool: 'Edit', input: {} },
+        ]),
+      ],
+    });
+    const result = analyzeSession(session);
+    // null file_path -> should not crash, null entry
+    assert.deepStrictEqual(result.editedFiles, {});
+  });
+
+  it('returns null date when meta has no timestamp', () => {
+    const session = makeSession({ meta: { timestamp: null, branch: null } });
+    const result = analyzeSession(session);
+    assert.strictEqual(result.date, null);
+    assert.strictEqual(result.branch, null);
+  });
+
+  it('skips short and long sentences', () => {
+    const session = makeSession({
+      messages: [
+        assistantMsg('I decided x. ' + 'A'.repeat(301)),
+      ],
+    });
+    const result = analyzeSession(session);
+    // "I decided x." is <40 chars, the long one is >300
+    assert.strictEqual(result.decisions.length, 0);
+  });
+
+  it('skips user messages for text analysis', () => {
+    const session = makeSession({
+      messages: [
+        userMsg('I decided to use token refresh for the authentication module because it is better than cookies.'),
+      ],
+    });
+    const result = analyzeSession(session);
+    assert.strictEqual(result.decisions.length, 0);
+  });
+});
+
+// --- Branch coverage: accumulate edge cases ---
+
+describe('accumulate edge cases', () => {
+  it('handles session with null date in hotspot', () => {
+    const analyses = [
+      { decisions: [], pitfalls: [], patterns: [], editedFiles: { '/a.js': 1 }, features: new Set(), date: null, branch: 'main' },
+      { decisions: [], pitfalls: [], patterns: [], editedFiles: { '/a.js': 1 }, features: new Set(), date: null, branch: 'main' },
+    ];
+    const result = accumulate(analyses, { minHotspotSessions: 1 });
+    const hotspots = result.newEntries.filter(e => e.category === 'hotspot');
+    assert.ok(hotspots.length >= 1);
+  });
+
+  it('updates earliestDate when newer session has earlier date', () => {
+    const analyses = [
+      { decisions: [], pitfalls: [], patterns: [], editedFiles: { '/a.js': 1 }, features: new Set(), date: '2026-04-02T00:00:00Z', branch: 'main' },
+      { decisions: [], pitfalls: [], patterns: [], editedFiles: { '/a.js': 1 }, features: new Set(), date: '2026-03-01T00:00:00Z', branch: 'main' },
+    ];
+    const result = accumulate(analyses);
+    const hotspot = result.newEntries.find(e => e.category === 'hotspot');
+    assert.ok(hotspot);
+    assert.strictEqual(hotspot.metadata.since, '2026-03-01');
+  });
+
+  it('decision with no editedFiles gets null primary file', () => {
+    const analyses = [
+      { decisions: ['We decided to use approach X because of performance requirements and scalability concerns.'], pitfalls: [], patterns: [], editedFiles: {}, features: new Set(), date: '2026-04-01T00:00:00Z', branch: 'main' },
+    ];
+    const result = accumulate(analyses);
+    const dec = result.newEntries.find(e => e.category === 'decision');
+    assert.ok(dec);
+    assert.strictEqual(dec.file, null);
+  });
+
+  it('pitfall with no editedFiles gets null primary file', () => {
+    const analyses = [
+      { decisions: [], pitfalls: ['Avoid using plain text cookies without encryption for session tokens and auth data.'], patterns: [], editedFiles: {}, features: new Set(), date: '2026-04-01T00:00:00Z', branch: 'main' },
+    ];
+    const result = accumulate(analyses);
+    const pit = result.newEntries.find(e => e.category === 'pitfall');
+    assert.ok(pit);
+    assert.strictEqual(pit.file, null);
+  });
+
+  it('pattern with no relatedFiles gets null primary file', () => {
+    const analyses = [
+      { decisions: [], pitfalls: [], patterns: ['This approach works well for auth modules.'], editedFiles: {}, features: new Set(), date: '2026-04-01T00:00:00Z', branch: 'main' },
+      { decisions: [], pitfalls: [], patterns: ['This approach works well for auth modules.'], editedFiles: {}, features: new Set(), date: '2026-04-02T00:00:00Z', branch: 'main' },
+    ];
+    const result = accumulate(analyses);
+    const pat = result.newEntries.find(e => e.category === 'pattern');
+    assert.ok(pat);
+    assert.strictEqual(pat.file, null);
+  });
+});
+
+// --- Branch coverage: accumulateFromCode edge cases ---
+
+describe('accumulateFromCode edge cases', () => {
+  it('filters short risk descriptions', () => {
+    const tags = [
+      { type: 'todo', file: 'x.ts', line: 1, metadata: {}, description: 'risk: ab', subtype: 'risk' },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 0);
+  });
+
+  it('filters short standalone risk descriptions', () => {
+    const tags = [
+      { type: 'risk', file: 'x.ts', line: 1, metadata: {}, description: 'short', subtype: null },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 0);
+  });
+
+  it('deduplicates risk tags with same content prefix', () => {
+    const tags = [
+      { type: 'todo', file: 'a.ts', line: 1, metadata: {}, description: 'risk: Connection pooling can cause timeouts under heavy load testing', subtype: 'risk' },
+      { type: 'todo', file: 'b.ts', line: 1, metadata: {}, description: 'risk: Connection pooling can cause timeouts under heavy load testing', subtype: 'risk' },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 1);
+  });
+
+  it('deduplicates standalone risk tags', () => {
+    const tags = [
+      { type: 'risk', file: 'a.ts', line: 1, metadata: {}, description: 'Rollback not tested for large migration datasets with foreign keys', subtype: null },
+      { type: 'risk', file: 'b.ts', line: 1, metadata: {}, description: 'Rollback not tested for large migration datasets with foreign keys', subtype: null },
+    ];
+    const entries = accumulateFromCode(tags);
+    assert.strictEqual(entries.length, 1);
+  });
+});
+
+// --- Branch coverage: accumulateFromFiles edge cases ---
+
+describe('accumulateFromFiles edge cases', () => {
+  it('handles session file with timestamp on a later line', () => {
+    const fp = makeSessionFile('late-ts.jsonl', [
+      { sessionId: 's1' },
+      { type: 'user', message: { content: 'hi' }, timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'assistant', message: { content: 'ok' } },
+    ]);
+    const result = accumulateFromFiles([{ path: fp }]);
+    assert.strictEqual(result.stats.sessionsAnalyzed, 1);
+  });
+
+  it('handles session file with gitBranch on a later line', () => {
+    const fp = makeSessionFile('late-branch.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { gitBranch: 'feature-x', type: 'user', message: { content: 'hi' } },
+      { type: 'assistant', message: { content: 'ok' } },
+    ]);
+    const result = accumulateFromFiles([{ path: fp }]);
+    assert.strictEqual(result.stats.sessionsAnalyzed, 1);
+  });
+
+  it('handles malformed JSON lines in session file', () => {
+    const fp = path.join(tmpDir, 'bad.jsonl');
+    fs.writeFileSync(fp, '{"sessionId":"s1"}\nnot-json\n{"type":"user","message":{"content":"hi"}}');
+    const result = accumulateFromFiles([{ path: fp }]);
+    assert.strictEqual(result.stats.sessionsAnalyzed, 1);
+  });
+
+  it('passes projectRoot option through for path normalization', () => {
+    const fp = makeSessionFile('proj.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: { content: [
+          { type: 'text', text: 'editing' },
+          { type: 'tool_use', name: 'Edit', input: { file_path: '/root/project/src/file.js', old_string: 'a', new_string: 'b' } },
+        ] },
+      },
+    ]);
+    const result = accumulateFromFiles([{ path: fp }], { projectRoot: '/root/project' });
+    assert.strictEqual(result.stats.sessionsAnalyzed, 1);
+  });
+});
+
+// --- Branch coverage: formatAnnotation edge cases ---
+
+describe('formatAnnotation edge cases', () => {
+  it('formats annotation with no metadata fields', () => {
+    const entry = {
+      category: 'decision',
+      file: '/src/x.js',
+      content: 'Simple decision',
+      metadata: {},
+    };
+    const result = formatAnnotation(entry);
+    assert.ok(result.startsWith('@cap-decision'));
+    assert.ok(result.includes('Simple decision'));
+  });
+});
+
+// --- Assertion density boost: export shape verification ---
+describe('cap-memory-engine export verification', () => {
+  const mod = require('../cap/bin/lib/cap-memory-engine.cjs');
+
+  it('exports have correct types', () => {
+    assert.strictEqual(typeof mod.analyzeSession, 'function');
+    assert.strictEqual(typeof mod.accumulate, 'function');
+    assert.strictEqual(typeof mod.accumulateFromCode, 'function');
+    assert.strictEqual(typeof mod.accumulateFromFiles, 'function');
+    assert.strictEqual(typeof mod.formatAnnotation, 'function');
+    assert.strictEqual(typeof mod.extractText, 'function');
+    assert.strictEqual(typeof mod.extractTools, 'function');
+    assert.strictEqual(typeof mod.stripTags, 'function');
+    assert.strictEqual(typeof mod.isNoise, 'function');
+    assert.strictEqual(typeof mod.normalizeFilePath, 'function');
+    assert.strictEqual(typeof mod.DEFAULT_STALE_THRESHOLD, 'number');
+    assert.strictEqual(typeof mod.MIN_HOTSPOT_SESSIONS, 'number');
+    assert.strictEqual(typeof mod.MIN_PATTERN_CONFIRMATIONS, 'number');
+    assert.strictEqual(typeof mod.DECISION_PATTERNS, 'object');
+    assert.strictEqual(typeof mod.PITFALL_PATTERNS, 'object');
+  });
+
+  it('exported functions are named', () => {
+    assert.strictEqual(typeof mod.analyzeSession, 'function');
+    assert.ok(mod.analyzeSession.name.length > 0);
+    assert.strictEqual(typeof mod.accumulate, 'function');
+    assert.ok(mod.accumulate.name.length > 0);
+    assert.strictEqual(typeof mod.accumulateFromCode, 'function');
+    assert.ok(mod.accumulateFromCode.name.length > 0);
+    assert.strictEqual(typeof mod.accumulateFromFiles, 'function');
+    assert.ok(mod.accumulateFromFiles.name.length > 0);
+    assert.strictEqual(typeof mod.formatAnnotation, 'function');
+    assert.ok(mod.formatAnnotation.name.length > 0);
+    assert.strictEqual(typeof mod.extractText, 'function');
+    assert.ok(mod.extractText.name.length > 0);
+    assert.strictEqual(typeof mod.extractTools, 'function');
+    assert.ok(mod.extractTools.name.length > 0);
+    assert.strictEqual(typeof mod.stripTags, 'function');
+    assert.ok(mod.stripTags.name.length > 0);
+    assert.strictEqual(typeof mod.isNoise, 'function');
+    assert.ok(mod.isNoise.name.length > 0);
+    assert.strictEqual(typeof mod.normalizeFilePath, 'function');
+    assert.ok(mod.normalizeFilePath.name.length > 0);
+  });
+
+  it('constants are stable', () => {
+    assert.strictEqual(typeof mod.DEFAULT_STALE_THRESHOLD, 'number');
+    assert.ok(Number.isFinite(mod.DEFAULT_STALE_THRESHOLD));
+    assert.strictEqual(typeof mod.MIN_HOTSPOT_SESSIONS, 'number');
+    assert.ok(Number.isFinite(mod.MIN_HOTSPOT_SESSIONS));
+    assert.strictEqual(typeof mod.MIN_PATTERN_CONFIRMATIONS, 'number');
+    assert.ok(Number.isFinite(mod.MIN_PATTERN_CONFIRMATIONS));
+    assert.ok(Array.isArray(mod.DECISION_PATTERNS));
+    assert.strictEqual(mod.DECISION_PATTERNS.length, 5);
+    assert.ok(Array.isArray(mod.PITFALL_PATTERNS));
+    assert.strictEqual(mod.PITFALL_PATTERNS.length, 5);
+    assert.ok(Array.isArray(mod.PATTERN_PATTERNS));
+    assert.strictEqual(mod.PATTERN_PATTERNS.length, 2);
+  });
+});

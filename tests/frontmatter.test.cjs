@@ -8,7 +8,7 @@
  * Includes REG-04 regression: quoted comma inline array edge case.
  */
 
-const { test, describe } = require('node:test');
+const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 
 const {
@@ -431,6 +431,419 @@ must_haves:
     assert.strictEqual(result[0].path, 'src/api.ts');
     // The nested array should be captured
     assert.ok(result[0].exports !== undefined, 'should have exports field');
+  });
+});
+
+// ─── reconstructFrontmatter — deep nesting branches ─────────────────────────
+
+describe('reconstructFrontmatter deep nesting', () => {
+  test('serializes nested object within object (3 levels deep)', () => {
+    const result = reconstructFrontmatter({
+      outer: {
+        inner: {
+          deepKey: 'deepVal',
+          deepArr: ['x', 'y'],
+          deepEmpty: [],
+        },
+      },
+    });
+    assert.ok(result.includes('outer:'), 'should have outer key');
+    assert.ok(result.includes('  inner:'), 'should have inner key indented');
+    assert.ok(result.includes('    deepKey: deepVal'), 'should have deep key-value');
+    assert.ok(result.includes('    deepArr:'), 'should have deep array header');
+    assert.ok(result.includes('      - x'), 'should have deep array items');
+    assert.ok(result.includes('    deepEmpty: []'), 'should serialize deep empty array');
+  });
+
+  test('skips null/undefined in nested objects', () => {
+    const result = reconstructFrontmatter({
+      outer: {
+        keep: 'yes',
+        skipNull: null,
+        skipUndef: undefined,
+      },
+    });
+    assert.ok(result.includes('  keep: yes'), 'should include non-null key');
+    assert.ok(!result.includes('skipNull'), 'should skip null nested key');
+    assert.ok(!result.includes('skipUndef'), 'should skip undefined nested key');
+  });
+
+  test('skips null/undefined in deeply nested objects', () => {
+    const result = reconstructFrontmatter({
+      outer: {
+        inner: {
+          keep: 'yes',
+          skip: null,
+        },
+      },
+    });
+    assert.ok(result.includes('    keep: yes'), 'should include non-null deep key');
+    assert.ok(!result.includes('skip'), 'should skip null deep key');
+  });
+
+  test('quotes nested sub-values with colon or hash', () => {
+    const result = reconstructFrontmatter({
+      parent: {
+        url: 'http://example.com',
+        comment: 'value # note',
+      },
+    });
+    assert.ok(result.includes('"http://example.com"'), 'should quote nested value with colon');
+    assert.ok(result.includes('"value # note"'), 'should quote nested value with hash');
+  });
+
+  test('serializes nested long arrays as block with quoting', () => {
+    const result = reconstructFrontmatter({
+      parent: {
+        items: ['http://a.com', 'b # note', 'c', 'd'],
+      },
+    });
+    assert.ok(result.includes('  items:'), 'should have block array header');
+    assert.ok(result.includes('    - "http://a.com"'), 'should quote array items with colon');
+    assert.ok(result.includes('    - "b # note"'), 'should quote array items with hash');
+    assert.ok(result.includes('    - c'), 'non-special items unquoted');
+  });
+
+  test('serializes nested empty array inside object', () => {
+    const result = reconstructFrontmatter({
+      parent: {
+        empty: [],
+      },
+    });
+    assert.ok(result.includes('  empty: []'), 'should serialize nested empty array');
+  });
+
+  test('quotes top-level values starting with [ or {', () => {
+    const result = reconstructFrontmatter({ val: '[array-like]', obj: '{object-like}' });
+    assert.ok(result.includes('"[array-like]"'), 'should quote value starting with [');
+    assert.ok(result.includes('"{object-like}"'), 'should quote value starting with {');
+  });
+
+  test('handles opening bracket as value (key: [)', () => {
+    const content = '---\nitems: [\nfoo\nbar\n]\n---\n';
+    const result = extractFrontmatter(content);
+    // When value is just "[", parser creates an empty array
+    assert.ok(Array.isArray(result.items), 'should create array for opening bracket value');
+  });
+});
+
+describe('parseMustHavesBlock edge cases', () => {
+  test('returns empty when block is not nested under must_haves', () => {
+    // blockIndent <= mustHavesIndent — lines 202-205
+    const content = `---
+must_haves:
+  truths:
+    - "OK"
+truths:
+  - "not under must_haves"
+---
+`;
+    // The top-level "truths:" is not nested under must_haves
+    // parseMustHavesBlock looks for block UNDER must_haves
+    const result = parseMustHavesBlock(content, 'truths');
+    // Should find the one under must_haves (indented), not the top-level one
+    assert.ok(result.length >= 1, 'should find truths under must_haves');
+  });
+
+  test('handles must_haves block with no matching sub-block', () => {
+    const content = `---
+must_haves:
+  artifacts:
+    - path: "src/foo.ts"
+---
+`;
+    const result = parseMustHavesBlock(content, 'truths');
+    assert.deepStrictEqual(result, [], 'should return empty for non-existent sub-block');
+  });
+
+  test('returns empty when block is at same indent as must_haves', () => {
+    // blockIndent <= mustHavesIndent (line 185)
+    // must_haves is indented by 2, truths is also indented by 2 (same level)
+    const content = `---
+outer:
+  must_haves:
+    artifacts:
+      - path: "src/foo.ts"
+  truths:
+    - "at same level as must_haves"
+---
+`;
+    const result = parseMustHavesBlock(content, 'truths');
+    assert.deepStrictEqual(result, [], 'should return empty when block is not nested under must_haves');
+  });
+
+  test('handles artifact with key having empty value then array items', () => {
+    // Hits line 241: current[lastKey] is falsy
+    const content = `---
+must_haves:
+  artifacts:
+    - path: "src/foo.ts"
+      provides:
+        - "API"
+        - "Auth"
+---
+`;
+    const result = parseMustHavesBlock(content, 'artifacts');
+    assert.ok(Array.isArray(result), 'should return array');
+    assert.strictEqual(result.length, 1);
+    assert.ok(result[0].path === 'src/foo.ts');
+    // provides should be an array since it had empty value then dash items
+    assert.ok(result[0].provides !== undefined, 'should have provides field');
+  });
+});
+
+// ─── Frontmatter CRUD commands ──────────────────────────────────────────────
+
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const {
+  cmdFrontmatterGet,
+  cmdFrontmatterSet,
+  cmdFrontmatterMerge,
+  cmdFrontmatterValidate,
+} = require('../cap/bin/lib/frontmatter.cjs');
+
+/** Capture output() calls — intercepts fs.writeSync(fd 1/2) and process.exit */
+function captureCmd(fn) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let captured = '';
+  let exitCode = null;
+  fs.writeSync = function(fd, data) {
+    if (fd === 1) { captured += data; return data.length; }
+    if (fd === 2) { captured += data; return data.length; }
+    return origWriteSync.apply(fs, arguments);
+  };
+  process.exit = (code) => { exitCode = code; throw new Error('__EXIT__'); };
+  try { fn(); } catch (e) { if (e.message !== '__EXIT__') throw e; }
+  finally { fs.writeSync = origWriteSync; process.exit = origExit; }
+  return { output: captured, exitCode };
+}
+
+describe('cmdFrontmatterGet', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns all frontmatter when no field specified', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\ntype: execute\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterGet(tmpDir, 'test.md', null, false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.phase, '01');
+    assert.strictEqual(data.type, 'execute');
+  });
+
+  test('returns specific field value', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 02\ntype: tdd\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterGet(tmpDir, 'test.md', 'phase', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.phase, '02');
+  });
+
+  test('returns error for missing field', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterGet(tmpDir, 'test.md', 'nonexistent', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.error, 'Field not found');
+  });
+
+  test('returns error for missing file', () => {
+    const { output } = captureCmd(() => cmdFrontmatterGet(tmpDir, 'missing.md', null, false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.error, 'File not found');
+  });
+
+  test('rejects null bytes in file path', () => {
+    const { exitCode } = captureCmd(() => cmdFrontmatterGet(tmpDir, 'test\0.md', null, false));
+    assert.strictEqual(exitCode, 1);
+  });
+
+  test('handles absolute file path', () => {
+    const fp = path.join(tmpDir, 'abs.md');
+    fs.writeFileSync(fp, '---\nkey: val\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterGet(tmpDir, fp, 'key', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.key, 'val');
+  });
+});
+
+describe('cmdFrontmatterSet', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('sets a field value in frontmatter', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterSet(tmpDir, 'test.md', 'phase', '"02"', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.updated, true);
+    assert.strictEqual(data.field, 'phase');
+    // Verify file was written
+    const content = fs.readFileSync(fp, 'utf-8');
+    const fm = extractFrontmatter(content);
+    assert.strictEqual(fm.phase, '02');
+  });
+
+  test('returns error for missing file', () => {
+    const { output } = captureCmd(() => cmdFrontmatterSet(tmpDir, 'missing.md', 'key', 'val', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.error, 'File not found');
+  });
+
+  test('rejects null bytes in file path', () => {
+    const { exitCode } = captureCmd(() => cmdFrontmatterSet(tmpDir, 'test\0.md', 'key', 'val', false));
+    assert.strictEqual(exitCode, 1);
+  });
+
+  test('errors when required params missing', () => {
+    const { exitCode } = captureCmd(() => cmdFrontmatterSet(tmpDir, null, null, undefined, false));
+    assert.strictEqual(exitCode, 1);
+  });
+
+  test('parses JSON value correctly', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterSet(tmpDir, 'test.md', 'tags', '["a","b"]', false));
+    const data = JSON.parse(output);
+    assert.deepStrictEqual(data.value, ['a', 'b']);
+  });
+});
+
+describe('cmdFrontmatterMerge', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('merges multiple fields into frontmatter', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { output } = captureCmd(() =>
+      cmdFrontmatterMerge(tmpDir, 'test.md', '{"type":"execute","wave":"2"}', false)
+    );
+    const data = JSON.parse(output);
+    assert.strictEqual(data.merged, true);
+    assert.deepStrictEqual(data.fields, ['type', 'wave']);
+    const content = fs.readFileSync(fp, 'utf-8');
+    const fm = extractFrontmatter(content);
+    assert.strictEqual(fm.phase, '01');
+    assert.strictEqual(fm.type, 'execute');
+    assert.strictEqual(fm.wave, '2');
+  });
+
+  test('returns error for missing file', () => {
+    const { output } = captureCmd(() =>
+      cmdFrontmatterMerge(tmpDir, 'missing.md', '{"key":"val"}', false)
+    );
+    const data = JSON.parse(output);
+    assert.strictEqual(data.error, 'File not found');
+  });
+
+  test('errors on invalid JSON data', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { exitCode } = captureCmd(() =>
+      cmdFrontmatterMerge(tmpDir, 'test.md', 'not-json', false)
+    );
+    assert.strictEqual(exitCode, 1);
+  });
+
+  test('errors when required params missing', () => {
+    const { exitCode } = captureCmd(() =>
+      cmdFrontmatterMerge(tmpDir, null, null, false)
+    );
+    assert.strictEqual(exitCode, 1);
+  });
+});
+
+describe('cmdFrontmatterValidate', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fm-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('validates a complete plan frontmatter as valid', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\nplan: 01\ntype: execute\nwave: 1\ndepends_on: []\nfiles_modified: []\nautonomous: true\nmust_haves:\n  truths:\n    - "passes"\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterValidate(tmpDir, 'test.md', 'plan', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.valid, true);
+    assert.strictEqual(data.missing.length, 0);
+    assert.strictEqual(data.schema, 'plan');
+  });
+
+  test('reports missing fields for incomplete plan', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterValidate(tmpDir, 'test.md', 'plan', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.valid, false);
+    assert.ok(data.missing.includes('type'), 'should report type as missing');
+    assert.ok(data.missing.includes('wave'), 'should report wave as missing');
+  });
+
+  test('errors on unknown schema', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\n---\nBody\n');
+    const { exitCode } = captureCmd(() => cmdFrontmatterValidate(tmpDir, 'test.md', 'unknown', false));
+    assert.strictEqual(exitCode, 1);
+  });
+
+  test('returns error for missing file', () => {
+    const { output } = captureCmd(() => cmdFrontmatterValidate(tmpDir, 'missing.md', 'plan', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.error, 'File not found');
+  });
+
+  test('errors when required params missing', () => {
+    const { exitCode } = captureCmd(() => cmdFrontmatterValidate(tmpDir, null, null, false));
+    assert.strictEqual(exitCode, 1);
+  });
+
+  test('validates summary schema', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\nplan: 01\nsubsystem: auth\ntags: [api]\nduration: 30min\ncompleted: true\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterValidate(tmpDir, 'test.md', 'summary', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.valid, true);
+    assert.strictEqual(data.schema, 'summary');
+  });
+
+  test('validates verification schema', () => {
+    const fp = path.join(tmpDir, 'test.md');
+    fs.writeFileSync(fp, '---\nphase: 01\nverified: true\nstatus: pass\nscore: 95\n---\nBody\n');
+    const { output } = captureCmd(() => cmdFrontmatterValidate(tmpDir, 'test.md', 'verification', false));
+    const data = JSON.parse(output);
+    assert.strictEqual(data.valid, true);
+    assert.strictEqual(data.schema, 'verification');
   });
 });
 

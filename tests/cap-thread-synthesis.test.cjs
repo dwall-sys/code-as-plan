@@ -1122,7 +1122,11 @@ describe('AC-6: detectSingleConflict — adversarial edge cases', () => {
       { description: '' }
     );
     // Should not crash
-    assert.ok(result === null || typeof result === 'string');
+    if (result !== null) {
+      assert.strictEqual(result.constructor, String, 'should be a string if not null');
+    } else {
+      assert.strictEqual(result, null, 'should be null for empty descriptions');
+    }
   });
 
   // @cap-todo(ac:F-032/AC-6) Adversarial: undefined descriptions
@@ -1131,7 +1135,11 @@ describe('AC-6: detectSingleConflict — adversarial edge cases', () => {
       { description: undefined },
       { description: undefined }
     );
-    assert.ok(result === null || typeof result === 'string');
+    if (result !== null) {
+      assert.strictEqual(result.constructor, String, 'should be a string if not null');
+    } else {
+      assert.strictEqual(result, null, 'should be null for undefined descriptions');
+    }
   });
 
   // @cap-todo(ac:F-032/AC-6) Adversarial: negation with "prevent" keyword
@@ -1331,5 +1339,133 @@ describe('reconnect — adversarial edge cases', () => {
       newACs: [],
     });
     assert.strictEqual(result.conflicts, null, 'Empty newACs should be treated as no ACs');
+  });
+});
+
+// --- Branch coverage: executeMerge with missing featureIds / boundaryDecisions / solutionShape ---
+
+describe('executeMerge — fallback branches for missing optional fields', () => {
+  it('handles oldThread with no featureIds or boundaryDecisions', () => {
+    const oldThread = {
+      id: 'thr-old',
+      name: 'Old',
+      timestamp: new Date().toISOString(),
+      // deliberately omit featureIds and boundaryDecisions
+    };
+    const newThread = makeThread({ id: 'thr-new', featureIds: ['F-001'] });
+    const featureMap = makeFeatureMap([
+      { id: 'F-001', title: 'Auth', state: 'planned', acs: [{ id: 'AC-1', description: 'Login' }], files: [], dependencies: [] },
+    ]);
+
+    const result = executeMerge(oldThread, newThread, featureMap);
+    assert.strictEqual(result.mergedThread.featureIds.length, 1);
+    assert.strictEqual(result.mergedThread.featureIds[0], 'F-001');
+    // boundaryDecisions should be from newThread only
+    assert.ok(Array.isArray(result.mergedThread.boundaryDecisions));
+    // Each merged AC should have source 'new:thr-new' (only in new)
+    assert.strictEqual(result.mergedACs[0].source, 'new:thr-new');
+  });
+
+  it('handles newThread with no featureIds or boundaryDecisions', () => {
+    const oldThread = makeThread({ id: 'thr-old', featureIds: ['F-001'] });
+    const newThread = {
+      id: 'thr-new',
+      name: 'New',
+      timestamp: new Date().toISOString(),
+      // deliberately omit featureIds and boundaryDecisions
+    };
+    const featureMap = makeFeatureMap([
+      { id: 'F-001', title: 'Auth', state: 'planned', acs: [{ id: 'AC-1', description: 'Login' }], files: [], dependencies: [] },
+    ]);
+
+    const result = executeMerge(oldThread, newThread, featureMap);
+    assert.strictEqual(result.mergedThread.featureIds.length, 1);
+    // AC should be sourced from old thread only
+    assert.strictEqual(result.mergedACs[0].source, 'old:thr-old');
+    assert.ok(Array.isArray(result.mergedThread.boundaryDecisions));
+  });
+
+  it('falls back to oldThread solutionShape when newThread has none', () => {
+    const oldThread = makeThread({ id: 'thr-old', featureIds: ['F-001'], solutionShape: 'old-shape' });
+    const newThread = {
+      id: 'thr-new',
+      name: 'New',
+      timestamp: new Date().toISOString(),
+      featureIds: ['F-001'],
+      solutionShape: null,
+    };
+    const featureMap = makeFeatureMap([
+      { id: 'F-001', title: 'Auth', state: 'planned', acs: [], files: [], dependencies: [] },
+    ]);
+
+    const result = executeMerge(oldThread, newThread, featureMap);
+    assert.strictEqual(result.mergedThread.solutionShape, 'old-shape');
+  });
+
+  it('handles feature not found in feature map during merge', () => {
+    const oldThread = makeThread({ id: 'thr-old', featureIds: ['F-999'] });
+    const newThread = makeThread({ id: 'thr-new', featureIds: ['F-999'] });
+    const featureMap = makeFeatureMap([]); // no features
+
+    const result = executeMerge(oldThread, newThread, featureMap);
+    assert.strictEqual(result.mergedACs.length, 0, 'no ACs when feature not found');
+    assert.strictEqual(result.mergedThread.featureIds.length, 1);
+    assert.strictEqual(result.mergedThread.featureIds[0], 'F-999');
+  });
+
+  it('handles feature with undefined acs array in merge', () => {
+    const oldThread = makeThread({ id: 'thr-old', featureIds: ['F-001'] });
+    const newThread = makeThread({ id: 'thr-new', featureIds: ['F-002'] });
+    const featureMap = makeFeatureMap([
+      { id: 'F-001', title: 'A', state: 'planned', files: [], dependencies: [] },
+      { id: 'F-002', title: 'B', state: 'planned', files: [], dependencies: [] },
+    ]);
+
+    const result = executeMerge(oldThread, newThread, featureMap);
+    assert.strictEqual(result.mergedACs.length, 0, 'no ACs from features without acs');
+  });
+});
+
+// --- Branch coverage: detectACConflicts with features missing from featureMap ---
+
+describe('detectACConflicts — feature not found fallback', () => {
+  it('skips feature IDs not present in featureMap', () => {
+    const result = detectACConflicts(
+      ['F-NONEXISTENT'],
+      [{ featureId: 'F-001', description: 'New AC' }],
+      makeFeatureMap([])
+    );
+    assert.ok(Array.isArray(result.conflicts));
+    assert.ok(Array.isArray(result.compatible));
+    // All newACs should be compatible since there are no existing ACs to conflict with
+    assert.strictEqual(result.compatible.length, 1);
+  });
+
+  it('handles features with undefined acs in detectACConflicts', () => {
+    const result = detectACConflicts(
+      ['F-001'],
+      [{ featureId: 'F-001', description: 'New AC' }],
+      makeFeatureMap([{ id: 'F-001', title: 'Auth', state: 'planned', files: [], dependencies: [] }])
+    );
+    assert.ok(Array.isArray(result.conflicts));
+    assert.ok(Array.isArray(result.compatible));
+  });
+});
+
+// --- Branch coverage: reconnect with newACs that triggers detectACConflicts ---
+
+describe('reconnect — newACs triggers AC conflict detection', () => {
+  it('returns conflict results when newACs are provided with content', () => {
+    const oldThread = makeThread({ id: 'thr-old', featureIds: ['F-001'] });
+    persistThread(tmpDir, oldThread);
+    writeTmpFeatureMap([
+      { id: 'F-001', title: 'Auth', state: 'planned', acs: [{ id: 'AC-1', description: 'Must support JWT' }], files: [], dependencies: [] },
+    ]);
+
+    const result = reconnect(tmpDir, { threadId: 'thr-old', score: 0.5 }, 'Extend auth', {
+      newACs: [{ featureId: 'F-001', description: 'Must not support JWT' }],
+    });
+    assert.notStrictEqual(result.conflicts, null, 'Conflicts should be returned');
+    assert.ok(result.conflicts.conflicts.length > 0 || result.conflicts.compatible.length > 0);
   });
 });

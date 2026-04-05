@@ -289,7 +289,8 @@ describe('arc-scanner formatAsMarkdown', () => {
       { type: 'todo', file: 'src/auth.js', line: 2, metadata: { phase: '2' }, description: 'Fix this', raw: '// @gsd-todo(phase:2) Fix this' },
     ];
     const result = arcScanner.formatAsMarkdown(tags, 'TestProject');
-    assert.ok(typeof result === 'string', 'should return a string');
+    assert.strictEqual(typeof result, 'string', 'should return a string');
+    assert.ok(result.length > 0, 'result should not be empty');
     assert.ok(result.includes('## Summary Statistics'), 'should contain ## Summary Statistics');
   });
 
@@ -316,5 +317,241 @@ describe('arc-scanner formatAsMarkdown', () => {
     ];
     const result = arcScanner.formatAsMarkdown(tags, 'TestProject');
     assert.ok(result.includes('## Phase Reference Index'), 'should contain ## Phase Reference Index');
+  });
+
+  test('uses "Unknown Project" when projectName is not provided', () => {
+    const tags = [
+      { type: 'context', file: 'a.js', line: 1, metadata: {}, description: 'test', raw: '// @gsd-context test' },
+    ];
+    const result = arcScanner.formatAsMarkdown(tags);
+    assert.ok(result.includes('Unknown Project'), 'should use "Unknown Project" as default');
+  });
+
+  test('renders metadata key-value pairs in the table', () => {
+    const tags = [
+      { type: 'todo', file: 'a.js', line: 1, metadata: { phase: '2', priority: 'high' }, description: 'Fix', raw: '// @gsd-todo Fix' },
+    ];
+    const result = arcScanner.formatAsMarkdown(tags, 'Test');
+    assert.ok(result.includes('phase:2'), 'should contain metadata key-value pair');
+    assert.ok(result.includes('priority:high'), 'should contain second metadata entry');
+  });
+
+  test('renders dash for empty metadata and empty description', () => {
+    const tags = [
+      { type: 'context', file: 'a.js', line: 5, metadata: {}, description: '', raw: '// @gsd-context' },
+    ];
+    const result = arcScanner.formatAsMarkdown(tags, 'Test');
+    // Both metadata and description should show dash
+    const lines = result.split('\n');
+    const dataRow = lines.find(l => l.includes('| 5 |'));
+    assert.ok(dataRow, 'should have a row for line 5');
+    // The row should contain two dashes for empty metadata and empty description
+    const dashes = (dataRow.match(/—/g) || []).length;
+    assert.ok(dashes >= 2, 'should have dashes for empty metadata and description');
+  });
+
+  test('singular "file" when only one file has tags', () => {
+    const tags = [
+      { type: 'context', file: 'only.js', line: 1, metadata: {}, description: 'only file', raw: '// @gsd-context only file' },
+    ];
+    const result = arcScanner.formatAsMarkdown(tags, 'Test');
+    assert.ok(result.includes('1 file'), 'should say "1 file" (singular)');
+  });
+
+  test('handles tags with untagged phase in Phase Reference Index', () => {
+    const tags = [
+      { type: 'context', file: 'a.js', line: 1, metadata: {}, description: 'no phase', raw: '// @gsd-context no phase' },
+      { type: 'todo', file: 'b.js', line: 1, metadata: { phase: '1' }, description: 'phase 1', raw: '// @gsd-todo phase 1' },
+    ];
+    const result = arcScanner.formatAsMarkdown(tags, 'Test');
+    assert.ok(result.includes('(untagged)'), 'should contain (untagged) in Phase Reference Index');
+  });
+});
+
+// ─── scanFile — edge cases ──────────────────────────────────────────────────
+
+describe('arc-scanner scanFile edge cases', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('returns empty array for nonexistent file', () => {
+    const tags = arcScanner.scanFile(path.join(tmpDir, 'nonexistent.js'));
+    assert.deepStrictEqual(tags, []);
+  });
+
+  test('ignores unknown @gsd- tag types', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'fixture.js'),
+      '// @gsd-unknown some text\n// @gsd-context valid tag\n',
+      'utf-8'
+    );
+    const tags = arcScanner.scanFile(path.join(tmpDir, 'fixture.js'));
+    assert.strictEqual(tags.length, 1);
+    assert.strictEqual(tags[0].type, 'context');
+  });
+
+  test('parseMetadata handles entries without colon (skips them)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'fixture.js'),
+      '// @gsd-todo(nokey, phase:2) test\n',
+      'utf-8'
+    );
+    const tags = arcScanner.scanFile(path.join(tmpDir, 'fixture.js'));
+    assert.strictEqual(tags.length, 1);
+    assert.deepStrictEqual(tags[0].metadata, { phase: '2' });
+  });
+
+  test('parseMetadata handles empty key gracefully', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'fixture.js'),
+      '// @gsd-todo(:val) test\n',
+      'utf-8'
+    );
+    const tags = arcScanner.scanFile(path.join(tmpDir, 'fixture.js'));
+    assert.strictEqual(tags.length, 1);
+    // Empty key should be skipped
+    assert.deepStrictEqual(tags[0].metadata, {});
+  });
+});
+
+// ─── scanDirectory — .gsdignore and excludes ────────────────────────────────
+
+describe('arc-scanner scanDirectory .gsdignore and excludes', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('respects .gsdignore file to exclude directories', () => {
+    // Create .gsdignore at scan root
+    fs.writeFileSync(path.join(tmpDir, '.gsdignore'), 'vendor\n# comment\n\n', 'utf-8');
+    // Create vendor dir with a tag
+    fs.mkdirSync(path.join(tmpDir, 'vendor'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'vendor', 'lib.js'), '// @gsd-context vendored\n', 'utf-8');
+    // Create src dir with a tag
+    fs.writeFileSync(path.join(tmpDir, 'src.js'), '// @gsd-context source\n', 'utf-8');
+
+    const tags = arcScanner.scanDirectory(tmpDir);
+    const files = tags.map(t => t.file);
+    assert.ok(!files.some(f => f.includes('vendor')), 'vendor should be excluded by .gsdignore');
+    assert.ok(files.some(f => f.includes('src.js')), 'src.js should be included');
+  });
+
+  test('respects options.excludes to skip additional directories', () => {
+    fs.mkdirSync(path.join(tmpDir, 'custom-skip'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'custom-skip', 'lib.js'), '// @gsd-context excluded\n', 'utf-8');
+    fs.writeFileSync(path.join(tmpDir, 'main.js'), '// @gsd-context included\n', 'utf-8');
+
+    const tags = arcScanner.scanDirectory(tmpDir, { excludes: ['custom-skip'] });
+    const files = tags.map(t => t.file);
+    assert.ok(!files.some(f => f.includes('custom-skip')), 'custom-skip should be excluded');
+    assert.ok(files.some(f => f.includes('main.js')), 'main.js should be included');
+  });
+
+  test('handles unreadable directory gracefully in walk', () => {
+    // A directory that does not exist should return empty tags
+    const tags = arcScanner.scanDirectory(path.join(tmpDir, 'nonexistent'));
+    assert.deepStrictEqual(tags, []);
+  });
+
+  test('phaseFilter with null returns all tags', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'a.js'),
+      '// @gsd-todo(phase:2) Phase two\n// @gsd-context no phase\n',
+      'utf-8'
+    );
+    const tags = arcScanner.scanDirectory(tmpDir, { phaseFilter: null });
+    assert.ok(tags.length >= 2, 'null phaseFilter should return all tags');
+  });
+});
+
+// ─── cmdExtractTags ─────────────────────────────────────────────────────────
+
+describe('arc-scanner cmdExtractTags', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('writes JSON output to file when outputFile is specified', () => {
+    fs.writeFileSync(path.join(tmpDir, 'src.js'), '// @gsd-context test\n', 'utf-8');
+    const outFile = path.join(tmpDir, 'output', 'tags.json');
+
+    arcScanner.cmdExtractTags(tmpDir, tmpDir, { format: 'json', outputFile: outFile });
+
+    assert.ok(fs.existsSync(outFile), 'output file should be created');
+    const content = fs.readFileSync(outFile, 'utf-8');
+    const parsed = JSON.parse(content);
+    assert.ok(Array.isArray(parsed), 'output should be a JSON array');
+  });
+
+  test('writes markdown output to file when format is md', () => {
+    fs.writeFileSync(path.join(tmpDir, 'src.js'), '// @gsd-todo(phase:1) task\n', 'utf-8');
+    const outFile = path.join(tmpDir, 'output', 'CODE-INVENTORY.md');
+
+    arcScanner.cmdExtractTags(tmpDir, tmpDir, { format: 'md', outputFile: outFile, projectName: 'TestProj' });
+
+    assert.ok(fs.existsSync(outFile), 'output file should be created');
+    const content = fs.readFileSync(outFile, 'utf-8');
+    assert.ok(content.includes('## Summary Statistics'), 'markdown should contain Summary Statistics');
+  });
+
+  test('writes to stdout when no outputFile specified', () => {
+    fs.writeFileSync(path.join(tmpDir, 'src.js'), '// @gsd-context tag\n', 'utf-8');
+    // This should not throw — it writes to stdout
+    // We just verify it does not crash
+    const originalWrite = process.stdout.write;
+    let captured = '';
+    process.stdout.write = (data) => { captured += data; return true; };
+    try {
+      arcScanner.cmdExtractTags(tmpDir, tmpDir, { format: 'json' });
+      assert.ok(captured.length > 0, 'should have written something to stdout');
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+
+  test('defaults to cwd when targetPath is not provided', () => {
+    fs.writeFileSync(path.join(tmpDir, 'a.js'), '// @gsd-context tag\n', 'utf-8');
+    const outFile = path.join(tmpDir, 'out.json');
+
+    arcScanner.cmdExtractTags(tmpDir, undefined, { format: 'json', outputFile: outFile });
+
+    assert.ok(fs.existsSync(outFile), 'output file should be created');
+    const parsed = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
+    assert.ok(Array.isArray(parsed), 'should be valid JSON array');
+  });
+
+  test('passes phaseFilter and typeFilter to scanDirectory', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'a.js'),
+      '// @gsd-todo(phase:2) phase two task\n// @gsd-context no phase\n',
+      'utf-8'
+    );
+    const outFile = path.join(tmpDir, 'out.json');
+
+    arcScanner.cmdExtractTags(tmpDir, tmpDir, { format: 'json', outputFile: outFile, phaseFilter: '2', typeFilter: 'todo' });
+
+    const parsed = JSON.parse(fs.readFileSync(outFile, 'utf-8'));
+    assert.strictEqual(parsed.length, 1);
+    assert.strictEqual(parsed[0].type, 'todo');
+    assert.strictEqual(parsed[0].metadata.phase, '2');
   });
 });

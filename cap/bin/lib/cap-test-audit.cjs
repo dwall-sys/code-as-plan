@@ -452,6 +452,114 @@ function runMutationTests(projectRoot, targetFiles, testCommand, options = {}) {
   return result;
 }
 
+// @cap-decision Test Diversity measures the breadth of test types — error paths, edge cases, boundary conditions.
+// Projects that only test happy paths score low; adversarial testing is rewarded.
+
+/** Patterns that indicate error-path testing. */
+const ERROR_PATH_PATTERNS = [
+  /\bthrow[s]?\b/i,
+  /\breject[s]?\b/i,
+  /\berror\b/i,
+  /\bfail[s]?\b/i,
+  /\binvalid\b/i,
+  /\bmalformed\b/i,
+  /\bcorrupt/i,
+  /\btimeout\b/i,
+  /\bexception\b/i,
+  /\.toThrow\(/,
+  /assert\.throws\(/,
+  /assert\.rejects\(/,
+];
+
+/** Patterns that indicate edge-case / boundary testing. */
+const EDGE_CASE_PATTERNS = [
+  /\bnull\b/,
+  /\bundefined\b/,
+  /\bempty\b/i,
+  /\bboundary\b/i,
+  /\bedge[- ]?case/i,
+  /\bzero\b/i,
+  /\bnegative\b/i,
+  /\boverflow\b/i,
+  /\bmax\b/i,
+  /\bmin\b/i,
+  /\bhuge\b/i,
+  /\blarge\b/i,
+  /\bspecial char/i,
+  /\bunicode\b/i,
+  /\badversarial\b/i,
+];
+
+/**
+ * Analyze test diversity — measures how well tests cover error paths and edge cases.
+ * Returns a diversity score (0-100) based on the proportion of tests that exercise
+ * non-happy-path scenarios.
+ *
+ * @param {string} projectRoot
+ * @param {Object} [options]
+ * @param {string[]} [options.extensions] - File extensions to scan
+ * @returns {{ diversityScore: number, totalTests: number, errorPathTests: number, edgeCaseTests: number, happyPathOnlyTests: number, diversityRatio: number }}
+ */
+function analyzeTestDiversity(projectRoot, options = {}) {
+  const testFiles = findTestFiles(projectRoot, options.extensions);
+  let totalTests = 0;
+  let errorPathTests = 0;
+  let edgeCaseTests = 0;
+
+  for (const filePath of testFiles) {
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch (_e) {
+      continue;
+    }
+
+    const lines = content.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const testMatch = lines[i].match(TEST_BLOCK_RE);
+      if (!testMatch) continue;
+
+      totalTests++;
+      const testName = testMatch[1] || '';
+
+      // Collect test body (until next test or describe block)
+      let testBody = testName;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (TEST_BLOCK_RE.test(lines[j]) || DESCRIBE_BLOCK_RE.test(lines[j])) break;
+        testBody += ' ' + lines[j];
+      }
+
+      // Check if test exercises error paths
+      const isErrorPath = ERROR_PATH_PATTERNS.some(p => p.test(testName)) ||
+        ERROR_PATH_PATTERNS.some(p => p.test(testBody));
+
+      // Check if test exercises edge cases
+      const isEdgeCase = EDGE_CASE_PATTERNS.some(p => p.test(testName)) ||
+        EDGE_CASE_PATTERNS.some(p => p.test(testBody));
+
+      if (isErrorPath) errorPathTests++;
+      if (isEdgeCase) edgeCaseTests++;
+    }
+  }
+
+  const diverseTests = new Set(); // count unique diverse tests (a test can be both error + edge)
+  // We approximate: diverse = max(errorPathTests, edgeCaseTests) + min(errorPathTests, edgeCaseTests) * 0.5
+  // This avoids double-counting while rewarding tests that cover both
+  const diverseCount = Math.min(totalTests, errorPathTests + edgeCaseTests);
+  const diversityRatio = totalTests > 0 ? diverseCount / totalTests : 0;
+  const diversityScore = Math.round(diversityRatio * 100);
+
+  return {
+    diversityScore,
+    totalTests,
+    errorPathTests,
+    edgeCaseTests,
+    happyPathOnlyTests: Math.max(0, totalTests - diverseCount),
+    diversityRatio: Math.round(diversityRatio * 100) / 100,
+  };
+}
+
 /**
  * Generate spot-check suggestions for human review.
  *
@@ -459,6 +567,141 @@ function runMutationTests(projectRoot, targetFiles, testCommand, options = {}) {
  * @param {Object} options - { count: 3, criticalPaths: ['auth', 'payment', 'booking'] }
  * @returns {Array<{ file: string, testName: string, line: number, suggestion: string, productionFile: string, productionLine: number }>}
  */
+// @cap-decision Critical Path Coverage measures whether the most important code paths have dedicated tests.
+// Uses configurable path keywords to identify critical areas and checks for test file presence + assertion density.
+
+/** Default critical path keywords — areas where bugs are most costly. */
+const DEFAULT_CRITICAL_PATHS = ['auth', 'security', 'payment', 'session', 'migration', 'rls', 'permission', 'encrypt', 'token', 'credential'];
+
+/**
+ * Analyze critical path test coverage.
+ * Scans source files for critical path keywords, then checks if corresponding test files exist
+ * and have sufficient assertions.
+ *
+ * @param {string} projectRoot
+ * @param {Object} [options]
+ * @param {string[]} [options.criticalPaths] - Keywords identifying critical paths
+ * @param {string[]} [options.extensions] - Test file extensions
+ * @returns {{ score: number, criticalFiles: number, testedFiles: number, wellTestedFiles: number, untestedPaths: string[], coverage: number }}
+ */
+function analyzeCriticalPathCoverage(projectRoot, options = {}) {
+  const criticalKeywords = options.criticalPaths || DEFAULT_CRITICAL_PATHS;
+
+  // Step 1: Find source files matching critical path keywords
+  const libDir = path.join(projectRoot, 'cap', 'bin', 'lib');
+  let sourceFiles = [];
+  try {
+    if (fs.existsSync(libDir)) {
+      sourceFiles = fs.readdirSync(libDir)
+        .filter(f => f.endsWith('.cjs') && !f.includes('.test.'))
+        .map(f => ({ name: f, path: path.join('cap', 'bin', 'lib', f) }));
+    }
+  } catch (_e) { /* ignore */ }
+
+  // Also scan other common source directories
+  const otherDirs = ['bin', 'hooks', 'scripts'];
+  for (const dir of otherDirs) {
+    const dirPath = path.join(projectRoot, dir);
+    try {
+      if (fs.existsSync(dirPath)) {
+        const files = fs.readdirSync(dirPath)
+          .filter(f => f.endsWith('.js') || f.endsWith('.cjs') || f.endsWith('.mjs'))
+          .map(f => ({ name: f, path: path.join(dir, f) }));
+        sourceFiles.push(...files);
+      }
+    } catch (_e) { /* ignore */ }
+  }
+
+  // Identify critical source files — files whose name or content contains critical keywords
+  const criticalFiles = [];
+  for (const sf of sourceFiles) {
+    const lowerName = sf.name.toLowerCase();
+    const isCriticalByName = criticalKeywords.some(kw => lowerName.includes(kw));
+
+    if (isCriticalByName) {
+      criticalFiles.push(sf);
+      continue;
+    }
+
+    // Check file content for critical keywords (first 50 lines)
+    try {
+      const content = fs.readFileSync(path.join(projectRoot, sf.path), 'utf8');
+      const head = content.split('\n').slice(0, 50).join(' ').toLowerCase();
+      const isCriticalByContent = criticalKeywords.some(kw => head.includes(kw));
+      if (isCriticalByContent) {
+        criticalFiles.push(sf);
+      }
+    } catch (_e) { /* ignore */ }
+  }
+
+  if (criticalFiles.length === 0) {
+    return { score: 100, criticalFiles: 0, testedFiles: 0, wellTestedFiles: 0, untestedPaths: [], coverage: 1.0 };
+  }
+
+  // Step 2: Check which critical files have corresponding test files with assertions
+  const testFiles = findTestFiles(projectRoot, options.extensions);
+  const testFileNames = testFiles.map(f => path.basename(f).toLowerCase());
+  const testFileContents = {};
+  for (const tf of testFiles) {
+    try {
+      testFileContents[path.basename(tf).toLowerCase()] = fs.readFileSync(tf, 'utf8');
+    } catch (_e) { /* ignore */ }
+  }
+
+  let testedFiles = 0;
+  let wellTestedFiles = 0;
+  const untestedPaths = [];
+
+  for (const cf of criticalFiles) {
+    // Derive expected test file name: cap-session.cjs → cap-session.test.cjs
+    const baseName = cf.name.replace(/\.(cjs|js|mjs)$/, '');
+    const possibleTestNames = [
+      `${baseName}.test.cjs`,
+      `${baseName}.test.js`,
+      `${baseName}.test.ts`,
+      `${baseName}.test.mjs`,
+    ];
+
+    const matchedTest = possibleTestNames.find(tn => testFileNames.includes(tn));
+    if (!matchedTest) {
+      untestedPaths.push(cf.path);
+      continue;
+    }
+
+    testedFiles++;
+
+    // Check assertion density in the test file
+    const content = testFileContents[matchedTest] || '';
+    let assertionCount = 0;
+    let testCount = 0;
+    for (const line of content.split('\n')) {
+      if (TEST_BLOCK_RE.test(line)) testCount++;
+      for (const p of ASSERTION_PATTERNS) {
+        if (p.test(line)) { assertionCount++; break; }
+      }
+    }
+
+    // "Well tested" = at least 5 tests and 2+ assertions per test
+    if (testCount >= 5 && (testCount > 0 ? assertionCount / testCount : 0) >= 2) {
+      wellTestedFiles++;
+    }
+  }
+
+  const coverage = criticalFiles.length > 0 ? testedFiles / criticalFiles.length : 0;
+  const wellTestedRatio = criticalFiles.length > 0 ? wellTestedFiles / criticalFiles.length : 0;
+  // Score: 60% from having tests, 40% from having GOOD tests
+  const score = Math.round((coverage * 0.6 + wellTestedRatio * 0.4) * 100);
+
+  return {
+    score,
+    criticalFiles: criticalFiles.length,
+    testedFiles,
+    wellTestedFiles,
+    untestedPaths,
+    coverage: Math.round(coverage * 100) / 100,
+  };
+}
+
 function generateSpotChecks(projectRoot, options = {}) {
   const count = options.count || 3;
   const criticalPaths = options.criticalPaths || ['auth', 'payment', 'booking', 'rls', 'security'];
@@ -635,14 +878,14 @@ function detectAntiPatterns(projectRoot, options = {}) {
  * @param {Object} antiPatterns - from detectAntiPatterns
  * @returns {number} - 0 to 100
  */
-function computeTrustScore(assertions, coverage, mutations, antiPatterns) {
+function computeTrustScore(assertions, coverage, mutations, antiPatterns, diversity, criticalPath) {
   let score = 0;
 
-  // Assertion density (max 30 points)
+  // Assertion density (max 25 points)
   // 2+ assertions per test = full marks
-  if (assertions.assertionDensity >= 2) score += 30;
-  else if (assertions.assertionDensity >= 1) score += 20;
-  else if (assertions.assertionDensity >= 0.5) score += 10;
+  if (assertions.assertionDensity >= 2) score += 25;
+  else if (assertions.assertionDensity >= 1) score += 15;
+  else if (assertions.assertionDensity >= 0.5) score += 8;
 
   // Empty tests penalty (max -10)
   if (assertions.totalTests > 0) {
@@ -650,20 +893,41 @@ function computeTrustScore(assertions, coverage, mutations, antiPatterns) {
     score -= Math.round(emptyRatio * 10);
   }
 
-  // Coverage (max 30 points)
+  // Coverage (max 25 points)
   if (coverage && !coverage.error) {
-    score += Math.round(coverage.lines * 0.15); // Up to 15 points
-    score += Math.round(coverage.branches * 0.10); // Up to 10 points
-    score += Math.round(coverage.functions * 0.05); // Up to 5 points
+    score += Math.round(coverage.lines * 0.13); // Up to 13 points
+    score += Math.round(coverage.branches * 0.08); // Up to 8 points
+    score += Math.round(coverage.functions * 0.04); // Up to 4 points
   } else {
-    score += 15; // Neutral if no coverage data
+    score += 13; // Neutral if no coverage data
   }
 
   // Mutation score (max 25 points)
   if (mutations && mutations.mutationsTotal > 0) {
     score += Math.round(mutations.mutationScore * 0.25);
   } else {
-    score += 15; // Neutral if no mutation data
+    score += 13; // Neutral if no mutation data
+  }
+
+  // Test diversity (max 15 points)
+  // @cap-decision Diversity rewards error-path and edge-case testing — adversarial mindset is scored.
+  if (diversity && diversity.totalTests > 0) {
+    // 30%+ diverse tests = full marks, linear scale below that
+    const ratio = diversity.diversityRatio;
+    if (ratio >= 0.30) score += 15;
+    else if (ratio >= 0.20) score += 12;
+    else if (ratio >= 0.10) score += 8;
+    else if (ratio > 0) score += 4;
+  } else {
+    score += 8; // Neutral if no diversity data
+  }
+
+  // Critical path coverage (max 10 points)
+  // @cap-decision Critical path coverage rewards testing the most important code paths (auth, security, payment).
+  if (criticalPath && criticalPath.criticalFiles > 0) {
+    score += Math.round(criticalPath.score * 0.10);
+  } else {
+    score += 5; // Neutral if no critical paths detected
   }
 
   // Anti-pattern penalty (max -15)
@@ -689,7 +953,20 @@ function generateAuditReport(projectRoot, options = {}) {
   const runCoverage = options.coverage !== false;
   const runMutations = options.mutations !== false;
   const mutationCount = options.mutationCount || 10;
-  const targetFiles = options.targetFiles || [];
+  let targetFiles = options.targetFiles || [];
+
+  // @cap-decision Auto-discover mutation target files when none explicitly provided.
+  // Scans cap/bin/lib/*.cjs as default targets for mutation testing.
+  if (targetFiles.length === 0 && runMutations) {
+    const libDir = path.join(projectRoot, 'cap', 'bin', 'lib');
+    if (fs.existsSync(libDir)) {
+      try {
+        targetFiles = fs.readdirSync(libDir)
+          .filter(f => f.endsWith('.cjs') && !f.includes('.test.'))
+          .map(f => path.join('cap', 'bin', 'lib', f));
+      } catch (_e) { /* ignore */ }
+    }
+  }
 
   // Step 1: Assertion analysis (always runs)
   const assertions = analyzeAssertions(projectRoot, {
@@ -722,8 +999,19 @@ function generateAuditReport(projectRoot, options = {}) {
     extensions: options.extensions,
   });
 
-  // Step 6: Trust score
-  const trustScore = computeTrustScore(assertions, coverage, mutations, antiPatterns);
+  // Step 6: Test diversity
+  const diversity = analyzeTestDiversity(projectRoot, {
+    extensions: options.extensions,
+  });
+
+  // Step 7: Critical path coverage
+  const criticalPath = analyzeCriticalPathCoverage(projectRoot, {
+    criticalPaths,
+    extensions: options.extensions,
+  });
+
+  // Step 8: Trust score
+  const trustScore = computeTrustScore(assertions, coverage, mutations, antiPatterns, diversity, criticalPath);
 
   return {
     timestamp: new Date().toISOString(),
@@ -733,6 +1021,8 @@ function generateAuditReport(projectRoot, options = {}) {
     mutations,
     spotChecks,
     antiPatterns,
+    diversity,
+    criticalPath,
     trustScore,
   };
 }
@@ -814,6 +1104,28 @@ function formatAuditReport(report, projectName = 'project') {
     for (const flag of report.antiPatterns.flags) {
       lines.push(`  ${flag.severity.toUpperCase()} ${flag.file}:${flag.line} -- ${flag.description}`);
     }
+    lines.push('');
+  }
+
+  // Critical path coverage
+  if (report.criticalPath) {
+    lines.push('CRITICAL PATH COVERAGE');
+    lines.push(`  Score: ${report.criticalPath.score}%`);
+    lines.push(`  Critical files: ${report.criticalPath.criticalFiles}`);
+    lines.push(`  With tests: ${report.criticalPath.testedFiles} (${report.criticalPath.wellTestedFiles} well-tested)`);
+    if (report.criticalPath.untestedPaths.length > 0) {
+      lines.push(`  UNTESTED: ${report.criticalPath.untestedPaths.join(', ')}`);
+    }
+    lines.push('');
+  }
+
+  // Test diversity
+  if (report.diversity) {
+    lines.push('TEST DIVERSITY');
+    lines.push(`  Score: ${report.diversity.diversityScore}%`);
+    lines.push(`  Error-path tests: ${report.diversity.errorPathTests} / ${report.diversity.totalTests}`);
+    lines.push(`  Edge-case tests: ${report.diversity.edgeCaseTests} / ${report.diversity.totalTests}`);
+    lines.push(`  Happy-path only: ${report.diversity.happyPathOnlyTests} / ${report.diversity.totalTests}`);
     lines.push('');
   }
 
@@ -913,6 +1225,32 @@ function generateImprovementSuggestions(report) {
     }
   }
 
+  // Critical path coverage
+  if (report.criticalPath && report.criticalPath.score < 80) {
+    const currentPts = Math.round(report.criticalPath.score * 0.10);
+    const gain = Math.max(0, 10 - currentPts);
+    if (gain > 0) {
+      suggestions.push({
+        title: 'Improve critical path test coverage',
+        points: gain,
+        action: `${report.criticalPath.untestedPaths.length} critical file(s) have no tests: ${report.criticalPath.untestedPaths.slice(0, 3).join(', ')}. Add dedicated test files for these security/auth/payment paths.`,
+      });
+    }
+  }
+
+  // Test diversity
+  if (report.diversity && report.diversity.diversityRatio < 0.30) {
+    const currentPts = report.diversity.diversityRatio >= 0.20 ? 12 : report.diversity.diversityRatio >= 0.10 ? 8 : report.diversity.diversityRatio > 0 ? 4 : 0;
+    const gain = 15 - currentPts;
+    if (gain > 0) {
+      suggestions.push({
+        title: 'Increase test diversity',
+        points: gain,
+        action: `Only ${report.diversity.diversityRatio * 100}% of tests cover error paths or edge cases (target: 30%+). Add tests for: null/undefined inputs, invalid data, timeouts, boundary values, error throwing.`,
+      });
+    }
+  }
+
   // Anti-patterns
   if (report.antiPatterns && report.antiPatterns.flags.length > 0) {
     const errors = report.antiPatterns.flags.filter(f => f.severity === 'error');
@@ -938,6 +1276,8 @@ function generateImprovementSuggestions(report) {
 module.exports = {
   analyzeAssertions,
   analyzeCoverage,
+  analyzeTestDiversity,
+  analyzeCriticalPathCoverage,
   runMutationTests,
   generateSpotChecks,
   detectAntiPatterns,
@@ -949,6 +1289,9 @@ module.exports = {
   applyMutation,
   ASSERTION_PATTERNS,
   WEAK_ASSERTION_PATTERNS,
+  ERROR_PATH_PATTERNS,
+  EDGE_CASE_PATTERNS,
+  DEFAULT_CRITICAL_PATHS,
   MUTATION_OPERATORS,
   DEFAULT_TEST_EXTENSIONS,
 };

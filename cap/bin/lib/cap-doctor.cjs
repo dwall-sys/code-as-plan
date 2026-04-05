@@ -18,7 +18,10 @@ const os = require('node:os');
 // cap/bin/lib/, it must be added here. This is intentional: an explicit manifest catches accidental deletions.
 const CAP_MODULE_MANIFEST = [
   'arc-scanner.cjs',
+  'cap-affinity-engine.cjs',
   'cap-annotation-writer.cjs',
+  'cap-cluster-detect.cjs',
+  'cap-cluster-display.cjs',
   'cap-divergence-detector.cjs',
   'cap-doctor.cjs',
   'cap-feature-map.cjs',
@@ -28,6 +31,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-memory-engine.cjs',
   'cap-memory-graph.cjs',
   'cap-migrate.cjs',
+  'cap-realtime-affinity.cjs',
+  'cap-semantic-pipeline.cjs',
   'cap-session-extract.cjs',
   'cap-session.cjs',
   'cap-stack-docs.cjs',

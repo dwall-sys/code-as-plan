@@ -18,6 +18,7 @@ const {
   initAppPlanning,
   buildMonorepoContext,
   resolveRelevantManifests,
+  loadGlobalContextRefs,
   scopeExtractTags,
 } = require('../cap/bin/lib/monorepo-context.cjs');
 
@@ -152,5 +153,116 @@ describe('resolveRelevantManifests', () => {
     const result = resolveRelevantManifests(manifestsDir, appDir, []);
     assert.strictEqual(result.length, 1);
     assert.ok(result[0].endsWith('acme__ui.md'));
+  });
+
+  it('returns empty when manifestsDir does not exist', () => {
+    const root = makeTmpDir();
+    const appDir = path.join(root, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+
+    const result = resolveRelevantManifests(path.join(root, 'nonexistent'), appDir, []);
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('uses knownDeps when package.json is missing', () => {
+    const root = makeTmpDir();
+    const manifestsDir = path.join(root, '.planning', 'manifests');
+    fs.mkdirSync(manifestsDir, { recursive: true });
+    fs.writeFileSync(path.join(manifestsDir, 'shared-utils.md'), '# shared-utils\n', 'utf-8');
+
+    const appDir = path.join(root, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+    // No package.json in appDir
+
+    const result = resolveRelevantManifests(manifestsDir, appDir, ['shared-utils']);
+    assert.strictEqual(result.length, 1);
+    assert.ok(result[0].endsWith('shared-utils.md'));
+  });
+
+  it('handles unreadable manifestsDir gracefully', () => {
+    const root = makeTmpDir();
+    // Create a file (not directory) at manifests path to cause readdirSync to throw
+    const manifestsDir = path.join(root, '.planning', 'manifests');
+    fs.mkdirSync(path.dirname(manifestsDir), { recursive: true });
+    fs.writeFileSync(manifestsDir, 'not a directory', 'utf-8');
+
+    const appDir = path.join(root, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeJson(path.join(appDir, 'package.json'), {
+      dependencies: { '@acme/ui': 'workspace:*' },
+    });
+
+    const result = resolveRelevantManifests(manifestsDir, appDir, []);
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('also picks up devDependencies with workspace: protocol', () => {
+    const root = makeTmpDir();
+    const manifestsDir = path.join(root, '.planning', 'manifests');
+    fs.mkdirSync(manifestsDir, { recursive: true });
+    fs.writeFileSync(path.join(manifestsDir, 'test-utils.md'), '# test-utils\n', 'utf-8');
+
+    const appDir = path.join(root, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeJson(path.join(appDir, 'package.json'), {
+      devDependencies: { 'test-utils': 'workspace:^' },
+    });
+
+    const result = resolveRelevantManifests(manifestsDir, appDir, []);
+    assert.strictEqual(result.length, 1);
+  });
+});
+
+// ── loadGlobalContextRefs ─────────────────────────────────────────────────
+
+describe('loadGlobalContextRefs', () => {
+  it('detects PROJECT.md and extracts summary', () => {
+    const root = makeTmpDir();
+    const planDir = path.join(root, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+    fs.writeFileSync(path.join(planDir, 'PROJECT.md'), '# My Project\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\n', 'utf-8');
+
+    const refs = loadGlobalContextRefs(planDir);
+    assert.strictEqual(refs.hasProject, true);
+    assert.ok(refs.projectSummary.includes('# My Project'));
+    assert.ok(refs.projectSummary.includes('Line 5'));
+    // Line 6 should NOT be included (only first 5 lines)
+    assert.ok(!refs.projectSummary.includes('Line 6'));
+  });
+
+  it('detects ROADMAP.md and REQUIREMENTS.md', () => {
+    const root = makeTmpDir();
+    const planDir = path.join(root, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+    fs.writeFileSync(path.join(planDir, 'ROADMAP.md'), '# Roadmap\n', 'utf-8');
+    fs.writeFileSync(path.join(planDir, 'REQUIREMENTS.md'), '# Reqs\n', 'utf-8');
+
+    const refs = loadGlobalContextRefs(planDir);
+    assert.strictEqual(refs.hasRoadmap, true);
+    assert.strictEqual(refs.hasRequirements, true);
+  });
+
+  it('returns false flags when files are missing', () => {
+    const root = makeTmpDir();
+    const planDir = path.join(root, '.planning');
+    fs.mkdirSync(planDir, { recursive: true });
+
+    const refs = loadGlobalContextRefs(planDir);
+    assert.strictEqual(refs.hasProject, false);
+    assert.strictEqual(refs.hasRoadmap, false);
+    assert.strictEqual(refs.hasRequirements, false);
+    assert.strictEqual(refs.projectSummary, null);
+  });
+
+  it('handles PROJECT.md that is a directory (unreadable as file)', () => {
+    const root = makeTmpDir();
+    const planDir = path.join(root, '.planning');
+    // Create PROJECT.md as a directory so readFileSync throws
+    fs.mkdirSync(path.join(planDir, 'PROJECT.md'), { recursive: true });
+
+    const refs = loadGlobalContextRefs(planDir);
+    assert.strictEqual(refs.hasProject, true);
+    // projectSummary should be null because readFileSync throws on a directory
+    assert.strictEqual(refs.projectSummary, null);
   });
 });

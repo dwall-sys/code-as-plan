@@ -23,6 +23,7 @@ const {
   getStatus,
   initAppFeatureMap,
   listAppFeatureMaps,
+  rescopeFeatures,
 } = require('../cap/bin/lib/cap-feature-map.cjs');
 
 let tmpDir;
@@ -727,6 +728,20 @@ describe('listAppFeatureMaps', () => {
     const results = listAppFeatureMaps(tmpDir);
     assert.strictEqual(results.length, 0);
   });
+
+  it('handles unreadable subdirectories gracefully', () => {
+    // Create a directory and make it unreadable
+    const unreadable = path.join(tmpDir, 'restricted');
+    fs.mkdirSync(unreadable);
+    fs.chmodSync(unreadable, 0o000);
+    try {
+      const results = listAppFeatureMaps(tmpDir);
+      assert.ok(Array.isArray(results), 'Should return array even with unreadable dirs');
+    } finally {
+      // Restore permissions for cleanup
+      fs.chmodSync(unreadable, 0o755);
+    }
+  });
 });
 
 // --- App-scoped addFeature tests ---
@@ -741,5 +756,135 @@ describe('addFeature with appPath', () => {
     const result = readFeatureMap(tmpDir, 'apps/flow');
     assert.strictEqual(result.features.length, 1);
     assert.strictEqual(result.features[0].title, 'Flow login');
+  });
+});
+
+// --- enrichFromDeps error branches ---
+
+describe('enrichFromDeps error branches', () => {
+  it('handles malformed package.json gracefully', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{ this is not json }');
+    const result = enrichFromDeps(tmpDir);
+    assert.deepStrictEqual(result.dependencies, []);
+    assert.deepStrictEqual(result.devDependencies, []);
+  });
+
+  it('handles unreadable .env gracefully', () => {
+    // Create .env as a directory to trigger read error
+    fs.mkdirSync(path.join(tmpDir, '.env'));
+    const result = enrichFromDeps(tmpDir);
+    assert.deepStrictEqual(result.envVars, []);
+  });
+});
+
+// --- rescopeFeatures ---
+
+describe('rescopeFeatures', () => {
+  function mkFeature(id, title, files) {
+    return { id, title, state: 'planned', acs: [], files: files || [], dependencies: [], metadata: {} };
+  }
+
+  it('returns zeros when no features exist', () => {
+    writeFeatureMap(tmpDir, { features: [], lastScan: null });
+    const result = rescopeFeatures(tmpDir, ['apps/flow']);
+    assert.strictEqual(result.appsCreated, 0);
+    assert.strictEqual(result.featuresDistributed, 0);
+    assert.strictEqual(result.featuresKeptAtRoot, 0);
+    assert.deepStrictEqual(result.distribution, {});
+  });
+
+  it('keeps features with no files at root', () => {
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'No files', [])], lastScan: null });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    const result = rescopeFeatures(tmpDir, ['apps/flow']);
+    assert.strictEqual(result.featuresKeptAtRoot, 1);
+    assert.strictEqual(result.featuresDistributed, 0);
+  });
+
+  it('distributes features to the correct app based on file refs', () => {
+    const features = [
+      mkFeature('F-001', 'Flow feature', ['apps/flow/src/index.js']),
+      mkFeature('F-002', 'Hub feature', ['apps/hub/src/main.js']),
+    ];
+    writeFeatureMap(tmpDir, { features, lastScan: null });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'hub'), { recursive: true });
+    const result = rescopeFeatures(tmpDir, ['apps/flow', 'apps/hub']);
+    assert.strictEqual(result.appsCreated, 2);
+    assert.strictEqual(result.featuresDistributed, 2);
+    assert.ok(result.distribution['apps/flow'], 'Should have apps/flow distribution');
+    assert.ok(result.distribution['apps/hub'], 'Should have apps/hub distribution');
+  });
+
+  it('assigns cross-app features to the app with most file refs', () => {
+    const features = [
+      mkFeature('F-001', 'Cross-app', ['apps/flow/a.js', 'apps/flow/b.js', 'apps/hub/c.js']),
+    ];
+    writeFeatureMap(tmpDir, { features, lastScan: null });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'hub'), { recursive: true });
+    const result = rescopeFeatures(tmpDir, ['apps/flow', 'apps/hub']);
+    assert.strictEqual(result.featuresDistributed, 1);
+    assert.deepStrictEqual(result.distribution['apps/flow'], ['F-001']);
+  });
+
+  it('keeps features whose files do not match any app at root', () => {
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'Unknown', ['lib/utils.js'])], lastScan: null });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    const result = rescopeFeatures(tmpDir, ['apps/flow']);
+    assert.strictEqual(result.featuresKeptAtRoot, 1);
+    assert.strictEqual(result.featuresDistributed, 0);
+  });
+
+  it('dry run reports without writing files', () => {
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'Flow feature', ['apps/flow/src/index.js'])], lastScan: null });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    const result = rescopeFeatures(tmpDir, ['apps/flow'], { dryRun: true });
+    assert.strictEqual(result.appsCreated, 1);
+    assert.strictEqual(result.featuresDistributed, 1);
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'apps', 'flow', 'FEATURE-MAP.md')));
+  });
+
+  it('does not duplicate features already in app Feature Map', () => {
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'Flow feature', ['apps/flow/src/index.js'])], lastScan: null });
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'Existing', [])], lastScan: null }, 'apps/flow');
+    const result = rescopeFeatures(tmpDir, ['apps/flow']);
+    assert.strictEqual(result.featuresDistributed, 0);
+    const appMap = readFeatureMap(tmpDir, 'apps/flow');
+    assert.strictEqual(appMap.features.length, 1);
+  });
+
+  it('rewrites root Feature Map to contain only root features', () => {
+    const features = [
+      mkFeature('F-001', 'Flow feature', ['apps/flow/src/a.js']),
+      mkFeature('F-002', 'Root only', []),
+    ];
+    writeFeatureMap(tmpDir, { features, lastScan: null });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    rescopeFeatures(tmpDir, ['apps/flow']);
+    const rootMap = readFeatureMap(tmpDir);
+    assert.strictEqual(rootMap.features.length, 1);
+    assert.strictEqual(rootMap.features[0].id, 'F-002');
+  });
+
+  it('skips apps whose directory does not exist', () => {
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'Ghost app', ['apps/ghost/src/x.js'])], lastScan: null });
+    const result = rescopeFeatures(tmpDir, ['apps/ghost']);
+    assert.strictEqual(result.appsCreated, 0);
+  });
+
+  it('re-numbers features for app starting after existing ones', () => {
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'New flow', ['apps/flow/src/x.js'])], lastScan: null });
+    const appDir = path.join(tmpDir, 'apps', 'flow');
+    fs.mkdirSync(appDir, { recursive: true });
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-001', 'Pre-existing', [])], lastScan: null }, 'apps/flow');
+    // The new feature has a different ID so it won't be skipped
+    writeFeatureMap(tmpDir, { features: [mkFeature('F-099', 'New flow', ['apps/flow/src/x.js'])], lastScan: null });
+    rescopeFeatures(tmpDir, ['apps/flow']);
+    const appMap = readFeatureMap(tmpDir, 'apps/flow');
+    assert.strictEqual(appMap.features.length, 2);
+    assert.strictEqual(appMap.features[1].id, 'F-002');
   });
 });

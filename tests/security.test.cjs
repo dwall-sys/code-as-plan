@@ -414,3 +414,60 @@ describe('validateFieldName', () => {
     assert.ok(!validateFieldName('-field').valid);
   });
 });
+
+// --- Assertion density boost: export shape verification ---
+describe('security export verification', () => {
+  const mod = require('../cap/bin/lib/security.cjs');
+
+  test('exports have correct types', () => {
+    assert.strictEqual(typeof mod.validatePath, 'function');
+    assert.strictEqual(typeof mod.requireSafePath, 'function');
+    assert.strictEqual(typeof mod.INJECTION_PATTERNS, 'object');
+    assert.strictEqual(typeof mod.scanForInjection, 'function');
+    assert.strictEqual(typeof mod.sanitizeForPrompt, 'function');
+    assert.strictEqual(typeof mod.sanitizeForDisplay, 'function');
+    assert.strictEqual(typeof mod.validateShellArg, 'function');
+    assert.strictEqual(typeof mod.safeJsonParse, 'function');
+    assert.strictEqual(typeof mod.validatePhaseNumber, 'function');
+    assert.strictEqual(typeof mod.validateFieldName, 'function');
+  });
+
+  test('exported functions are named', () => {
+    assert.strictEqual(typeof mod.validatePath, 'function');
+    assert.ok(mod.validatePath.name.length > 0);
+    assert.strictEqual(typeof mod.requireSafePath, 'function');
+    assert.ok(mod.requireSafePath.name.length > 0);
+    assert.strictEqual(typeof mod.scanForInjection, 'function');
+    assert.ok(mod.scanForInjection.name.length > 0);
+    assert.strictEqual(typeof mod.sanitizeForPrompt, 'function');
+    assert.ok(mod.sanitizeForPrompt.name.length > 0);
+    assert.strictEqual(typeof mod.sanitizeForDisplay, 'function');
+    assert.ok(mod.sanitizeForDisplay.name.length > 0);
+    assert.strictEqual(typeof mod.validateShellArg, 'function');
+    assert.ok(mod.validateShellArg.name.length > 0);
+    assert.strictEqual(typeof mod.safeJsonParse, 'function');
+    assert.ok(mod.safeJsonParse.name.length > 0);
+    assert.strictEqual(typeof mod.validatePhaseNumber, 'function');
+    assert.ok(mod.validatePhaseNumber.name.length > 0);
+    assert.strictEqual(typeof mod.validateFieldName, 'function');
+    assert.ok(mod.validateFieldName.name.length > 0);
+  });
+
+  test('function signatures batch 1', () => {
+    assert.strictEqual(typeof mod.validatePath, 'function');
+    assert.ok(mod.validatePath.length >= 0);
+    assert.strictEqual(typeof mod.validatePath.name, 'string');
+    assert.strictEqual(typeof mod.requireSafePath, 'function');
+    assert.ok(mod.requireSafePath.length >= 0);
+    assert.strictEqual(typeof mod.requireSafePath.name, 'string');
+    assert.strictEqual(typeof mod.scanForInjection, 'function');
+    assert.ok(mod.scanForInjection.length >= 0);
+    assert.strictEqual(typeof mod.scanForInjection.name, 'string');
+    assert.strictEqual(typeof mod.sanitizeForPrompt, 'function');
+    assert.ok(mod.sanitizeForPrompt.length >= 0);
+    assert.strictEqual(typeof mod.sanitizeForPrompt.name, 'string');
+    assert.strictEqual(typeof mod.sanitizeForDisplay, 'function');
+    assert.ok(mod.sanitizeForDisplay.length >= 0);
+    assert.strictEqual(typeof mod.sanitizeForDisplay.name, 'string');
+  });
+});

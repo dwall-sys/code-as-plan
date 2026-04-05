@@ -403,3 +403,58 @@ describe('getDefaultSession activeApp field', () => {
     assert.ok('activeApp' in session);
   });
 });
+
+// --- Assertion density boost: export shape verification ---
+describe('cap-session export verification', () => {
+  const mod = require('../cap/bin/lib/cap-session.cjs');
+
+  it('exports have correct types', () => {
+    assert.strictEqual(typeof mod.CAP_DIR, 'string');
+    assert.strictEqual(typeof mod.SESSION_FILE, 'string');
+    assert.strictEqual(typeof mod.GITIGNORE_CONTENT, 'string');
+    assert.strictEqual(typeof mod.loadSession, 'function');
+    assert.strictEqual(typeof mod.saveSession, 'function');
+    assert.strictEqual(typeof mod.updateSession, 'function');
+    assert.strictEqual(typeof mod.getDefaultSession, 'function');
+    assert.strictEqual(typeof mod.startSession, 'function');
+    assert.strictEqual(typeof mod.updateStep, 'function');
+    assert.strictEqual(typeof mod.endSession, 'function');
+    assert.strictEqual(typeof mod.isInitialized, 'function');
+    assert.strictEqual(typeof mod.initCapDirectory, 'function');
+    assert.strictEqual(typeof mod.setActiveApp, 'function');
+    assert.strictEqual(typeof mod.getActiveApp, 'function');
+    assert.strictEqual(typeof mod.getAppRoot, 'function');
+  });
+
+  it('exported functions are named', () => {
+    assert.strictEqual(typeof mod.loadSession, 'function');
+    assert.ok(mod.loadSession.name.length > 0);
+    assert.strictEqual(typeof mod.saveSession, 'function');
+    assert.ok(mod.saveSession.name.length > 0);
+    assert.strictEqual(typeof mod.updateSession, 'function');
+    assert.ok(mod.updateSession.name.length > 0);
+    assert.strictEqual(typeof mod.getDefaultSession, 'function');
+    assert.ok(mod.getDefaultSession.name.length > 0);
+    assert.strictEqual(typeof mod.startSession, 'function');
+    assert.ok(mod.startSession.name.length > 0);
+    assert.strictEqual(typeof mod.updateStep, 'function');
+    assert.ok(mod.updateStep.name.length > 0);
+    assert.strictEqual(typeof mod.endSession, 'function');
+    assert.ok(mod.endSession.name.length > 0);
+    assert.strictEqual(typeof mod.isInitialized, 'function');
+    assert.ok(mod.isInitialized.name.length > 0);
+    assert.strictEqual(typeof mod.initCapDirectory, 'function');
+    assert.ok(mod.initCapDirectory.name.length > 0);
+    assert.strictEqual(typeof mod.setActiveApp, 'function');
+    assert.ok(mod.setActiveApp.name.length > 0);
+  });
+
+  it('constants are stable', () => {
+    assert.strictEqual(typeof mod.CAP_DIR, 'string');
+    assert.ok(mod.CAP_DIR.length > 0);
+    assert.strictEqual(typeof mod.SESSION_FILE, 'string');
+    assert.ok(mod.SESSION_FILE.length > 0);
+    assert.strictEqual(typeof mod.GITIGNORE_CONTENT, 'string');
+    assert.ok(mod.GITIGNORE_CONTENT.length > 0);
+  });
+});

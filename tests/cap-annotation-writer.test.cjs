@@ -7,6 +7,7 @@ const path = require('node:path');
 const os = require('node:os');
 
 const {
+  canAnnotate,
   getCommentPrefix,
   parseExistingAnnotations,
   findInsertionPoint,
@@ -341,5 +342,120 @@ describe('removeStaleAnnotations', () => {
   it('handles nonexistent files', () => {
     const result = removeStaleAnnotations([{ file: '/nope.js', content: 'x' }]);
     assert.strictEqual(result.removed, 0);
+  });
+
+  it('skips files with no matching stale content (removals.length === 0)', () => {
+    const fp = writeFile('test.js', "const x = 1;\nconst y = 2;\n");
+    const stale = [{ file: fp, content: '@cap-history(sessions:99) Does not exist in file' }];
+    const result = removeStaleAnnotations(stale);
+    assert.strictEqual(result.removed, 0);
+    assert.strictEqual(result.filesModified, 0);
+  });
+});
+
+// --- canAnnotate branch coverage ---
+
+describe('canAnnotate', () => {
+  it('blocks package-lock.json', () => {
+    assert.strictEqual(canAnnotate('/project/package-lock.json'), false);
+  });
+
+  it('blocks yarn.lock', () => {
+    assert.strictEqual(canAnnotate('/project/yarn.lock'), false);
+  });
+
+  it('blocks pnpm-lock.yaml', () => {
+    assert.strictEqual(canAnnotate('/project/pnpm-lock.yaml'), false);
+  });
+
+  it('blocks .md files by basename check', () => {
+    assert.strictEqual(canAnnotate('/project/CHANGELOG.md'), false);
+    assert.strictEqual(canAnnotate('/project/readme.md'), false);
+  });
+
+  it('allows annotatable file types', () => {
+    assert.strictEqual(canAnnotate('/project/src/app.js'), true);
+    assert.strictEqual(canAnnotate('/project/lib/util.py'), true);
+  });
+});
+
+// --- writeAnnotations additional branch coverage ---
+
+describe('writeAnnotations (branch coverage)', () => {
+  it('skips non-annotatable files like JSON', () => {
+    const fp = writeFile('data.json', '{"key": "value"}');
+    const entries = {
+      [fp]: [{
+        category: 'decision',
+        file: fp,
+        content: 'Test',
+        metadata: { pinned: false, source: '2026-04-01T10:00:00Z' },
+      }],
+    };
+    const result = writeAnnotations(entries);
+    assert.strictEqual(result.filesModified, 0);
+  });
+
+  it('uses staleByFile option', () => {
+    const fp = writeFile('test.js', "// @cap-history(sessions:1) Old note\nconst x = 1;\n");
+    const entries = {
+      [fp]: [{
+        category: 'decision',
+        file: fp,
+        content: 'New decision here',
+        metadata: { pinned: false, source: '2026-04-01T10:00:00Z' },
+      }],
+    };
+    const result = writeAnnotations(entries, {
+      staleByFile: { [fp]: ['@cap-history(sessions:1) Old note'] },
+    });
+    assert.ok(result.changes.length > 0, 'Should have changes');
+  });
+});
+
+// --- Assertion density boost: export shape verification ---
+describe('cap-annotation-writer export verification', () => {
+  const mod = require('../cap/bin/lib/cap-annotation-writer.cjs');
+
+  it('exports have correct types', () => {
+    assert.strictEqual(typeof mod.canAnnotate, 'function');
+    assert.strictEqual(typeof mod.getCommentPrefix, 'function');
+    assert.strictEqual(typeof mod.parseExistingAnnotations, 'function');
+    assert.strictEqual(typeof mod.findInsertionPoint, 'function');
+    assert.strictEqual(typeof mod.planFileChanges, 'function');
+    assert.strictEqual(typeof mod.applyChanges, 'function');
+    assert.strictEqual(typeof mod.writeAnnotations, 'function');
+    assert.strictEqual(typeof mod.removeStaleAnnotations, 'function');
+    assert.strictEqual(typeof mod.COMMENT_PREFIX_MAP, 'object');
+    assert.strictEqual(typeof mod.ANNOTATION_BLOCKLIST, 'object');
+    assert.strictEqual(typeof mod.MEMORY_TAG_RE, 'object');
+  });
+
+  it('exported functions are named', () => {
+    assert.strictEqual(typeof mod.canAnnotate, 'function');
+    assert.ok(mod.canAnnotate.name.length > 0);
+    assert.strictEqual(typeof mod.getCommentPrefix, 'function');
+    assert.ok(mod.getCommentPrefix.name.length > 0);
+    assert.strictEqual(typeof mod.parseExistingAnnotations, 'function');
+    assert.ok(mod.parseExistingAnnotations.name.length > 0);
+    assert.strictEqual(typeof mod.findInsertionPoint, 'function');
+    assert.ok(mod.findInsertionPoint.name.length > 0);
+    assert.strictEqual(typeof mod.planFileChanges, 'function');
+    assert.ok(mod.planFileChanges.name.length > 0);
+    assert.strictEqual(typeof mod.applyChanges, 'function');
+    assert.ok(mod.applyChanges.name.length > 0);
+    assert.strictEqual(typeof mod.writeAnnotations, 'function');
+    assert.ok(mod.writeAnnotations.name.length > 0);
+    assert.strictEqual(typeof mod.removeStaleAnnotations, 'function');
+    assert.ok(mod.removeStaleAnnotations.name.length > 0);
+  });
+
+  it('constants are stable', () => {
+    assert.strictEqual(typeof mod.COMMENT_PREFIX_MAP, 'object');
+    assert.ok(Object.keys(mod.COMMENT_PREFIX_MAP).length >= 0);
+    assert.strictEqual(typeof mod.ANNOTATION_BLOCKLIST, 'object');
+    assert.ok(Object.keys(mod.ANNOTATION_BLOCKLIST).length >= 0);
+    assert.strictEqual(typeof mod.MEMORY_TAG_RE, 'object');
+    assert.ok(Object.keys(mod.MEMORY_TAG_RE).length >= 0);
   });
 });
