@@ -18,6 +18,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-tag-scanner.cjs`
+- `.claude/cap/bin/lib/cap-tag-scanner.cjs`
 
 ### F-002: Feature Map Management [shipped]
 
@@ -33,6 +34,7 @@
 **Files:**
 - `cap/bin/lib/cap-feature-map.cjs`
 - `tests/cap-tag-scanner.test.cjs`
+- `.claude/cap/bin/lib/cap-feature-map.cjs`
 
 ### F-003: Session State Management [shipped]
 
@@ -46,6 +48,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-session.cjs`
+- `.claude/cap/bin/lib/cap-session.cjs`
 
 ### F-004: Stack Docs / Context7 Integration [shipped]
 
@@ -59,6 +62,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-stack-docs.cjs`
+- `.claude/cap/bin/lib/cap-stack-docs.cjs`
 
 ### F-005: Doctor Health Check [shipped]
 
@@ -72,6 +76,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-doctor.cjs`
+- `.claude/cap/bin/lib/cap-doctor.cjs`
 
 ### F-006: GSD-to-CAP Migration [shipped]
 
@@ -87,6 +92,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-migrate.cjs`
+- `.claude/cap/bin/lib/cap-migrate.cjs`
 
 ### F-007: Test Audit [shipped]
 
@@ -100,6 +106,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-test-audit.cjs`
+- `.claude/cap/bin/lib/cap-test-audit.cjs`
 
 ### F-008: Multi-Runtime Installer [shipped]
 
@@ -131,6 +138,11 @@
 - `hooks/cap-context-monitor.js`
 - `hooks/cap-workflow-guard.js`
 - `scripts/build-hooks.js`
+- `.claude/hooks/cap-check-update.js`
+- `.claude/hooks/cap-context-monitor.js`
+- `.claude/hooks/cap-prompt-guard.js`
+- `.claude/hooks/cap-statusline.js`
+- `.claude/hooks/cap-workflow-guard.js`
 
 ### F-011: Legacy GSD Modules [shipped]
 
@@ -159,6 +171,21 @@
 - `cap/bin/lib/frontmatter.cjs`
 - `cap/bin/lib/security.cjs`
 - `cap/bin/lib/model-profiles.cjs`
+- `.claude/cap/bin/lib/commands.cjs`
+- `.claude/cap/bin/lib/config.cjs`
+- `.claude/cap/bin/lib/core.cjs`
+- `.claude/cap/bin/lib/frontmatter.cjs`
+- `.claude/cap/bin/lib/init.cjs`
+- `.claude/cap/bin/lib/milestone.cjs`
+- `.claude/cap/bin/lib/model-profiles.cjs`
+- `.claude/cap/bin/lib/phase.cjs`
+- `.claude/cap/bin/lib/roadmap.cjs`
+- `.claude/cap/bin/lib/security.cjs`
+- `.claude/cap/bin/lib/state.cjs`
+- `.claude/cap/bin/lib/template.cjs`
+- `.claude/cap/bin/lib/uat.cjs`
+- `.claude/cap/bin/lib/verify.cjs`
+- `.claude/cap/bin/lib/workstream.cjs`
 
 ### F-012: Monorepo Support [shipped]
 
@@ -176,6 +203,11 @@
 - `cap/bin/lib/monorepo-migrator.cjs`
 - `cap/bin/lib/session-manager.cjs`
 - `cap/bin/lib/manifest-generator.cjs`
+- `.claude/cap/bin/lib/manifest-generator.cjs`
+- `.claude/cap/bin/lib/monorepo-context.cjs`
+- `.claude/cap/bin/lib/monorepo-migrator.cjs`
+- `.claude/cap/bin/lib/session-manager.cjs`
+- `.claude/cap/bin/lib/workspace-detector.cjs`
 
 ### F-013: Convention and Skeleton Generation [shipped]
 
@@ -189,6 +221,9 @@
 - `cap/bin/lib/convention-reader.cjs`
 - `cap/bin/lib/skeleton-generator.cjs`
 - `cap/bin/lib/test-detector.cjs`
+- `.claude/cap/bin/lib/convention-reader.cjs`
+- `.claude/cap/bin/lib/skeleton-generator.cjs`
+- `.claude/cap/bin/lib/test-detector.cjs`
 
 ### F-014: Developer Profiling [shipped]
 
@@ -202,6 +237,8 @@
 **Files:**
 - `cap/bin/lib/profile-pipeline.cjs`
 - `cap/bin/lib/profile-output.cjs`
+- `.claude/cap/bin/lib/profile-output.cjs`
+- `.claude/cap/bin/lib/profile-pipeline.cjs`
 
 ### F-015: Legacy ARC Scanner [shipped]
 
@@ -216,6 +253,8 @@
 **Files:**
 - `cap/bin/lib/arc-scanner.cjs`
 - `cap/bin/lib/feature-aggregator.cjs`
+- `.claude/cap/bin/lib/arc-scanner.cjs`
+- `.claude/cap/bin/lib/feature-aggregator.cjs`
 
 ### F-016: Rename Hook Files to CAP Prefix [shipped]
 
@@ -291,6 +330,7 @@
 **Files:**
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-doctor-integrity.test.cjs`
+- `.claude/cap/bin/lib/cap-doctor.cjs`
 
 ### F-020: Add Resilient Module Loading with Error Recovery [shipped]
 
@@ -308,6 +348,7 @@
 **Files:**
 - `cap/bin/lib/cap-loader.cjs`
 - `tests/cap-loader.test.cjs`
+- `.claude/cap/bin/lib/cap-loader.cjs`
 
 ### F-021: Harden Installer Upgrade Path [shipped]
 
@@ -385,6 +426,7 @@
 **Files:**
 - `cap/bin/lib/cap-session-extract.cjs`
 - `bin/install.js`
+- `.claude/cap/bin/lib/cap-session-extract.cjs`
 
 ### F-026: Implement Cross-Session Aggregation [shipped]
 
@@ -401,6 +443,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-session-extract.cjs`
+- `.claude/cap/bin/lib/cap-session-extract.cjs`
 
 ### F-027: Build Memory Accumulation Engine [planned]
 
@@ -419,6 +462,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-memory-engine.cjs`
+- `.claude/cap/bin/lib/cap-memory-engine.cjs`
 
 ### F-028: Implement Code Annotation Writer [planned]
 
@@ -436,6 +480,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-annotation-writer.cjs`
+- `.claude/cap/bin/lib/cap-annotation-writer.cjs`
 
 ### F-029: Manage Cross-File Memory Directory [planned]
 
@@ -453,6 +498,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-memory-dir.cjs`
+- `.claude/cap/bin/lib/cap-memory-dir.cjs`
 
 ### F-030: Wire Memory Automation Hook and Command [planned]
 
@@ -472,6 +518,7 @@
 **Files:**
 - `hooks/cap-memory.js`
 - `commands/cap/memory.md`
+- `.claude/hooks/cap-memory.js`
 
 ### F-031: Implement Conversation Thread Tracking [shipped]
 
@@ -489,6 +536,8 @@
 
 **Files:**
 - `cap/bin/lib/cap-thread-tracker.cjs`
+- `.claude/cap/bin/lib/cap-thread-tracker.cjs`
+- `cap/bin/lib/cap-thread-migrator.cjs`
 
 ### F-032: Build Thread Reconnection and Synthesis Engine [shipped]
 
@@ -506,6 +555,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-thread-synthesis.cjs`
+- `.claude/cap/bin/lib/cap-thread-synthesis.cjs`
 
 ### F-033: Implement Feature Impact Analysis [shipped]
 
@@ -524,6 +574,7 @@
 
 **Files:**
 - `cap/bin/lib/cap-impact-analysis.cjs`
+- `.claude/cap/bin/lib/cap-impact-analysis.cjs`
 
 ### F-034: Upgrade Memory to Connected Graph Structure [planned]
 
@@ -540,6 +591,10 @@
 | AC-7 | pending | Graph incrementally updatable — adding new session shall not require full graph reconstruction |
 | AC-8 | pending | Graph data git-committable and merge-friendly — sorted keys, one-entry-per-line JSON to minimize merge conflicts |
 
+**Files:**
+- `.claude/cap/bin/lib/cap-memory-graph.cjs`
+- `cap/bin/lib/cap-memory-graph.cjs`
+
 ### F-035: Detect In-Session Topic Divergence During Brainstorm [planned]
 
 **Depends on:** F-031, F-032
@@ -554,6 +609,98 @@
 | AC-6 | pending | At brainstorm end, persist all threads (parent + branches) and update the thread index with branch relationships |
 | AC-7 | pending | Divergence detection shall not interrupt the conversation flow — present as a brief inline suggestion, not a blocking modal |
 
+**Files:**
+- `.claude/cap/bin/lib/cap-divergence-detector.cjs`
+- `cap/bin/lib/cap-divergence-detector.cjs`
+
+### F-036: Implement Multi-Signal Affinity Engine [tested]
+
+**Depends on:** F-034, F-031
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | The module cap-affinity-engine.cjs shall compute a composite affinity score (0.0-1.0) between any two thread nodes in the memory graph by combining up to 8 weighted signal scores |
+| AC-2 | pending | The engine shall support 8 named signals: feature-id-overlap, shared-files, temporal-proximity, causal-chains (realtime); concept-overlap, problem-space-similarity, shared-decisions-deep, transitive-connections (post-session) |
+| AC-3 | pending | Each signal shall return an independent score (0.0-1.0) and a human-readable reason string explaining what drove the score |
+| AC-4 | pending | Signal weights shall be configurable via .cap/config.json under the key affinityWeights with sensible defaults summing to 1.0 |
+| AC-5 | pending | The engine shall classify composite scores into four bands: urgent (>=0.90), notify (0.75-0.89), silent (0.40-0.74), discard (<0.40) — band thresholds configurable via .cap/config.json |
+| AC-6 | pending | Scores in the discard band (<0.40) shall not be persisted to graph.json — all other bands shall be stored as weighted edges with type affinity |
+| AC-7 | pending | The engine shall be a pure logic module with no direct I/O — affinity computation functions take graph data as input and return structured results |
+| AC-8 | pending | The full 8-signal scoring for a single thread pair shall complete within 200ms on a project with up to 100 thread nodes |
+
+**Files:**
+- `cap/bin/lib/cap-affinity-engine.cjs`
+
+### F-037: Build Semantic Analysis Pipeline [tested]
+
+**Depends on:** F-036
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Stage 1 shall compute TF-IDF cosine similarity (weight 0.5) between thread description texts using term-frequency vectors built from thread keywords and AC descriptions |
+| AC-2 | pending | Stage 1 shall compute character N-Gram overlap (weight 0.2) using trigrams to catch partial word matches and typo-resilient similarity |
+| AC-3 | pending | Stage 1 shall compute Jaccard keyword similarity (weight 0.1) over extracted keyword sets from thread metadata |
+| AC-4 | pending | Stage 2 shall maintain an embedded seed taxonomy of 20-30 universal software concepts (e.g., authentication, caching, persistence, validation, routing) as a static array in the module — no external config file |
+| AC-5 | pending | Stage 2 shall build a co-occurrence matrix that auto-learns concept associations from observed thread data and overrides seed weights when sufficient data exists (>=5 co-occurrences) |
+| AC-6 | pending | Stage 2 shall compute concept vector similarity (weight 0.2) by projecting threads into the concept space and measuring cosine distance |
+| AC-7 | pending | Stage 3 shall propagate affinity scores through the memory graph using iterative relaxation (3-5 iterations, damping factor 0.7) to discover transitive connections |
+| AC-8 | pending | The pipeline shall be implemented as cap-semantic-pipeline.cjs, a pure logic module with no I/O — all functions take text/graph data as input and return numeric scores |
+
+**Files:**
+- `cap/bin/lib/cap-semantic-pipeline.cjs`
+
+### F-038: Implement Neural Cluster Detection [tested]
+
+**Depends on:** F-036, F-037, F-034
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | The module cap-cluster-detect.cjs shall perform single-linkage clustering over thread nodes using affinity scores from F-036 as the distance metric, with a configurable linkage threshold (default: 0.40) |
+| AC-2 | pending | Each detected cluster shall receive an auto-generated dynamic label composed of the top 2-3 weighted concepts from the cluster members — labels are ephemeral and recalculated on each run |
+| AC-3 | pending | Divergence-based decay shall be computed post-session using three drift metrics: file-drift (changed files no longer overlap), keyword-drift (thread keywords diverged), and cluster-drift (member affinity scores dropped) |
+| AC-4 | pending | Decay shall reduce affinity edge weights in graph.json but never delete nodes — dormant nodes (all edges below silent threshold) shall remain in the graph with a dormant:true flag |
+| AC-5 | pending | Dormant nodes shall automatically reactivate when a new session produces an affinity score above the silent threshold (>=0.40) with the dormant node |
+| AC-6 | pending | There shall be no time-based decay — only measured divergence (file-drift, keyword-drift, cluster-drift) reduces affinity scores |
+| AC-7 | pending | Cluster membership shall be stored as a computed property on thread nodes in graph.json with cluster ID and membership timestamp |
+| AC-8 | pending | Clustering shall complete within 500ms for a graph with up to 200 nodes and 1000 edges |
+
+**Files:**
+- `cap/bin/lib/cap-cluster-detect.cjs`
+
+### F-039: Implement Realtime Affinity Detection [tested]
+
+**Depends on:** F-036, F-031, F-034
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | During an active session, the 4 realtime signals (feature-id-overlap, shared-files, temporal-proximity, causal-chains) shall be evaluated against all existing threads whenever the active thread context changes |
+| AC-2 | pending | Realtime evaluation of all 4 signals against the full thread index shall complete within 200ms to avoid perceptible session lag |
+| AC-3 | pending | Threads scoring in the urgent band (>=0.90) shall be surfaced as a full context block containing thread name, strongest signal with reasoning, and a load-context offer |
+| AC-4 | pending | Threads scoring in the notify band (0.75-0.89) shall be surfaced as a compact single-line notification with thread name and the single strongest signal |
+| AC-5 | pending | Threads scoring in the silent band (0.40-0.74) shall not produce any visible output — they are only queryable via /cap:status or explicit command |
+| AC-6 | pending | The realtime detector shall integrate with cap-brainstormer at session start and with cap-thread-tracker when thread context is updated mid-session |
+| AC-7 | pending | Realtime affinity results shall be cached in SESSION.json under the key realtimeAffinity so they persist across agent hand-offs within the same session |
+
+**Files:**
+- `cap/bin/lib/cap-realtime-affinity.cjs`
+
+### F-040: Integrate Cluster Commands and Status Extension [tested]
+
+**Depends on:** F-038, F-039
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | /cap:cluster command shall display all detected clusters with their auto-generated labels, member thread names, and intra-cluster affinity scores |
+| AC-2 | pending | /cap:cluster {cluster-label} shall display detailed view of a single cluster: all member threads, their pairwise affinity scores, shared concepts, and drift status |
+| AC-3 | pending | /cap:status shall be extended with a Neural Memory section showing: active cluster count, dormant node count, highest-affinity thread pair, and last clustering timestamp |
+| AC-4 | pending | /cap:start shall passively check realtime affinity and surface urgent/notify threads relevant to the selected feature before session work begins |
+| AC-5 | pending | /cap:brainstorm shall passively check thread affinity at session start and present relevant prior threads (notify band and above) before beginning discovery questions |
+| AC-6 | pending | The /cap:cluster command markdown shall be added to commands/cap/ following existing command file conventions (YAML frontmatter, structured sections) |
+| AC-7 | pending | All cluster display output shall use the existing CAP status formatting conventions (markdown tables, consistent headers) for visual consistency |
+
+**Files:**
+- `cap/bin/lib/cap-cluster-display.cjs`
+
 ## Legend
 
 | State | Meaning |
@@ -564,4 +711,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-03T19:06:07.027Z*
+*Last updated: 2026-04-04T21:28:34.877Z*
