@@ -447,7 +447,7 @@ describe('enrichFromDeps', () => {
   });
 
   it('reads env vars from .env file', () => {
-    fs.writeFileSync(path.join(tmpDir, '.env'), 'DATABASE_URL=postgres://...\nAPI_KEY=abc123\n');
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'DATABASE_URL=test-placeholder\nAPI_KEY=test-placeholder\n');
     const result = enrichFromDeps(tmpDir);
     assert.deepStrictEqual(result.envVars, ['DATABASE_URL', 'API_KEY']);
   });

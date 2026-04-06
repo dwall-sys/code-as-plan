@@ -571,8 +571,8 @@ describe('cmdWriteProfile (direct, additional branches)', () => {
           rating: 'terse-direct',
           confidence: 'HIGH',
           evidence: [
-            { quote: 'Use sk-abcdefghijklmnopqrstuvwxyz to authenticate', signal: 'API key usage' },
-            { example: 'Bearer eyJhbGciOiJIUzI1NiJ9.test', signal: 'Auth token' },
+            { quote: 'Use REDACTED-test-key to authenticate', signal: 'API key usage' },
+            { example: 'Bearer REDACTED-test-token', signal: 'Auth token' },
           ],
         },
         decision_speed: {
