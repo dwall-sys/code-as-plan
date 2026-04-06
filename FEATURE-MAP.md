@@ -684,7 +684,7 @@
 **Files:**
 - `cap/bin/lib/cap-realtime-affinity.cjs`
 
-### F-040: Integrate Cluster Commands and Status Extension [tested]
+### F-040: Integrate Cluster Commands and Status Extension [shipped]
 
 **Depends on:** F-038, F-039
 
@@ -711,4 +711,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-04T21:28:34.877Z*
+*Last updated: 2026-04-06T06:25:54.718Z*
