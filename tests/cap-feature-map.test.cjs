@@ -447,9 +447,9 @@ describe('enrichFromDeps', () => {
   });
 
   it('reads env vars from .env file', () => {
-    fs.writeFileSync(path.join(tmpDir, '.env'), 'DATABASE_URL=test\nAPI_KEY=test\n');
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'CUSTOM_VAR=test\nOTHER_VAR=test\n');
     const result = enrichFromDeps(tmpDir);
-    assert.deepStrictEqual(result.envVars, ['DATABASE_URL', 'API_KEY']);
+    assert.deepStrictEqual(result.envVars, ['CUSTOM_VAR', 'OTHER_VAR']);
   });
 
   it('returns empty arrays when no package.json or .env', () => {
