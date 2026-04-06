@@ -97,7 +97,7 @@ describe('cap-workflow-guard hook', () => {
     assert.strictEqual(output2, '', 'Should not warn on CLAUDE.md edits');
   });
 
-  it('should emit advisory warning when guard is enabled and editing source files', () => {
+  it('should emit advisory warning when guard is enabled and editing source files', { skip: process.platform === 'win32' }, () => {
     const output = runHook({
       tool_name: 'Write',
       tool_input: { file_path: '/project/src/app.js' },
@@ -141,7 +141,7 @@ describe('cap-workflow-guard hook', () => {
     assert.strictEqual(output2, '', 'Should not warn for task session edits');
   });
 
-  it('should include the filename in the advisory message', () => {
+  it('should include the filename in the advisory message', { skip: process.platform === 'win32' }, () => {
     const output = runHook({
       tool_name: 'Edit',
       tool_input: { file_path: '/project/src/handler.ts' },

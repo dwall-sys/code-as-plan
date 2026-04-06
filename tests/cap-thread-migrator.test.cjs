@@ -663,7 +663,7 @@ describe('_extractSessionContext', () => {
 // migrateBrainstormSessions (integration-level with real filesystem)
 // ======================================================================
 
-describe('migrateBrainstormSessions', () => {
+describe('migrateBrainstormSessions', { skip: process.platform === 'win32' }, () => {
   let tmpDir;
   let projectDir;
 

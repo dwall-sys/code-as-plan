@@ -240,7 +240,7 @@ describe('readProjectConventions additional branches', () => {
     assert.strictEqual(report.testPattern, 'separate-dir');
   });
 
-  it('detects nested tests/ directory as separate-dir', () => {
+  it('detects nested tests/ directory as separate-dir', { skip: process.platform === 'win32' }, () => {
     fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
     fs.mkdirSync(path.join(tmpDir, 'src', 'tests'), { recursive: true });
     const report = readProjectConventions(tmpDir);

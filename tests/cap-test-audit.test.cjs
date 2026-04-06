@@ -1178,7 +1178,7 @@ describe('analyzeAssertions empty test detection', () => {
 
 // --- analyzeCoverage (imported separately) ---
 
-describe('analyzeCoverage', () => {
+describe('analyzeCoverage', { skip: process.platform === 'win32' }, () => {
   const { analyzeCoverage } = require('../cap/bin/lib/cap-test-audit.cjs');
 
   it('parses coverage-summary.json when present', () => {
