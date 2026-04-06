@@ -12,6 +12,26 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const config = require('../cap/bin/lib/config.cjs');
+
+/**
+ * Helper: capture output from config functions that call core.output().
+ * core.output() calls fs.writeSync(1, data) — we intercept fd 1 writes.
+ */
+function captureOutput(fn) {
+  const origWriteSync = fs.writeSync;
+  let captured = '';
+  fs.writeSync = (fd, data) => {
+    if (fd === 1) { captured += data; return data.length; }
+    return origWriteSync(fd, data);
+  };
+  try {
+    fn();
+  } finally {
+    fs.writeSync = origWriteSync;
+  }
+  return captured ? JSON.parse(captured) : null;
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -781,5 +801,507 @@ describe('config-set workflow.skip_discuss', () => {
 
     const output = JSON.parse(result.output);
     assert.strictEqual(output, true);
+  });
+});
+
+// ─── config-set JSON array/object values ────────────────────────────────────
+
+describe('config-set JSON value parsing', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('parses JSON array value', () => {
+    const result = runGsdTools(['config-set', 'arc.comment_anchors', '["//","#"]'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.deepStrictEqual(config.arc.comment_anchors, ['//', '#']);
+  });
+
+  test('parses JSON object value', () => {
+    const result = runGsdTools(['config-set', 'arc.comment_anchors', '{"a":1}'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.deepStrictEqual(config.arc.comment_anchors, { a: 1 });
+  });
+
+  test('keeps invalid JSON as string', () => {
+    const result = runGsdTools(['config-set', 'arc.tag_prefix', '{broken'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.arc.tag_prefix, '{broken');
+  });
+
+  test('empty string value is kept as empty string (not coerced to number)', () => {
+    // Empty value "" is not NaN and not '', so it stays as string
+    const result = runGsdTools(['config-set', 'arc.tag_prefix', ''], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.arc.tag_prefix, '');
+  });
+});
+
+// ─── config-set dynamic keys (agent_skills, phase_modes) ────────────────────
+
+describe('config-set dynamic keys', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir);
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('accepts agent_skills.<agent-type> as valid key', () => {
+    const result = runGsdTools('config-set agent_skills.researcher true', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.agent_skills.researcher, true);
+  });
+
+  test('accepts phase_modes.<number> as valid key', () => {
+    const result = runGsdTools('config-set phase_modes.3 code-first', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.phase_modes['3'], 'code-first');
+  });
+});
+
+// ─── config-set-model-profile raw output message ────────────────────────────
+
+describe('config-set-model-profile raw output', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('raw output shows "was:" when profile changes', () => {
+    // First set to quality, capturing raw output
+    const result = runGsdTools('config-set-model-profile quality --raw', tmpDir);
+    // Whether raw or JSON, it should succeed
+    assert.ok(result.success, `Command failed: ${result.error}`);
+  });
+
+  test('setting same profile shows "already set"', () => {
+    // Set to balanced (which is the default), then set again
+    const result = runGsdTools('config-set-model-profile balanced', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const out = JSON.parse(result.output);
+    assert.strictEqual(out.profile, 'balanced');
+    assert.strictEqual(out.previousProfile, 'balanced');
+  });
+});
+
+// ─── buildNewProjectConfig depth migration ──────────────────────────────────
+
+describe('buildNewProjectConfig depth migration', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('migrates deprecated depth key to granularity in defaults.json', () => {
+    const gsdDir = path.join(tmpDir, '.gsd');
+    fs.mkdirSync(gsdDir, { recursive: true });
+    fs.writeFileSync(path.join(gsdDir, 'defaults.json'), JSON.stringify({
+      depth: 'comprehensive',
+    }), 'utf-8');
+
+    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.granularity, 'fine', 'comprehensive should map to fine');
+
+    // Verify the defaults.json was also updated
+    const updatedDefaults = JSON.parse(fs.readFileSync(path.join(gsdDir, 'defaults.json'), 'utf-8'));
+    assert.strictEqual(updatedDefaults.granularity, 'fine');
+    assert.strictEqual(updatedDefaults.depth, undefined, 'depth key should be removed');
+  });
+
+  test('detects firecrawl key from file', () => {
+    const gsdDir = path.join(tmpDir, '.gsd');
+    fs.mkdirSync(gsdDir, { recursive: true });
+    fs.writeFileSync(path.join(gsdDir, 'firecrawl_api_key'), 'test-key', 'utf-8');
+
+    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const config = readConfig(tmpDir);
+    assert.strictEqual(config.firecrawl, true);
+  });
+
+  test('detects exa_search key from file', () => {
+    const gsdDir = path.join(tmpDir, '.gsd');
+    fs.mkdirSync(gsdDir, { recursive: true });
+    fs.writeFileSync(path.join(gsdDir, 'exa_api_key'), 'test-key', 'utf-8');
+
+    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const cfg = readConfig(tmpDir);
+    assert.strictEqual(cfg.exa_search, true);
+  });
+});
+
+// ─── Direct unit tests (for c8 branch coverage) ────────────────────────────
+
+describe('config direct unit tests — buildNewProjectConfig', () => {
+  let origHome;
+
+  beforeEach(() => {
+    origHome = process.env.HOME;
+    // Sandbox HOME to prevent user defaults from interfering
+    const tmpHome = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cfg-home-'));
+    process.env.HOME = tmpHome;
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+  });
+
+  test('returns full config with all sections', () => {
+    const cfg = config.buildNewProjectConfig({});
+    assert.strictEqual(cfg.model_profile, 'balanced');
+    assert.strictEqual(cfg.commit_docs, true);
+    assert.ok(cfg.git && typeof cfg.git === 'object');
+    assert.ok(cfg.workflow && typeof cfg.workflow === 'object');
+    assert.ok(cfg.hooks && typeof cfg.hooks === 'object');
+    assert.ok(cfg.arc && typeof cfg.arc === 'object');
+    assert.strictEqual(cfg.default_phase_mode, 'plan-first');
+  });
+
+  test('user choices override hardcoded defaults', () => {
+    const cfg = config.buildNewProjectConfig({
+      mode: 'yolo',
+      model_profile: 'quality',
+      workflow: { research: false },
+      git: { branching_strategy: 'phase' },
+    });
+    assert.strictEqual(cfg.mode, 'yolo');
+    assert.strictEqual(cfg.model_profile, 'quality');
+    assert.strictEqual(cfg.workflow.research, false);
+    assert.strictEqual(cfg.workflow.plan_check, true); // preserved default
+    assert.strictEqual(cfg.git.branching_strategy, 'phase');
+    assert.strictEqual(cfg.git.phase_branch_template, 'gsd/phase-{phase}-{slug}'); // preserved default
+  });
+
+  test('handles null/undefined choices', () => {
+    const cfg = config.buildNewProjectConfig(null);
+    assert.strictEqual(cfg.model_profile, 'balanced');
+  });
+});
+
+describe('config direct unit tests — setConfigValue', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    // Create a minimal config
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ model_profile: 'balanced', workflow: { research: true } }, null, 2)
+    );
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('sets a top-level value', () => {
+    const result = config.setConfigValue(tmpDir, 'model_profile', 'quality');
+    assert.strictEqual(result.updated, true);
+    assert.strictEqual(result.key, 'model_profile');
+    assert.strictEqual(result.value, 'quality');
+    assert.strictEqual(result.previousValue, 'balanced');
+  });
+
+  test('sets a nested value', () => {
+    const result = config.setConfigValue(tmpDir, 'workflow.research', false);
+    assert.strictEqual(result.updated, true);
+    assert.strictEqual(result.value, false);
+    assert.strictEqual(result.previousValue, true);
+  });
+
+  test('auto-creates intermediate objects for deep paths', () => {
+    const result = config.setConfigValue(tmpDir, 'deep.nested.key', 'value');
+    assert.strictEqual(result.updated, true);
+
+    const cfg = readConfig(tmpDir);
+    assert.strictEqual(cfg.deep.nested.key, 'value');
+  });
+
+  test('creates config from scratch when file does not exist', () => {
+    // Remove config
+    fs.unlinkSync(path.join(tmpDir, '.planning', 'config.json'));
+
+    const result = config.setConfigValue(tmpDir, 'model_profile', 'budget');
+    assert.strictEqual(result.updated, true);
+
+    const cfg = readConfig(tmpDir);
+    assert.strictEqual(cfg.model_profile, 'budget');
+  });
+
+  test('overwrites non-object intermediate value with object', () => {
+    // Set model_profile to a string, then try to use it as parent for nested key
+    config.setConfigValue(tmpDir, 'model_profile', 'balanced');
+    const result = config.setConfigValue(tmpDir, 'model_profile.sub', 'value');
+    assert.strictEqual(result.updated, true);
+
+    const cfg = readConfig(tmpDir);
+    assert.strictEqual(cfg.model_profile.sub, 'value');
+  });
+});
+
+describe('config direct unit tests — cmdConfigEnsureSection', () => {
+  let tmpDir;
+  let origHome;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+    cleanup(tmpDir);
+  });
+
+  test('creates config file when it does not exist', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigEnsureSection(tmpDir, false);
+    });
+    assert.strictEqual(result.created, true);
+  });
+
+  test('returns already_exists when config exists', () => {
+    // Create config first
+    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+
+    const result = captureOutput(() => {
+      config.cmdConfigEnsureSection(tmpDir, false);
+    });
+    assert.strictEqual(result.created, false);
+    assert.strictEqual(result.reason, 'already_exists');
+  });
+});
+
+describe('config direct unit tests — cmdConfigSet', () => {
+  let tmpDir;
+  let origHome;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+    cleanup(tmpDir);
+  });
+
+  test('sets a string value', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'model_profile', 'quality', false);
+    });
+    assert.strictEqual(result.updated, true);
+    assert.strictEqual(result.value, 'quality');
+  });
+
+  test('coerces true to boolean', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'commit_docs', 'true', false);
+    });
+    assert.strictEqual(result.value, true);
+  });
+
+  test('coerces false to boolean', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'commit_docs', 'false', false);
+    });
+    assert.strictEqual(result.value, false);
+  });
+
+  test('coerces numeric string to number', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'granularity', '42', false);
+    });
+    assert.strictEqual(result.value, 42);
+  });
+
+  test('parses JSON array value', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'arc.comment_anchors', '["//","#"]', false);
+    });
+    assert.deepStrictEqual(result.value, ['//', '#']);
+  });
+
+  test('parses JSON object value', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'arc.comment_anchors', '{"a":1}', false);
+    });
+    assert.deepStrictEqual(result.value, { a: 1 });
+  });
+
+  test('keeps malformed JSON as string', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'arc.tag_prefix', '{broken', false);
+    });
+    assert.strictEqual(result.value, '{broken');
+  });
+
+  test('sets nested value via dot notation', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSet(tmpDir, 'workflow.research', 'false', false);
+    });
+    assert.strictEqual(result.value, false);
+  });
+});
+
+describe('config direct unit tests — cmdConfigGet', () => {
+  let tmpDir;
+  let origHome;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+    cleanup(tmpDir);
+  });
+
+  test('gets a top-level value', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigGet(tmpDir, 'model_profile', false);
+    });
+    assert.strictEqual(result, 'balanced');
+  });
+
+  test('gets a nested value', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigGet(tmpDir, 'workflow.research', false);
+    });
+    assert.strictEqual(result, true);
+  });
+});
+
+describe('config direct unit tests — cmdConfigNewProject', () => {
+  let tmpDir;
+  let origHome;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+    cleanup(tmpDir);
+  });
+
+  test('creates config with choices', () => {
+    const choices = JSON.stringify({ mode: 'yolo', granularity: 'fine' });
+    const result = captureOutput(() => {
+      config.cmdConfigNewProject(tmpDir, choices, false);
+    });
+    assert.strictEqual(result.created, true);
+
+    const cfg = readConfig(tmpDir);
+    assert.strictEqual(cfg.mode, 'yolo');
+    assert.strictEqual(cfg.granularity, 'fine');
+  });
+
+  test('is idempotent', () => {
+    captureOutput(() => config.cmdConfigNewProject(tmpDir, '{}', false));
+
+    const result = captureOutput(() => {
+      config.cmdConfigNewProject(tmpDir, '{}', false);
+    });
+    assert.strictEqual(result.created, false);
+    assert.strictEqual(result.reason, 'already_exists');
+  });
+
+  test('handles empty/null choices', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigNewProject(tmpDir, '', false);
+    });
+    assert.strictEqual(result.created, true);
+  });
+});
+
+describe('config direct unit tests — cmdConfigSetModelProfile', () => {
+  let tmpDir;
+  let origHome;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+  });
+
+  afterEach(() => {
+    process.env.HOME = origHome;
+    cleanup(tmpDir);
+  });
+
+  test('sets valid profile and returns agent map', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSetModelProfile(tmpDir, 'quality', false);
+    });
+    assert.strictEqual(result.updated, true);
+    assert.strictEqual(result.profile, 'quality');
+    assert.ok(result.agentToModelMap);
+  });
+
+  test('returns previous profile', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSetModelProfile(tmpDir, 'budget', false);
+    });
+    assert.strictEqual(result.previousProfile, 'balanced');
+    assert.strictEqual(result.profile, 'budget');
+  });
+
+  test('is case-insensitive', () => {
+    const result = captureOutput(() => {
+      config.cmdConfigSetModelProfile(tmpDir, 'BALANCED', false);
+    });
+    assert.strictEqual(result.profile, 'balanced');
   });
 });

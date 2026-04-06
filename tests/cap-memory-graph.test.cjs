@@ -24,6 +24,7 @@ const {
   saveGraph,
   _parseMarkdownEntries,
   _getRelatedFeatureIds,
+  _ingestMemoryFiles,
   GRAPH_FILE,
   GRAPH_VERSION,
   EDGE_TYPES,
@@ -132,7 +133,8 @@ describe('constants', () => {
     assert.ok(EDGE_TYPES.includes('branched_from'));
     assert.ok(EDGE_TYPES.includes('informed_by'));
     assert.ok(EDGE_TYPES.includes('relates_to'));
-    assert.strictEqual(EDGE_TYPES.length, 6);
+    assert.ok(EDGE_TYPES.includes('affinity'));
+    assert.strictEqual(EDGE_TYPES.length, 7);
   });
 
   it('exposes valid node types', () => {
@@ -937,13 +939,13 @@ describe('AC-2 adversarial: edge type validation and edge cases', () => {
     assert.strictEqual(g.edges.length, 1);
   });
 
-  // @cap-todo(ac:F-034/AC-2) All 6 edge types can be created
-  it('supports creating all 6 edge types', () => {
+  // @cap-todo(ac:F-034/AC-2) All edge types can be created
+  it('supports creating all edge types', () => {
     const g = createGraph();
     for (const edgeType of EDGE_TYPES) {
       addEdge(g, makeEdge({ source: 'a', target: 'b', type: edgeType }));
     }
-    assert.strictEqual(g.edges.length, 6);
+    assert.strictEqual(g.edges.length, EDGE_TYPES.length);
     const types = g.edges.map(e => e.type).sort();
     assert.deepStrictEqual(types, [...EDGE_TYPES].sort());
   });
@@ -1470,5 +1472,159 @@ describe('AC-8 adversarial: serialization correctness', () => {
     assert.strictEqual(relatesToEdge.metadata.weight, 42);
     const conflictsEdge = loaded.edges.find(e => e.type === 'conflicts_with');
     assert.strictEqual(conflictsEdge.active, false);
+  });
+});
+
+// --- Branch coverage: buildFromMemory with parentThreadId ---
+describe('buildFromMemory (branch coverage)', () => {
+  it('creates branched_from edge when thread has parentThreadId', () => {
+    const parentId = 'thr-parent01';
+    const childId = 'thr-child02';
+
+    setupProject({
+      threadIndex: {
+        version: '1.0.0',
+        threads: [
+          {
+            id: parentId,
+            name: 'Parent thread',
+            timestamp: '2026-04-01T00:00:00Z',
+            featureIds: [],
+            parentThreadId: null,
+            keywords: [],
+          },
+          {
+            id: childId,
+            name: 'Child thread',
+            timestamp: '2026-04-02T00:00:00Z',
+            featureIds: [],
+            parentThreadId: parentId,
+            keywords: [],
+          },
+        ],
+      },
+    });
+
+    const threadsDir = path.join(tmpDir, '.cap', 'memory', 'threads');
+    fs.writeFileSync(path.join(threadsDir, `${parentId}.json`), JSON.stringify({
+      id: parentId, name: 'Parent thread', timestamp: '2026-04-01T00:00:00Z',
+      problemStatement: 'Parent problem', solutionShape: '', boundaryDecisions: [],
+      featureIds: [], keywords: [],
+    }));
+    fs.writeFileSync(path.join(threadsDir, `${childId}.json`), JSON.stringify({
+      id: childId, name: 'Child thread', timestamp: '2026-04-02T00:00:00Z',
+      problemStatement: 'Child problem', solutionShape: '', boundaryDecisions: [],
+      featureIds: [], keywords: [], parentThreadId: parentId,
+    }));
+
+    const g = buildFromMemory(tmpDir);
+    const branchedEdges = g.edges.filter(e => e.type === 'branched_from');
+    assert.ok(branchedEdges.length >= 1, 'Should have at least one branched_from edge');
+  });
+
+  it('handles features without optional fields (acs, files, dependencies)', () => {
+    // Feature map with minimal features -- triggers || fallbacks
+    setupProject({
+      featureMap: `# Feature Map
+
+> Single source of truth.
+
+## Features
+
+### F-001: Minimal Feature [planned]
+
+## Legend
+`,
+    });
+
+    const g = buildFromMemory(tmpDir);
+    const features = queryByType(g, 'feature');
+    assert.ok(features.length >= 1);
+    const f = features.find(n => n.metadata.featureId === 'F-001');
+    assert.ok(f, 'Should have F-001');
+    assert.strictEqual(f.metadata.acCount, 0);
+    assert.deepStrictEqual(f.metadata.files, []);
+  });
+
+  it('handles thread entries with missing keywords and featureIds', () => {
+    setupProject({
+      threadIndex: {
+        version: '1.0.0',
+        threads: [{
+          id: 'thr-minimal01',
+          name: 'Minimal thread',
+          timestamp: '2026-04-01T00:00:00Z',
+          // featureIds and keywords intentionally missing
+        }],
+      },
+    });
+    const threadsDir = path.join(tmpDir, '.cap', 'memory', 'threads');
+    fs.writeFileSync(path.join(threadsDir, 'thr-minimal01.json'), JSON.stringify({
+      id: 'thr-minimal01', name: 'Minimal',
+      // missing problemStatement, etc.
+    }));
+    const g = buildFromMemory(tmpDir);
+    const threads = queryByType(g, 'thread');
+    assert.ok(threads.length >= 1);
+  });
+
+  it('handles addNode update with missing label', () => {
+    const g = createGraph();
+    addNode(g, { type: 'test', id: 'n1', label: 'Original', active: true, metadata: {} });
+    // Update with empty label -- should keep original
+    addNode(g, { type: 'test', id: 'n1', label: '', metadata: { extra: true } });
+    assert.strictEqual(g.nodes['n1'].label, 'Original');
+    assert.strictEqual(g.nodes['n1'].metadata.extra, true);
+  });
+
+  it('loadGraph with partial JSON fills defaults', () => {
+    // Write a graph file missing version, lastUpdated, nodes, edges
+    const memDir = path.join(tmpDir, '.cap', 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(path.join(memDir, 'graph.json'), '{}', 'utf8');
+    const g = loadGraph(tmpDir);
+    assert.strictEqual(g.version, GRAPH_VERSION);
+    assert.ok(typeof g.lastUpdated === 'string');
+    assert.deepStrictEqual(g.nodes, {});
+    assert.deepStrictEqual(g.edges, []);
+  });
+
+  it('incrementalUpdate with entries missing optional metadata fields', () => {
+    const g = createGraph();
+    addNode(g, { type: 'feature', id: 'feature-f001', label: 'F-001: Test', active: true, metadata: { featureId: 'F-001' } });
+    const entry = {
+      category: 'decision',
+      content: 'Test decision',
+      file: '/test.js',
+      metadata: {
+        source: '2026-04-01T00:00:00Z',
+        // relatedFiles, pinned, features intentionally missing
+      },
+    };
+    incrementalUpdate(g, [entry]);
+    const decisions = queryByType(g, 'decision');
+    assert.ok(decisions.length >= 1);
+  });
+
+  it('handles addNode update with undefined active', () => {
+    const g = createGraph();
+    addNode(g, { type: 'test', id: 'n1', label: 'Test', active: false, metadata: {} });
+    // Update without specifying active -- should keep existing
+    addNode(g, { type: 'test', id: 'n1', label: 'Test', metadata: {} });
+    assert.strictEqual(g.nodes['n1'].active, false);
+  });
+
+  it('_ingestMemoryFiles skips unparseable files gracefully', () => {
+    const g = createGraph();
+    const memDir = path.join(tmpDir, '.cap', 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    // Create a decisions.md that is unreadable (permission denied triggers catch)
+    const decFile = path.join(memDir, 'decisions.md');
+    fs.writeFileSync(decFile, '# Decisions\n### Node\n- **Date:** 2026-01-01\n');
+    fs.chmodSync(decFile, 0o000);
+    _ingestMemoryFiles(g, memDir);
+    // Restore permissions for cleanup
+    fs.chmodSync(decFile, 0o644);
+    assert.ok(typeof g.nodes === 'object');
   });
 });

@@ -608,6 +608,236 @@ describe('analyzeMigration', () => {
   });
 });
 
+// --- Branch coverage: migrateLineTag uncommon tag types ---
+
+describe('migrateLineTag — uncommon tag branches', () => {
+  it('converts @gsd-ref without description to removed', () => {
+    const result = migrateLineTag('// @gsd-ref');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'removed');
+  });
+
+  it('converts @gsd-ref with only metadata and no description to removed', () => {
+    const result = migrateLineTag('// @gsd-ref(ref:AC-20)');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'removed');
+  });
+
+  it('converts @gsd-todos (plural typo) to @cap-todo', () => {
+    const result = migrateLineTag('// @gsd-todos Fix all the things');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('@cap-todo'));
+  });
+
+  it('converts @gsd-placeholder to @cap-todo', () => {
+    const result = migrateLineTag('// @gsd-placeholder Will add later');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('@cap-todo'));
+  });
+
+  it('converts @gsd-concern to @cap-todo risk:', () => {
+    const result = migrateLineTag('// @gsd-concern Memory leak risk');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('@cap-todo'));
+    assert.ok(result.replaced.includes('risk:'));
+  });
+
+  it('returns null for unknown @gsd- tag type', () => {
+    const result = migrateLineTag('// @gsd-unknowntag Something');
+    assert.strictEqual(result, null);
+  });
+
+  it('handles @gsd-risk without description (empty metadata fallback)', () => {
+    const result = migrateLineTag('// @gsd-risk');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('risk:'));
+  });
+
+  it('handles @gsd-decision without description', () => {
+    const result = migrateLineTag('// @gsd-decision');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('decision:'));
+  });
+
+  it('handles @gsd-constraint without description', () => {
+    const result = migrateLineTag('// @gsd-constraint');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('[constraint]'));
+  });
+
+  it('handles @gsd-concern without description', () => {
+    const result = migrateLineTag('// @gsd-concern');
+    assert.notStrictEqual(result, null);
+    assert.strictEqual(result.action, 'converted');
+    assert.ok(result.replaced.includes('risk:'));
+  });
+});
+
+// --- Branch coverage: migrateTags catch blocks ---
+
+describe('migrateTags — filesystem error handling', () => {
+  it('handles unreadable directory in walk (catch on readdirSync)', { skip: process.platform === 'win32' }, () => {
+    // Create a directory that cannot be read
+    const unreadableDir = path.join(tmpDir, 'src', 'locked');
+    fs.mkdirSync(unreadableDir, { recursive: true });
+    // Create a valid file alongside
+    fs.writeFileSync(path.join(tmpDir, 'src', 'app.js'), '// @gsd-feature App', 'utf8');
+    fs.chmodSync(unreadableDir, 0o000);
+
+    const result = migrateTags(tmpDir, { dryRun: true });
+    assert.strictEqual(typeof result.filesScanned, 'number');
+    // Should still scan other files without crashing
+    assert.ok(result.filesScanned >= 1);
+
+    // Restore permissions for cleanup
+    fs.chmodSync(unreadableDir, 0o755);
+  });
+
+  it('handles unreadable file in processFile (catch on readFileSync)', { skip: process.platform === 'win32' }, () => {
+    const srcDir = path.join(tmpDir, 'src');
+    fs.mkdirSync(srcDir, { recursive: true });
+    const unreadableFile = path.join(srcDir, 'locked.js');
+    fs.writeFileSync(unreadableFile, '// @gsd-feature Locked', 'utf8');
+    fs.chmodSync(unreadableFile, 0o000);
+
+    const result = migrateTags(tmpDir, { dryRun: true });
+    assert.strictEqual(typeof result.filesScanned, 'number');
+    // The unreadable file should be skipped, not crash
+    assert.strictEqual(result.tagsConverted, 0);
+
+    // Restore for cleanup
+    fs.chmodSync(unreadableFile, 0o644);
+  });
+});
+
+// --- Branch coverage: migrateArtifacts catch block and edge cases ---
+
+describe('migrateArtifacts — additional branches', () => {
+  it('handles unreadable source artifact (catch on readFileSync)', { skip: process.platform === 'win32' }, () => {
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    const featFile = path.join(planningDir, 'FEATURES.md');
+    fs.writeFileSync(featFile, '## Feature: Auth\nLogin support', 'utf8');
+    fs.chmodSync(featFile, 0o000);
+
+    const result = migrateArtifacts(tmpDir);
+    // Should not crash, source unreadable so no features found
+    assert.strictEqual(result.featureMapCreated, false);
+
+    fs.chmodSync(featFile, 0o644);
+  });
+
+  it('returns early when features extracted is zero', () => {
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    // Write file with no feature headings
+    fs.writeFileSync(path.join(planningDir, 'FEATURES.md'), 'No features here.\nJust text.', 'utf8');
+
+    const result = migrateArtifacts(tmpDir);
+    assert.strictEqual(result.featureMapCreated, false);
+    assert.strictEqual(result.featuresFound, 0);
+  });
+
+  it('skips duplicate features when merging into existing FEATURE-MAP.md', () => {
+    // Create existing FEATURE-MAP.md with a feature
+    const capFeatureMap = require('../cap/bin/lib/cap-feature-map.cjs');
+    const template = capFeatureMap.generateTemplate();
+    fs.writeFileSync(path.join(tmpDir, 'FEATURE-MAP.md'), template, 'utf8');
+    capFeatureMap.addFeature(tmpDir, { title: 'Auth', acs: [], files: [], dependencies: [] });
+
+    // Create .planning/FEATURES.md with same and different feature
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(planningDir, 'FEATURES.md'),
+      '## Auth\nLogin support\n\n## Payments\nStripe integration',
+      'utf8'
+    );
+
+    const result = migrateArtifacts(tmpDir);
+    assert.ok(result.featuresFound >= 1);
+    // Read back to verify Auth wasn't duplicated
+    const fm = capFeatureMap.readFeatureMap(tmpDir);
+    const authCount = fm.features.filter(f => f.title.toLowerCase() === 'auth').length;
+    assert.strictEqual(authCount, 1, 'Auth feature should not be duplicated');
+  });
+});
+
+// --- Branch coverage: migrateSession with startedAt and lastCommand fallback forms ---
+
+describe('migrateSession — session field fallback branches', () => {
+  it('maps startedAt field (camelCase form) to newSession', () => {
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(planningDir, 'SESSION.json'),
+      JSON.stringify({
+        startedAt: '2026-01-01T00:00:00Z',
+        lastCommand: '/cap:test',
+      }),
+      'utf8'
+    );
+    fs.mkdirSync(path.join(tmpDir, '.cap'), { recursive: true });
+
+    const result = migrateSession(tmpDir);
+    assert.strictEqual(result.migrated, true);
+    assert.strictEqual(result.newFormat, 'v2.0');
+  });
+
+  it('maps started_at field (snake_case form) to newSession', () => {
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(planningDir, 'SESSION.json'),
+      JSON.stringify({
+        started_at: '2026-01-01T00:00:00Z',
+        last_command: '/cap:test',
+      }),
+      'utf8'
+    );
+    fs.mkdirSync(path.join(tmpDir, '.cap'), { recursive: true });
+
+    const result = migrateSession(tmpDir);
+    assert.strictEqual(result.migrated, true);
+  });
+
+  it('preserves non-string/number/boolean values as metadata (skips objects/arrays)', () => {
+    const planningDir = path.join(tmpDir, '.planning');
+    fs.mkdirSync(planningDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(planningDir, 'SESSION.json'),
+      JSON.stringify({
+        simple_field: 'hello',
+        numeric_field: 42,
+        bool_field: true,
+        nested_obj: { a: 1 },
+        arr_field: [1, 2, 3],
+      }),
+      'utf8'
+    );
+    fs.mkdirSync(path.join(tmpDir, '.cap'), { recursive: true });
+
+    const result = migrateSession(tmpDir);
+    assert.strictEqual(result.migrated, true);
+    // Read back the session to verify metadata
+    const sessionData = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, '.cap', 'SESSION.json'), 'utf8')
+    );
+    assert.strictEqual(sessionData.metadata.gsd_simple_field, 'hello');
+    assert.strictEqual(sessionData.metadata.gsd_numeric_field, '42');
+    assert.strictEqual(sessionData.metadata.gsd_bool_field, 'true');
+    // nested_obj and arr_field should NOT be in metadata
+    assert.strictEqual(sessionData.metadata.gsd_nested_obj, undefined);
+    assert.strictEqual(sessionData.metadata.gsd_arr_field, undefined);
+  });
+});
+
 // --- Zero-dep compliance ---
 
 describe('zero-dep compliance', () => {

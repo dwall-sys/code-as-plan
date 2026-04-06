@@ -27,6 +27,7 @@ const EDGE_TYPES = [
   'branched_from',
   'informed_by',
   'relates_to',
+  'affinity',
 ];
 
 // @cap-todo(ac:F-034/AC-1) Node types: feature, thread, decision, pitfall, pattern, hotspot

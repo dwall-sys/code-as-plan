@@ -113,6 +113,51 @@ If `prior_threads.threadCount > 0` and NOT `resume_mode`:
   ```
 - The brainstormer agent will receive this context and can reference prior threads during conversation.
 
+## Step 1c: Passively check thread affinity before brainstorm
+
+<!-- @cap-todo(ac:F-040/AC-5) /cap:brainstorm passively checks thread affinity at session start and presents relevant prior threads (notify band and above) before beginning discovery questions -->
+
+If prior threads exist, check realtime affinity to surface relevant ones:
+
+```bash
+node -e "
+const realtimeAffinity = require('./cap/bin/lib/cap-realtime-affinity.cjs');
+const clusterDisplay = require('./cap/bin/lib/cap-cluster-display.cjs');
+const tracker = require('./cap/bin/lib/cap-thread-tracker.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+
+try {
+  const threads = tracker.listThreads(process.cwd());
+  if (threads.length > 0) {
+    const s = session.loadSession(process.cwd());
+    // Use the most recent thread as reference point for affinity detection
+    const latestThread = threads[0];
+    const fullThread = tracker.loadThread(process.cwd(), latestThread.id);
+    if (fullThread) {
+      const notifications = realtimeAffinity.onSessionStart(process.cwd(), fullThread);
+      const output = clusterDisplay.formatRealtimeNotifications(notifications);
+      if (output) console.log(output);
+      else console.log('');
+    } else {
+      console.log('');
+    }
+  } else {
+    console.log('');
+  }
+} catch (e) {
+  console.log('');
+}
+"
+```
+
+If output is non-empty, display it before spawning the brainstormer:
+
+```
+{thread_affinity_output}
+```
+
+This gives the user awareness of related prior discussions before beginning a new brainstorm.
+
 ## Step 2: Spawn cap-brainstormer agent
 
 <!-- @cap-todo(ref:AC-37) cap-brainstormer shall produce structured PRD output with numbered acceptance criteria. -->

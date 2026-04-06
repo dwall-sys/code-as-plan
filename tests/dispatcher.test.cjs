@@ -183,7 +183,8 @@ describe('dispatcher routing branches', () => {
     const result = runGsdTools('init resume', tmpDir);
     assert.strictEqual(result.success, true, `init resume failed: ${result.error}`);
     const parsed = JSON.parse(result.output);
-    assert.ok(typeof parsed === 'object', 'Output should be valid JSON object');
+    assert.strictEqual(typeof parsed, 'object', 'Output should be valid JSON object');
+    assert.notStrictEqual(parsed, null, 'parsed should not be null');
   });
 
   // init verify-work
@@ -207,7 +208,8 @@ describe('dispatcher routing branches', () => {
     const result = runGsdTools('init verify-work 01', tmpDir);
     assert.strictEqual(result.success, true, `init verify-work failed: ${result.error}`);
     const parsed = JSON.parse(result.output);
-    assert.ok(typeof parsed === 'object', 'Output should be valid JSON object');
+    assert.strictEqual(typeof parsed, 'object', 'Output should be valid JSON object');
+    assert.notStrictEqual(parsed, null, 'parsed should not be null');
   });
 
   // roadmap update-plan-progress
@@ -244,7 +246,8 @@ describe('dispatcher routing branches', () => {
     const result = runGsdTools('state', tmpDir);
     assert.strictEqual(result.success, true, `state load failed: ${result.error}`);
     const parsed = JSON.parse(result.output);
-    assert.ok(typeof parsed === 'object', 'Output should be valid JSON object');
+    assert.strictEqual(typeof parsed, 'object', 'Output should be valid JSON object');
+    assert.notStrictEqual(parsed, null, 'parsed should not be null');
   });
 
   // summary-extract
@@ -276,7 +279,8 @@ requirements-completed: [TEST-01]
     const result = runGsdTools(`summary-extract .planning/phases/01-test/01-01-SUMMARY.md`, tmpDir);
     assert.strictEqual(result.success, true, `summary-extract failed: ${result.error}`);
     const parsed = JSON.parse(result.output);
-    assert.ok(typeof parsed === 'object', 'Output should be valid JSON object');
+    assert.strictEqual(typeof parsed, 'object', 'Output should be valid JSON object');
+    assert.notStrictEqual(parsed, null, 'parsed should not be null');
     assert.strictEqual(parsed.path, '.planning/phases/01-test/01-01-SUMMARY.md', 'Path should match input');
     assert.deepStrictEqual(parsed.requirements_completed, ['TEST-01'], 'requirements_completed should contain TEST-01');
   });

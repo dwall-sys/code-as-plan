@@ -228,6 +228,63 @@ provides:
     );
   });
 
+  test('includes archived phases in digest', () => {
+    // Create milestones/v0.5-phases directory (the format getArchivedPhaseDirs expects)
+    const archivedPhase = path.join(tmpDir, '.planning', 'milestones', 'v0.5-phases', '01-foundation');
+    fs.mkdirSync(archivedPhase, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(archivedPhase, '01-01-SUMMARY.md'),
+      `---
+phase: "01"
+provides:
+  - "Archived feature"
+key-decisions:
+  - "Old decision"
+---
+`
+    );
+
+    const result = runGsdTools('history-digest', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const digest = JSON.parse(result.output);
+    assert.ok(digest.phases['01'], 'Archived phase 01 should exist');
+    assert.ok(
+      digest.phases['01'].provides.includes('Archived feature'),
+      'Archived feature should be present'
+    );
+    assert.ok(
+      digest.decisions.some(d => d.decision === 'Old decision'),
+      'Archived decision should be present'
+    );
+  });
+
+  test('handles SUMMARY.md that causes runtime error in processing', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-test');
+    fs.mkdirSync(phaseDir, { recursive: true });
+
+    // Create a summary with provides as a non-iterable value to trigger catch
+    // The extractFrontmatter might return provides as a string "direct",
+    // and .forEach on a string won't work in Set.add context
+    fs.writeFileSync(
+      path.join(phaseDir, 'SUMMARY.md'),
+      `---
+phase: "01"
+dependency-graph:
+  provides: not-an-array
+  affects: also-not-array
+---
+`
+    );
+
+    const result = runGsdTools('history-digest', tmpDir);
+    assert.ok(result.success, `Command should succeed despite malformed provides: ${result.error}`);
+    const digest = JSON.parse(result.output);
+    // Should either skip the malformed entry or handle it gracefully
+    assert.ok(digest.phases !== undefined, 'phases should exist');
+  });
+
   test('inline array syntax supported', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-test');
     fs.mkdirSync(phaseDir, { recursive: true });
@@ -420,6 +477,30 @@ one-liner: Minimal summary
     assert.deepStrictEqual(output.requirements_completed, [], 'requirements_completed defaults to empty');
   });
 
+  test('parses key-decisions without colon (no rationale)', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(phaseDir, '01-01-SUMMARY.md'),
+      `---
+key-decisions:
+  - Simple decision without rationale
+  - Another plain decision
+---
+`
+    );
+
+    const result = runGsdTools('summary-extract .planning/phases/01-foundation/01-01-SUMMARY.md', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.decisions[0].summary, 'Simple decision without rationale');
+    assert.strictEqual(output.decisions[0].rationale, null, 'rationale should be null when no colon');
+    assert.strictEqual(output.decisions[1].summary, 'Another plain decision');
+    assert.strictEqual(output.decisions[1].rationale, null);
+  });
+
   test('parses key-decisions with rationale', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
     fs.mkdirSync(phaseDir, { recursive: true });
@@ -596,6 +677,12 @@ describe('todo complete command', () => {
     assert.ok(!result.success, 'should fail');
     assert.ok(result.error.includes('not found'), 'error mentions not found');
   });
+
+  test('fails when no filename provided', () => {
+    const result = runGsdTools('todo complete', tmpDir);
+    assert.ok(!result.success, 'should fail without filename');
+    assert.ok(result.error.includes('filename required'), 'error mentions filename required');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -670,6 +757,33 @@ describe('todo match-phase command', () => {
     assert.ok(hasAreaReason, 'should match on area');
   });
 
+  test('matches todo by file overlap with phase plan', () => {
+    const pendingDir = path.join(tmpDir, '.planning', 'todos', 'pending');
+    fs.mkdirSync(pendingDir, { recursive: true });
+    fs.writeFileSync(path.join(pendingDir, 'file-todo.md'),
+      'title: Fix auth middleware\narea: general\ncreated: 2026-03-01\nfiles: src/middleware/auth.ts\n\nFix token validation.');
+
+    // Create phase dir with a plan that references the same file
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), `---
+files_modified: [src/middleware/auth.ts, src/routes/login.ts]
+---
+# Plan
+`);
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '# Roadmap\n\n### Phase 01: Auth System\n\n**Goal:** Build auth module\n');
+
+    const result = runGsdTools('todo match-phase 01', tmpDir);
+    assert.ok(result.success, 'should succeed');
+    const output = JSON.parse(result.output);
+    const fileMatch = output.matches.find(m => m.title === 'Fix auth middleware');
+    assert.ok(fileMatch, 'should find file-matching todo');
+    const hasFileReason = fileMatch.reasons.some(r => r.startsWith('files:'));
+    assert.ok(hasFileReason, 'should match on files');
+    assert.ok(fileMatch.score >= 0.4, 'file match should contribute significant score');
+  });
+
   test('sorts matches by score descending', () => {
     const pendingDir = path.join(tmpDir, '.planning', 'todos', 'pending');
     fs.mkdirSync(pendingDir, { recursive: true });
@@ -694,6 +808,181 @@ describe('todo match-phase command', () => {
 // scaffold command
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+describe('commit-to-subrepo command', () => {
+  const { createTempGitProject } = require('./helpers.cjs');
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempGitProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('errors when no sub_repos configured', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({})
+    );
+
+    const result = runGsdTools('commit-to-subrepo "test message" --files some/file.md', tmpDir);
+    assert.ok(!result.success, 'should fail without sub_repos');
+    assert.ok(result.error.includes('no sub_repos'), 'error mentions sub_repos');
+  });
+
+  test('errors when no --files provided', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ sub_repos: ['frontend'] })
+    );
+
+    const result = runGsdTools('commit-to-subrepo "test message"', tmpDir);
+    assert.ok(!result.success, 'should fail without files');
+    assert.ok(result.error.includes('--files required'), 'error mentions files required');
+  });
+
+  test('errors when no message provided', () => {
+    const result = runGsdTools('commit-to-subrepo', tmpDir);
+    assert.ok(!result.success, 'should fail without message');
+    assert.ok(result.error.includes('commit message required'), 'error mentions message required');
+  });
+
+  test('commits to matching sub-repo and warns for unmatched files', () => {
+    // Create sub-repo directory with its own git repo
+    const subRepoDir = path.join(tmpDir, 'frontend');
+    fs.mkdirSync(subRepoDir, { recursive: true });
+    execSync('git init', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config user.email "test@test.com"', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config user.name "Test"', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config commit.gpgsign false', { cwd: subRepoDir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(subRepoDir, 'README.md'), '# Frontend\n');
+    execSync('git add -A && git commit -m "init"', { cwd: subRepoDir, stdio: 'pipe' });
+
+    // Configure sub_repos
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ sub_repos: ['frontend'] })
+    );
+
+    // Create a file in the sub-repo and a file outside
+    fs.writeFileSync(path.join(subRepoDir, 'new-file.md'), '# New\n');
+
+    const result = runGsdTools(
+      ['commit-to-subrepo', 'test commit', '--files', 'frontend/new-file.md', 'unmatched/file.md'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.committed, true);
+    assert.ok(output.repos.frontend, 'should have frontend repo');
+    assert.ok(output.repos.frontend.committed, 'frontend should have committed');
+    assert.ok(output.repos.frontend.hash, 'frontend should have hash');
+    assert.deepStrictEqual(output.unmatched, ['unmatched/file.md']);
+  });
+
+  test('handles sub-repo commit error (not nothing-to-commit)', () => {
+    // Create sub-repo with a pre-commit hook that fails
+    const subRepoDir = path.join(tmpDir, 'frontend');
+    fs.mkdirSync(subRepoDir, { recursive: true });
+    execSync('git init', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config user.email "test@test.com"', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config user.name "Test"', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config commit.gpgsign false', { cwd: subRepoDir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(subRepoDir, 'README.md'), '# Frontend\n');
+    execSync('git add -A && git commit -m "init"', { cwd: subRepoDir, stdio: 'pipe' });
+
+    // Add a pre-commit hook that fails
+    const hooksDir = path.join(subRepoDir, '.git', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ sub_repos: ['frontend'] })
+    );
+
+    fs.writeFileSync(path.join(subRepoDir, 'new-file.md'), '# New\n');
+
+    const result = runGsdTools(
+      ['commit-to-subrepo', 'test commit', '--files', 'frontend/new-file.md'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.repos.frontend.committed, false);
+    assert.strictEqual(output.repos.frontend.reason, 'error');
+  });
+
+  test('handles nothing to commit in sub-repo', () => {
+    // Create sub-repo
+    const subRepoDir = path.join(tmpDir, 'frontend');
+    fs.mkdirSync(subRepoDir, { recursive: true });
+    execSync('git init', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config user.email "test@test.com"', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config user.name "Test"', { cwd: subRepoDir, stdio: 'pipe' });
+    execSync('git config commit.gpgsign false', { cwd: subRepoDir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(subRepoDir, 'README.md'), '# Frontend\n');
+    execSync('git add -A && git commit -m "init"', { cwd: subRepoDir, stdio: 'pipe' });
+
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ sub_repos: ['frontend'] })
+    );
+
+    // Reference an already-committed file (nothing new to commit)
+    const result = runGsdTools(
+      ['commit-to-subrepo', 'test commit', '--files', 'frontend/README.md'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.repos.frontend.committed, false);
+    assert.strictEqual(output.repos.frontend.reason, 'nothing_to_commit');
+  });
+});
+
+describe('summary-extract edge cases', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('errors when no summary-path provided', () => {
+    const result = runGsdTools('summary-extract', tmpDir);
+    assert.ok(!result.success, 'should fail without summary-path');
+    assert.ok(result.error.includes('summary-path required'), 'error mentions summary-path');
+  });
+
+  test('field filtering ignores nonexistent fields', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(phaseDir, '01-01-SUMMARY.md'),
+      `---
+one-liner: Test summary
+---
+`
+    );
+
+    const result = runGsdTools('summary-extract .planning/phases/01-foundation/01-01-SUMMARY.md --fields one_liner,nonexistent_field', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.one_liner, 'Test summary');
+    assert.strictEqual(output.nonexistent_field, undefined, 'nonexistent field should not be in output');
+  });
+});
 
 describe('scaffold command', () => {
   let tmpDir;
@@ -768,6 +1057,26 @@ describe('scaffold command', () => {
       fs.existsSync(path.join(tmpDir, '.planning', 'phases', '05-user-dashboard')),
       'directory should be created'
     );
+  });
+
+  test('errors on unknown scaffold type', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '03-api'), { recursive: true });
+
+    const result = runGsdTools('scaffold bogustype --phase 3', tmpDir);
+    assert.ok(!result.success, 'should fail for unknown type');
+    assert.ok(result.error.includes('Unknown scaffold type'), 'error mentions unknown type');
+  });
+
+  test('errors when phase not found for non-phase-dir scaffold', () => {
+    const result = runGsdTools('scaffold context --phase 99', tmpDir);
+    assert.ok(!result.success, 'should fail when phase dir missing');
+    assert.ok(result.error.includes('not found'), 'error mentions not found');
+  });
+
+  test('errors when phase-dir missing required name', () => {
+    const result = runGsdTools('scaffold phase-dir --phase 5', tmpDir);
+    assert.ok(!result.success, 'should fail without name');
+    assert.ok(result.error.includes('name required'), 'error mentions name required');
   });
 
   test('does not overwrite existing files', () => {
@@ -1040,6 +1349,7 @@ describe('verify-path-exists command', () => {
     assert.ok(!result.success, 'should fail without path');
     assert.ok(result.error.includes('path required'), 'error should mention path required');
   });
+
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1185,6 +1495,30 @@ describe('commit command', () => {
     const logCount = execSync('git log --oneline', { cwd: tmpDir, encoding: 'utf-8' }).trim().split('\n').length;
     assert.strictEqual(logCount, 2, 'should have 2 commits (initial + amended)');
   });
+  test('fails when no message and no amend flag', () => {
+    const result = runGsdTools('commit', tmpDir);
+    assert.ok(!result.success, 'should fail without message');
+    assert.ok(result.error.includes('commit message required'), 'error mentions message required');
+  });
+
+  test('stages deletion for missing file', () => {
+    // Create and commit a file, then delete it
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'to-delete.md'), '# Delete me\n');
+    execSync('git add .planning/to-delete.md', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git commit -m "add file to delete"', { cwd: tmpDir, stdio: 'pipe' });
+
+    // Delete the file on disk
+    fs.unlinkSync(path.join(tmpDir, '.planning', 'to-delete.md'));
+
+    // Commit with the deleted file listed
+    const result = runGsdTools('commit "docs: remove file" --files .planning/to-delete.md', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    // Should either commit the deletion or report nothing (depending on git state)
+    assert.ok(output.committed !== undefined, 'should have committed field');
+  });
+
   test('creates strategy branch before first commit when branching_strategy is milestone', () => {
     // Configure milestone branching strategy
     fs.writeFileSync(
@@ -1249,6 +1583,52 @@ describe('commit command', () => {
     const { execFileSync } = require('child_process');
     const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: tmpDir, encoding: 'utf-8' }).trim();
     assert.strictEqual(branch, 'gsd/phase-01-setup', 'should be on phase branch');
+  });
+
+  test('handles commit error that is not nothing-to-commit', () => {
+    // Create a pre-commit hook that fails
+    const hooksDir = path.join(tmpDir, '.git', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'fail-test.md'), '# Fail\n');
+
+    const result = runGsdTools('commit "test error" --files .planning/fail-test.md', tmpDir);
+    assert.ok(result.success, `Command should succeed (outputs JSON): ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.committed, false);
+  });
+
+  test('switches to existing strategy branch on subsequent commit', () => {
+    // Configure milestone branching strategy
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({
+        commit_docs: true,
+        branching_strategy: 'milestone',
+        milestone_branch_template: 'gsd/{milestone}-{slug}',
+      })
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      '## v2.0: Second Release\n\n### Phase 1: Setup\n'
+    );
+
+    // Pre-create the branch so checkout -b fails and it switches to existing
+    execSync('git branch gsd/v2.0-second-release', { cwd: tmpDir, stdio: 'pipe' });
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'test-switch.md'), '# Switch\n');
+
+    const result = runGsdTools('commit "docs: switch test" --files .planning/test-switch.md', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.committed, true);
+
+    const { execFileSync } = require('child_process');
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: tmpDir, encoding: 'utf-8' }).trim();
+    assert.strictEqual(branch, 'gsd/v2.0-second-release', 'should be on existing milestone branch');
   });
 });
 
@@ -1374,6 +1754,72 @@ describe('websearch command', () => {
     const output = JSON.parse(captured);
     assert.strictEqual(output.available, false);
     assert.strictEqual(output.error, 'Network timeout');
+  });
+});
+
+describe('cmdVerifyPathExists null byte guard', () => {
+  const { cmdVerifyPathExists } = require('../cap/bin/lib/commands.cjs');
+  let tmpDir;
+  let origWriteSync;
+  let origExit;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origWriteSync = fs.writeSync;
+    origExit = process.exit;
+  });
+
+  afterEach(() => {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+    cleanup(tmpDir);
+  });
+
+  test('rejects paths containing null bytes', () => {
+    let errMsg = '';
+    let exitCalled = false;
+    fs.writeSync = (fd, data) => { if (fd === 2) errMsg += data; return Buffer.byteLength(String(data)); };
+    process.exit = () => { exitCalled = true; throw new Error('EXIT'); };
+
+    try {
+      cmdVerifyPathExists(tmpDir, 'some\0path', false);
+    } catch {}
+
+    assert.ok(exitCalled, 'process.exit should have been called');
+    assert.ok(errMsg.includes('null bytes'), 'error should mention null bytes');
+  });
+});
+
+describe('cmdCommit message guard', () => {
+  const { cmdCommit } = require('../cap/bin/lib/commands.cjs');
+  let tmpDir;
+  let origWriteSync;
+  let origExit;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    origWriteSync = fs.writeSync;
+    origExit = process.exit;
+  });
+
+  afterEach(() => {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+    cleanup(tmpDir);
+  });
+
+  test('errors when no message and no amend flag via direct call', () => {
+    let errMsg = '';
+    let exitCalled = false;
+    fs.writeSync = (fd, data) => { if (fd === 2) errMsg += data; return Buffer.byteLength(String(data)); };
+    process.exit = () => { exitCalled = true; throw new Error('EXIT'); };
+
+    try {
+      cmdCommit(tmpDir, null, [], false, false, false);
+    } catch {}
+
+    assert.ok(exitCalled, 'process.exit should have been called');
+    assert.ok(errMsg.includes('commit message required'), 'error should mention message required');
   });
 });
 
@@ -1579,5 +2025,471 @@ describe('stats command', () => {
     assert.ok(parsed.rendered.includes('| Phase |'), 'should include table header');
     assert.ok(parsed.rendered.includes('| 1 |'), 'should include phase row');
     assert.ok(parsed.rendered.includes('1/1 phases'), 'should report phase progress');
+  });
+
+  test('table format includes requirements and git info when present', () => {
+    // Set up git repo
+    execSync('git init', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git config user.email "test@example.com"', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git config user.name "Test User"', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git config commit.gpgsign false', { cwd: tmpDir, stdio: 'pipe' });
+
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'PROJECT.md'), '# Project\n');
+    execSync('git add -A', { cwd: tmpDir, stdio: 'pipe' });
+    execSync('git commit -m "initial"', { cwd: tmpDir, stdio: 'pipe' });
+
+    // Add requirements
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'REQUIREMENTS.md'),
+      '# Requirements\n\n- [x] **AUTH-01**: Sign up\n- [ ] **AUTH-02**: Login\n'
+    );
+
+    // Add STATE.md with last activity
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      '# State\n\nlast_activity: 2026-03-15 - Did stuff\n'
+    );
+
+    // Add a phase
+    const p1 = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(p1, { recursive: true });
+    fs.writeFileSync(path.join(p1, '01-01-PLAN.md'), '# Plan');
+
+    const result = runGsdTools('stats table', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.rendered.includes('Requirements:'), 'should include requirements line');
+    assert.ok(parsed.rendered.includes('1/2'), 'should show 1 of 2 requirements');
+    assert.ok(parsed.rendered.includes('Git:'), 'should include git stats');
+    assert.ok(parsed.rendered.includes('commit'), 'should mention commits');
+    assert.ok(parsed.rendered.includes('Last activity:'), 'should include last activity');
+  });
+});
+
+// --- Branch coverage: history-digest edge cases ---
+
+describe('history-digest branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('handles summary with no dependency-graph but flat provides', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, 'SUMMARY.md'), `---
+phase: "01"
+name: "Foundation"
+provides:
+  - "Database schema"
+  - "Auth layer"
+tech-stack:
+  added:
+    - "prisma"
+    - "vitest"
+---
+
+# Summary
+`);
+    const result = runGsdTools('history-digest', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const digest = JSON.parse(result.output);
+    assert.deepStrictEqual(digest.phases['01'].provides, ['Database schema', 'Auth layer']);
+    assert.ok(digest.tech_stack.includes('prisma'), 'should include prisma');
+    assert.ok(digest.tech_stack.includes('vitest'), 'should include vitest');
+  });
+
+  test('handles summary without phase in frontmatter (uses dir name)', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '02-api');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, 'SUMMARY.md'), `---
+name: "API Layer"
+provides:
+  - "REST endpoints"
+---
+
+# Summary
+`);
+    const result = runGsdTools('history-digest', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const digest = JSON.parse(result.output);
+    assert.ok(digest.phases['02'], 'should use dir prefix as phase number');
+    assert.deepStrictEqual(digest.phases['02'].provides, ['REST endpoints']);
+  });
+
+  test('handles affects in dependency-graph', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-core');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), `---
+phase: "01"
+name: "Core"
+dependency-graph:
+  provides:
+    - "DB schema"
+  affects:
+    - "API layer"
+    - "Frontend"
+patterns-established:
+  - "Repository pattern"
+key-decisions:
+  - "Use PostgreSQL: better JSON support"
+---
+
+# Summary
+`);
+    const result = runGsdTools('history-digest', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const digest = JSON.parse(result.output);
+    assert.deepStrictEqual(digest.phases['01'].affects, ['API layer', 'Frontend']);
+    assert.deepStrictEqual(digest.phases['01'].patterns, ['Repository pattern']);
+    assert.strictEqual(digest.decisions.length, 1);
+    assert.strictEqual(digest.decisions[0].decision, 'Use PostgreSQL: better JSON support');
+  });
+});
+
+// --- Branch coverage: progress command edge cases ---
+
+describe('progress command branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('phase with plans but no summaries shows Planned status', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan');
+    // No SUMMARY.md => status should be Planned
+
+    const result = runGsdTools('progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'Planned'));
+  });
+
+  test('phase with no matching dir name pattern uses dir as phaseNum', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', 'special');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '.gitkeep'), '');
+
+    const result = runGsdTools('progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.number === 'special'));
+  });
+});
+
+// --- Branch coverage: stats command edge cases ---
+
+describe('stats command branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('phase with no plans shows Not Started status', () => {
+    // Create a phase dir with no plan files
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-setup');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '.gitkeep'), '');
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'Not Started'));
+  });
+
+  test('handles REQUIREMENTS.md with only unchecked items', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'REQUIREMENTS.md'),
+      '# Requirements\n\n- [ ] **REQ-01**: First req\n- [ ] **REQ-02**: Second req\n'
+    );
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.requirements_total, 2);
+    assert.strictEqual(parsed.requirements_complete, 0);
+  });
+
+  test('handles verify-path-exists with special stat type (other)', () => {
+    // A socket or pipe would be 'other' type, but hard to create
+    // Test the existing file/dir paths to cover both branches
+    const filePath = path.join(tmpDir, 'testfile.txt');
+    fs.writeFileSync(filePath, 'test');
+    const result = runGsdTools(`verify-path-exists testfile.txt`, tmpDir);
+    assert.ok(result.success);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.type, 'file');
+  });
+
+  test('handles last activity with bold format in STATE.md', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      '# State\n\n**Last Activity:** 2026-04-01 - Updated docs\n'
+    );
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.last_activity, '2026-04-01 - Updated docs');
+  });
+});
+
+// --- Branch coverage: scaffold edge cases ---
+
+// --- Branch coverage: list-todos catch blocks ---
+
+describe('list-todos branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('handles malformed todo file that throws on read', () => {
+    const pendingDir = path.join(tmpDir, '.planning', 'todos', 'pending');
+    fs.mkdirSync(pendingDir, { recursive: true });
+    // Create a directory with .md extension to make readFileSync throw
+    fs.mkdirSync(path.join(pendingDir, 'bad-todo.md'));
+    // Also create a valid todo
+    fs.writeFileSync(path.join(pendingDir, 'good-todo.md'), 'title: Valid Todo\ncreated: 2026-01-01\narea: testing\n');
+
+    const result = runGsdTools('list-todos', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    // The bad todo should be skipped, the good one should be counted
+    assert.strictEqual(parsed.count, 1);
+  });
+});
+
+// --- Branch coverage: summary-extract with one-liner from body ---
+
+describe('summary-extract branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('extracts key-files and requirements-completed from frontmatter', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-test');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, 'SUMMARY.md'), `---
+phase: "01"
+name: "Test Phase"
+key-files:
+  - "src/main.ts"
+requirements-completed:
+  - "REQ-01"
+---
+
+# Summary
+
+**Implemented the full authentication flow** with JWT tokens.
+
+More content follows.
+`);
+
+    const result = runGsdTools('summary-extract .planning/phases/01-test/SUMMARY.md', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.one_liner, 'Implemented the full authentication flow');
+    assert.deepStrictEqual(parsed.key_files, ['src/main.ts']);
+    assert.deepStrictEqual(parsed.requirements_completed, ['REQ-01']);
+  });
+});
+
+// --- Branch coverage: todo match-phase with file overlap ---
+
+describe('todo match-phase file overlap branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('matches todo by file overlap with phase plan files_modified', () => {
+    // Create a pending todo with files
+    const pendingDir = path.join(tmpDir, '.planning', 'todos', 'pending');
+    fs.mkdirSync(pendingDir, { recursive: true });
+    fs.writeFileSync(path.join(pendingDir, 'todo-01.md'),
+      'title: Fix routing\narea: frontend\nfiles: src/router.ts, src/app.ts\ncreated: 2026-01-01\n\nNeed to fix route handling.'
+    );
+
+    // Create phase with roadmap and plan files
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-routing');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '---\nwave: 1\n---\n\nfiles_modified: [src/router.ts, src/utils.ts]\n');
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'ROADMAP.md'), '# Roadmap\n\n## Phase 01: Routing\n\n**Goal:** Fix frontend routing\n');
+
+    const result = runGsdTools('todo match-phase 1', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.matches.length > 0, 'should have file overlap match');
+    const matchEntry = parsed.matches.find(m => m.file === 'todo-01.md');
+    assert.ok(matchEntry, 'should find the todo');
+    assert.ok(matchEntry.reasons.some(r => r.includes('files')), 'should have file reason');
+  });
+});
+
+describe('scaffold branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('scaffold context uses phase name from directory when name not given', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '.gitkeep'), '');
+
+    const result = runGsdTools('scaffold context --phase 1', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.created, true);
+  });
+
+  test('scaffold uat with explicit --name', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '.gitkeep'), '');
+
+    const result = runGsdTools(['scaffold', 'uat', '--phase', '1', '--name', 'Authentication'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.created, true);
+  });
+
+  test('scaffold verification with explicit --name', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '.gitkeep'), '');
+
+    const result = runGsdTools(['scaffold', 'verification', '--phase', '1', '--name', 'Auth Verify'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.created, true);
+  });
+
+  test('scaffold without phase uses default padding 00', () => {
+    // phase-dir does not require finding an existing phase
+    const result = runGsdTools(['scaffold', 'phase-dir', '--phase', '5', '--name', 'New Phase'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.created, true);
+    assert.ok(parsed.directory.includes('05-new-phase'));
+  });
+});
+
+// --- Branch coverage: stats In Progress status ---
+
+describe('stats In Progress branch coverage', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('shows In Progress when phase has some summaries but not all', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan 1');
+    fs.writeFileSync(path.join(phaseDir, '01-02-PLAN.md'), '# Plan 2');
+    fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Summary 1');
+    // 01-02-SUMMARY.md missing => In Progress
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'In Progress'));
+  });
+
+  test('shows Complete when all plans have summaries', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan 1');
+    fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Summary 1');
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'Complete'));
+  });
+
+  test('shows Planned when phase has plans but no summaries', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan');
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'Planned'));
+  });
+
+  test('handles state with lowercase Last Activity pattern', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      '# State\n\nLast Activity: 2026-04-02 - Fixed bugs\n'
+    );
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.last_activity, '2026-04-02 - Fixed bugs');
+  });
+
+  test('table format with no phases still renders', () => {
+    const result = runGsdTools('stats table', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.rendered.includes('Phases:'), 'should include phases section');
+  });
+
+  test('handles checked and unchecked requirements', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'REQUIREMENTS.md'),
+      '# Requirements\n\n- [x] **REQ-01**: Done\n- [x] **REQ-02**: Also done\n- [ ] **REQ-03**: Not done\n'
+    );
+
+    const result = runGsdTools('stats', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.strictEqual(parsed.requirements_complete, 2);
+    assert.strictEqual(parsed.requirements_total, 3);
+  });
+});
+
+// --- Branch coverage: progress Pending and In Progress status ---
+
+describe('progress branch coverage extended', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = createTempProject(); });
+  afterEach(() => { cleanup(tmpDir); });
+
+  test('In Progress status when summaries < plans', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-auth');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan 1');
+    fs.writeFileSync(path.join(phaseDir, '01-02-PLAN.md'), '# Plan 2');
+    fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Summary 1');
+
+    const result = runGsdTools('progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'In Progress'));
+  });
+
+  test('Pending status when phase has no plans', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-empty');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '.gitkeep'), '');
+
+    const result = runGsdTools('progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'Pending'));
+  });
+
+  test('Complete status when all plans have summaries', () => {
+    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-done');
+    fs.mkdirSync(phaseDir, { recursive: true });
+    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan');
+    fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Summary');
+
+    const result = runGsdTools('progress', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const parsed = JSON.parse(result.output);
+    assert.ok(parsed.phases.some(p => p.status === 'Complete'));
   });
 });

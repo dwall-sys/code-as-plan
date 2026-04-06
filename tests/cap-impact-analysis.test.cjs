@@ -1119,8 +1119,8 @@ describe('AC-6: advisory only enforcement', () => {
 
     // Report should be a plain object — no functions attached
     const reportValues = Object.values(report);
-    const hasFunctions = reportValues.some(v => typeof v === 'function');
-    assert.ok(!hasFunctions, 'Report must not contain function values (advisory only)');
+    const hasFunctions = reportValues.some(v => v instanceof Function);
+    assert.strictEqual(hasFunctions, false, 'Report must not contain function values (advisory only)');
   });
 });
 
@@ -1397,5 +1397,80 @@ describe('analyzeImpact (adversarial)', () => {
     // Very high threshold suppresses overlap
     const reportHigh = analyzeImpact(tmpDir, proposed, { similarityThreshold: 0.99 });
     assert.strictEqual(reportHigh.overlappingACs.length, 0, 'High threshold should suppress overlaps');
+  });
+});
+
+// --- Branch coverage: missing optional fields ---
+describe('detectOverlap (missing field branches)', () => {
+  it('handles proposed feature without acs or files', () => {
+    const proposed = { id: 'F-100', title: 'No ACs' };
+    const existing = [
+      { id: 'F-001', title: 'Existing', acs: [makeAC('AC-1', 'Extract tags')], files: ['f.js'] },
+    ];
+    const result = detectOverlap(proposed, existing);
+    assert.strictEqual(result.overlaps.length, 0);
+    assert.strictEqual(result.fileConflicts.length, 0);
+  });
+
+  it('handles existing features without acs, files, or dependencies', () => {
+    const proposed = makeFeature({
+      id: 'F-100',
+      acs: [makeAC('AC-1', 'Extract tags from source files')],
+      files: ['shared.js'],
+    });
+    const existing = [
+      { id: 'F-001', title: 'Bare Feature' },
+    ];
+    const result = detectOverlap(proposed, existing);
+    assert.strictEqual(result.overlaps.length, 0);
+    assert.strictEqual(result.fileConflicts.length, 0);
+  });
+});
+
+describe('traceDependencyChain (missing fields)', () => {
+  it('handles features without dependencies field', () => {
+    const features = [
+      { id: 'F-001', title: 'A' },
+      { id: 'F-002', title: 'B' },
+    ];
+    const result = traceDependencyChain('F-001', features);
+    assert.strictEqual(result.upstream.length, 0);
+    assert.strictEqual(result.downstream.length, 0);
+  });
+});
+
+// --- Branch coverage: cycle in unvisited nodes ---
+describe('detectCircularDeps (unvisited-node cycle)', () => {
+  it('detects cycle among existing features not reachable from proposed feature', () => {
+    const existingFeatures = [
+      { id: 'F-X', dependencies: ['F-Y'] },
+      { id: 'F-Y', dependencies: ['F-X'] },
+    ];
+    const result = detectCircularDeps('F-NEW', [], existingFeatures);
+    assert.strictEqual(result.hasCycle, true);
+    assert.ok(result.cycle.length > 0);
+  });
+});
+
+// --- Branch coverage: loadReport error path ---
+describe('loadReport (error branch)', () => {
+  it('returns null when impact dir is a file instead of directory', () => {
+    const impactPath = path.join(tmpDir, IMPACT_DIR);
+    fs.mkdirSync(path.dirname(impactPath), { recursive: true });
+    fs.writeFileSync(impactPath, 'not-a-directory', 'utf8');
+    const result = loadReport(tmpDir, 'F-001');
+    assert.strictEqual(result, null);
+  });
+
+  it('returns null when report file exists but is unreadable', { skip: process.platform === 'win32' }, () => {
+    const impactDir = path.join(tmpDir, IMPACT_DIR);
+    fs.mkdirSync(impactDir, { recursive: true });
+    const reportFile = path.join(impactDir, 'F-001.md');
+    fs.writeFileSync(reportFile, '# Impact Report\n', 'utf8');
+    fs.chmodSync(reportFile, 0o000);
+    const result = loadReport(tmpDir, 'F-001');
+    // Restore for cleanup
+    fs.chmodSync(reportFile, 0o644);
+    assert.strictEqual(result, null);
   });
 });

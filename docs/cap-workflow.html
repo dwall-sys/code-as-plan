@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CAP Workflow Guide</title>
+<title>CAP Workflow Guide v4.0</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   :root {
@@ -282,7 +282,7 @@
 <body>
 
 <nav>
-  <h1>CAP <span>Code as Plan</span></h1>
+  <h1>CAP <span>Code as Plan v4.0</span></h1>
   <div class="section-label">Pipeline</div>
   <a href="#overview">Overview</a>
   <a href="#init">1. Init</a>
@@ -645,7 +645,7 @@ flowchart TD
 
 <!-- MEMORY -->
 <h2 id="memory">Memory System</h2>
-<p>Cross-session intelligence — decisions, pitfalls, and conversation threads persist across context resets.</p>
+<p>Cross-session intelligence — decisions, pitfalls, conversation threads, and <strong>neural memory clusters</strong> persist across context resets. v4.0 adds automatic thread clustering and intelligent recall.</p>
 
 <div class="diagram">
 <pre class="mermaid">
@@ -675,6 +675,13 @@ flowchart TD
 
     RULE[".claude/rules/cap-memory.md"]:::hook
     D & P -.->|"auto-read"| RULE
+
+    AFF["Affinity Engine"]:::thread
+    CLU["Cluster Detection"]:::thread
+    G -->|"affinity scores"| AFF
+    TH -->|"thread pairs"| AFF
+    AFF -->|"clusters"| CLU
+    CLU -->|"labels + members"| G
 </pre>
 </div>
 
@@ -691,6 +698,7 @@ flowchart TD
     <tr><td>/cap:test-audit</td><td>Standalone trust score analysis</td><td>Deep quality check</td></tr>
     <tr><td>/cap:doctor</td><td>Environment health check</td><td>Setup issues</td></tr>
     <tr><td>/cap:memory init</td><td>Bootstrap memory from all sessions</td><td>First time / reset</td></tr>
+    <tr><td>/cap:cluster</td><td>Neural Memory cluster overview and detail views</td><td>Explore thread relationships</td></tr>
     <tr><td>/cap:refresh-docs</td><td>Update Context7 stack docs</td><td>Dependency updates</td></tr>
     <tr><td>/cap:start</td><td>Resume previous session</td><td>Start of day</td></tr>
     <tr><td>/cap:save</td><td>Snapshot session context</td><td>Before long break</td></tr>

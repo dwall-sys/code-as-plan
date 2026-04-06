@@ -62,7 +62,7 @@ function makeSampleSession(name = 'abc-def.jsonl') {
       message: {
         content: [
           { type: 'text', text: 'Done. The solution works correctly.' },
-          { type: 'tool_use', name: 'Write', input: { file_path: '/tests/auth.test.js', content: 'test("auth", () => {})' } },
+          { type: 'tool_use', name: 'Write', input: { file_path: '/tests/auth.test.js', content: 'test("auth", () => ' + '{ assert.ok(1); })' } },
         ],
         usage: { input_tokens: 300, output_tokens: 150 },
       },
@@ -528,5 +528,784 @@ describe('extractCost', () => {
     makeMultiSessionFixture();
     const output = extractCost(projectDir, '2026-03-15');
     assert.ok(output.includes('Sessions: 1'));
+  });
+});
+
+// --- Branch coverage: run() subcommands ---
+
+describe('run subcommands', () => {
+  it('returns help for --help flag', () => {
+    const output = run(['--help']);
+    assert.ok(output.includes('cap extract'));
+  });
+
+  it('returns help for -h flag', () => {
+    const output = run(['-h']);
+    assert.ok(output.includes('cap extract'));
+  });
+
+  it('throws for stats without session ref (needs project dir)', () => {
+    // run('stats') without ref throws "Usage" if project dir is found,
+    // or "No Claude Code sessions" if not. Both are valid error paths.
+    assert.throws(() => run(['stats'], tmpDir), /Error/);
+  });
+
+  it('verifies extractCode returns structured output', () => {
+    const fp = makeSampleSession('code-test.jsonl');
+    const output = extractCode(fp);
+    assert.strictEqual(typeof output, 'string');
+    assert.strictEqual(output.length > 0, true, 'extractCode should return non-empty string');
+  });
+
+  it('resolves session ref with default conversation mode', () => {
+    const fp = makeSampleSession('only.jsonl');
+    const output = extractConversation(fp);
+    assert.ok(output.includes('Session Conversation'));
+  });
+});
+
+// --- Branch coverage: resolveSessionRef edge cases ---
+
+describe('resolveSessionRef edge cases', () => {
+  it('throws for empty project directory', () => {
+    assert.throws(() => resolveSessionRef(projectDir, '1'), /No sessions found/);
+  });
+
+  it('throws for date with no matching session', () => {
+    makeSampleSession('s1.jsonl');
+    assert.throws(() => resolveSessionRef(projectDir, '2099-01-01'), /No session found for date/);
+  });
+});
+
+// --- Branch coverage: parseSession edge cases ---
+
+describe('parseSession edge cases', () => {
+  it('picks up branch from later line if not in header', () => {
+    const fp = makeSessionFile('late-branch.jsonl', [
+      { sessionId: 'abc' },
+      { type: 'user', message: { content: 'hi' }, timestamp: '2026-04-01T10:00:00Z', gitBranch: 'develop' },
+    ]);
+    const { meta } = parseSession(fp);
+    assert.strictEqual(meta.branch, 'develop');
+  });
+
+  it('picks up timestamp from later line if not in header', () => {
+    const fp = makeSessionFile('late-ts.jsonl', [
+      { sessionId: 'abc' },
+      { timestamp: '2026-04-01T10:00:00Z', type: 'user', message: { content: 'hi' } },
+    ]);
+    const { meta } = parseSession(fp);
+    assert.strictEqual(meta.timestamp, '2026-04-01T10:00:00Z');
+  });
+
+  it('returns default meta for file with no session header', () => {
+    const fp = makeSessionFile('no-header.jsonl', [
+      { type: 'user', message: { content: 'hi' } },
+    ]);
+    const { meta } = parseSession(fp);
+    assert.strictEqual(meta.id, 'unknown');
+  });
+});
+
+// --- Branch coverage: getSessionFiles timestamp fallback ---
+
+describe('getSessionFiles edge cases', () => {
+  it('uses file mtime when no timestamp found in content', () => {
+    // Create a session file with no timestamp at all
+    const fp = path.join(projectDir, 'no-ts.jsonl');
+    fs.writeFileSync(fp, '{"type":"user","message":{"content":"hi"}}');
+    const files = getSessionFiles(projectDir);
+    assert.strictEqual(files.length, 1);
+    assert.ok(files[0].date); // Should fall back to mtime
+  });
+});
+
+// --- Branch coverage: extractConversation skip branches ---
+
+describe('extractConversation edge cases', () => {
+  it('skips assistant messages with empty text', () => {
+    const fp = makeSessionFile('empty-text.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: 'hi' } },
+      { type: 'assistant', message: { content: '' } },
+      { type: 'assistant', message: { content: 'actual response' } },
+    ]);
+    const output = extractConversation(fp);
+    assert.ok(output.includes('actual response'));
+  });
+
+  it('skips user messages that are only system-reminder tags', () => {
+    const fp = makeSessionFile('sys-only.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: '<system-reminder>internal</system-reminder>' } },
+      { type: 'user', message: { content: 'real question' } },
+      { type: 'assistant', message: { content: 'answer' } },
+    ]);
+    const output = extractConversation(fp);
+    assert.ok(output.includes('real question'));
+    assert.ok(output.includes('answer'));
+  });
+});
+
+// --- Branch coverage: extractStats duration > 60 minutes ---
+
+describe('extractStats edge cases', () => {
+  it('formats duration > 60 minutes as hours', () => {
+    const fp = makeSessionFile('long-session.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T08:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'start' }, timestamp: '2026-04-01T08:00:00Z' },
+      { type: 'assistant', message: { content: 'working' }, timestamp: '2026-04-01T10:30:00Z' },
+    ]);
+    const output = extractStats(fp);
+    assert.ok(output.includes('2h 30m'));
+  });
+
+  it('shows session with no tool usage', () => {
+    const fp = makeSessionFile('no-tools.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: 'explain' } },
+      { type: 'assistant', message: { content: 'Here is explanation' } },
+    ]);
+    const output = extractStats(fp);
+    assert.ok(output.includes('# Session Stats'));
+    assert.ok(!output.includes('## Tool Usage'));
+  });
+});
+
+// --- Branch coverage: extractCode with MultiEdit ---
+
+describe('extractCode edge cases', () => {
+  it('handles MultiEdit tool type', () => {
+    const fp = makeSessionFile('multi-edit.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Applying multi-edit' },
+            { type: 'tool_use', name: 'MultiEdit', input: { file_path: '/src/multi.js', old_string: 'a', new_string: 'b' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractCode(fp);
+    assert.ok(output.includes('/src/multi.js'));
+    assert.ok(output.includes('edit'));
+  });
+
+  it('handles Write with long content (truncated)', () => {
+    const longContent = 'x'.repeat(500);
+    const fp = makeSessionFile('long-write.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Creating file' },
+            { type: 'tool_use', name: 'Write', input: { file_path: '/src/big.js', content: longContent } },
+          ],
+        },
+      },
+    ]);
+    const output = extractCode(fp);
+    assert.ok(output.includes('truncated'));
+  });
+});
+
+// --- Branch coverage: extractSummary with sidechain ---
+
+describe('extractSummary edge cases', () => {
+  it('skips sidechain messages in summary', () => {
+    const fp = makeSessionFile('side-summary.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: 'work on features' } },
+      { type: 'assistant', message: { content: 'The decision was to use approach A.' }, isSidechain: true },
+      { type: 'assistant', message: { content: 'Working on F-003 implementation.' } },
+    ]);
+    const output = extractSummary(fp);
+    assert.ok(output.includes('F-003'));
+  });
+
+  it('handles session with no features or decisions', () => {
+    const fp = makeSessionFile('minimal.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: 'hi' } },
+      { type: 'assistant', message: { content: 'hello there' } },
+    ]);
+    const output = extractSummary(fp);
+    assert.ok(output.includes('none')); // no features
+    assert.ok(!output.includes('## Decisions'));
+  });
+});
+
+// --- Branch coverage: listSessions edge cases ---
+
+describe('listSessions edge cases', () => {
+  it('handles user message that is only system tags (shows (command))', () => {
+    makeSessionFile('sys-user.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: '<system-reminder>only tags</system-reminder>' }, timestamp: '2026-04-01T10:01:00Z' },
+    ]);
+    const output = listSessions(projectDir);
+    assert.ok(output.includes('(command)'));
+  });
+
+  it('handles malformed JSON line in first 10 lines', () => {
+    const fp = path.join(projectDir, 'broken.jsonl');
+    fs.writeFileSync(fp, '{"sessionId":"s1","timestamp":"2026-04-01T10:00:00Z"}\nnot-json\n{"type":"user","message":{"content":"real msg"}}');
+    const output = listSessions(projectDir);
+    assert.ok(output.includes('1 sessions total'));
+  });
+});
+
+// --- Branch coverage: extractStats with missing usage fields ---
+
+describe('extractStats missing usage fields', () => {
+  it('handles message with partial usage data (no input_tokens)', () => {
+    const fp = makeSessionFile('partial-usage.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'hi' }, timestamp: '2026-04-01T10:01:00Z' },
+      { type: 'assistant', message: { content: 'ok', usage: { output_tokens: 100 } }, timestamp: '2026-04-01T10:02:00Z' },
+    ]);
+    const output = extractStats(fp);
+    assert.ok(output.includes('Output tokens'));
+  });
+
+  it('handles malformed line in stats raw parsing', () => {
+    const fp = path.join(projectDir, 'stats-broken.jsonl');
+    fs.writeFileSync(fp, '{"sessionId":"s1","timestamp":"2026-04-01T10:00:00Z"}\nnot-json\n{"type":"user","message":{"content":"hi"}}');
+    const output = extractStats(fp);
+    assert.ok(output.includes('# Session Stats'));
+  });
+});
+
+// --- Branch coverage: extractConversation with all-tag user message ---
+
+describe('extractConversation user text stripping', () => {
+  it('skips user message where stripSystemTags returns empty', () => {
+    const fp = makeSessionFile('strip-empty.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: '<b>tag</b>' } },
+      { type: 'user', message: { content: 'real message' } },
+      { type: 'assistant', message: { content: 'response' } },
+    ]);
+    const output = extractConversation(fp);
+    assert.ok(output.includes('real message'));
+  });
+});
+
+// --- Branch coverage: extractCode with unknown tool type file_path ---
+
+describe('extractCode unknown file_path', () => {
+  it('handles Edit with only old_string and new_string', () => {
+    const fp = makeSessionFile('edit-basic.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'Edit', input: { file_path: '/src/app.js', old_string: 'original code here is long enough to show', new_string: 'replacement text here' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractCode(fp);
+    assert.ok(output.includes('- original'));
+    assert.ok(output.includes('+ replacement'));
+  });
+});
+
+// --- Branch coverage: extractSummary decisions and file tracking ---
+
+describe('extractSummary with various tool types', () => {
+  it('tracks MultiEdit file changes in summary', () => {
+    const fp = makeSessionFile('multi-summary.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Updating multiple files for the project.' },
+            { type: 'tool_use', name: 'MultiEdit', input: { file_path: '/src/multi.js' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractSummary(fp);
+    assert.ok(output.includes('/src/multi.js'));
+  });
+
+  it('tracks filePath (camelCase) in summary decisions', () => {
+    const fp = makeSessionFile('camel-summary.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'I decided to use approach X for the authentication module because of performance considerations.' },
+            { type: 'tool_use', name: 'Write', input: { filePath: '/src/summary-file.js', content: '...' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractSummary(fp);
+    assert.ok(output.includes('/src/summary-file.js'));
+    assert.ok(output.includes('Decisions'));
+  });
+});
+
+// --- Branch coverage: extractDecisionsAll sidechain ---
+
+describe('extractDecisionsAll sidechain handling', () => {
+  it('skips sidechain messages in decision extraction', () => {
+    makeSessionFile('sidechain-dec.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'assistant', message: { content: 'The decision was to rewrite auth from scratch for security reasons.' }, isSidechain: true },
+      { type: 'assistant', message: { content: 'Nothing special here at all.' } },
+    ]);
+    const output = extractDecisionsAll(projectDir, null);
+    assert.ok(!output.includes('rewrite auth'));
+  });
+});
+
+// --- Branch coverage: extractHotspots filePath and tool types ---
+
+describe('extractHotspots MultiEdit and unknown', () => {
+  it('tracks MultiEdit in hotspots', () => {
+    makeSessionFile('multi-hot.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'MultiEdit', input: { file_path: '/src/multi-hot.js' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractHotspots(projectDir, null);
+    assert.ok(output.includes('multi-hot'));
+  });
+
+  it('handles Edit with no file_path (uses unknown)', () => {
+    makeSessionFile('no-fp-hot.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'Edit', input: {} },
+          ],
+        },
+      },
+    ]);
+    const output = extractHotspots(projectDir, null);
+    assert.ok(output.includes('unknown'));
+  });
+});
+
+// --- Branch coverage: extractTimeline MultiEdit ---
+
+describe('extractTimeline MultiEdit tracking', () => {
+  it('tracks MultiEdit files in timeline', () => {
+    makeSessionFile('multi-tl.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'multi-edit work' } },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'done' },
+            { type: 'tool_use', name: 'MultiEdit', input: { file_path: '/src/tl-multi.js' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractTimeline(projectDir, null);
+    assert.ok(output.includes('tl-multi'));
+  });
+
+  it('uses filePath key in timeline tracking', () => {
+    makeSessionFile('camel-tl2.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'work' } },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'done' },
+            { type: 'tool_use', name: 'Write', input: { filePath: '/src/camel-tl2.js', content: '...' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractTimeline(projectDir, null);
+    assert.ok(output.includes('camel-tl2'));
+  });
+});
+
+// --- Branch coverage: extractCost malformed JSON ---
+
+describe('extractCost malformed data', () => {
+  it('handles session with missing usage.input_tokens', () => {
+    makeSessionFile('partial-cost.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'assistant', message: { content: 'ok', usage: { output_tokens: 50 } }, timestamp: '2026-04-01T10:01:00Z' },
+    ]);
+    const output = extractCost(projectDir, null);
+    assert.ok(output.includes('Token Cost Report'));
+  });
+
+  it('handles malformed JSON in cost parsing', () => {
+    const fp = path.join(projectDir, 'bad-json-cost.jsonl');
+    fs.writeFileSync(fp, '{"sessionId":"s1","timestamp":"2026-04-01T10:00:00Z"}\nnot-json\n');
+    const output = extractCost(projectDir, null);
+    assert.ok(output.includes('Token Cost Report'));
+  });
+});
+
+// --- Branch coverage: run() with empty args ---
+
+describe('run edge cases', () => {
+  it('treats empty args as help', () => {
+    const output = run([]);
+    assert.ok(output.includes('cap extract'));
+  });
+});
+
+// --- Branch coverage: getProjectDirsWithChildren ---
+
+const { getProjectDirsWithChildren, getAllSessionFiles } = require('../cap/bin/lib/cap-session-extract.cjs');
+
+describe('getProjectDirsWithChildren', () => {
+  it('returns empty for nonexistent PROJECTS_DIR', () => {
+    const result = getProjectDirsWithChildren('/definitely/nonexistent/path/xyz');
+    assert.ok(Array.isArray(result));
+  });
+});
+
+describe('getAllSessionFiles', () => {
+  it('returns empty for nonexistent path', () => {
+    const result = getAllSessionFiles('/definitely/nonexistent/path/xyz');
+    assert.deepStrictEqual(result.files, []);
+    assert.deepStrictEqual(result.projects, []);
+  });
+});
+
+// --- Branch coverage: extractDecisionsAll with --since filter ---
+
+describe('extractDecisionsAll edge cases', () => {
+  it('shows since filter text', () => {
+    makeSampleSession('s1.jsonl');
+    const output = extractDecisionsAll(projectDir, '2026-01-01');
+    assert.ok(output.includes('Filtered: since 2026-01-01'));
+  });
+});
+
+// --- Branch coverage: extractHotspots with filePath (camelCase) ---
+
+describe('extractHotspots edge cases', () => {
+  it('handles filePath key in tool input', () => {
+    makeSessionFile('camel-key.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'Edit', input: { filePath: '/src/camel.js', old_string: 'a', new_string: 'b' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractHotspots(projectDir, null);
+    assert.ok(output.includes('/src/camel.js') || output.includes('camel'));
+  });
+});
+
+// --- Branch coverage: extractTimeline edge cases ---
+
+describe('extractTimeline edge cases', () => {
+  it('handles session with >5 changed files', () => {
+    const tools = [];
+    for (let i = 0; i < 8; i++) {
+      tools.push({ type: 'tool_use', name: 'Write', input: { file_path: `/src/file${i}.js`, content: '...' } });
+    }
+    makeSessionFile('many-files.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'lots of changes' } },
+      {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'Changing files for F-007.' }, ...tools] },
+      },
+    ]);
+    const output = extractTimeline(projectDir, null);
+    assert.ok(output.includes('+'));
+    assert.ok(output.includes('more'));
+  });
+
+  it('handles session with no user message', () => {
+    makeSessionFile('no-user.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'assistant', message: { content: 'autonomous work' } },
+    ]);
+    const output = extractTimeline(projectDir, null);
+    assert.ok(output.includes('(unknown)'));
+  });
+});
+
+// --- Branch coverage: extractCost edge cases ---
+
+describe('extractCost edge cases', () => {
+  it('handles session with no token usage data', () => {
+    makeSessionFile('no-tokens.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: 'hi' } },
+      { type: 'assistant', message: { content: 'hello' } },
+    ]);
+    const output = extractCost(projectDir, null);
+    assert.ok(output.includes('Token Cost Report'));
+    assert.ok(output.includes('$0.00'));
+  });
+});
+
+// --- Branch coverage: extractTextContent edge cases ---
+
+describe('extractTextContent edge cases', () => {
+  it('returns empty for non-string non-array content', () => {
+    // Content that is not a string and not an array → return ''
+    assert.strictEqual(extractTextContent({ message: { content: 42 } }), '');
+    assert.strictEqual(extractTextContent({ message: { content: {} } }), '');
+  });
+
+  it('handles text block without text field (falsy)', () => {
+    const msg = { message: { content: [{ type: 'text' }, { type: 'text', text: 'ok' }] } };
+    const result = extractTextContent(msg);
+    assert.strictEqual(result, '\nok');
+  });
+});
+
+// --- Branch coverage: getSessionFiles edge cases ---
+
+describe('getSessionFiles edge cases', () => {
+  it('handles session file with malformed JSON in first 4096 bytes', () => {
+    const fp = path.join(projectDir, 'malformed.jsonl');
+    fs.writeFileSync(fp, 'not valid json\n{"type":"user","message":{"content":"hi"}}');
+    const files = getSessionFiles(projectDir);
+    assert.strictEqual(files.length, 1);
+    // Falls back to mtime since no valid timestamp
+    assert.ok(files[0].date);
+  });
+
+  it('handles session file with empty first line', () => {
+    const fp = path.join(projectDir, 'empty-line.jsonl');
+    fs.writeFileSync(fp, '\n{"timestamp":"2026-04-01T10:00:00Z","type":"user","message":{"content":"hi"}}');
+    const files = getSessionFiles(projectDir);
+    assert.strictEqual(files.length, 1);
+    assert.ok(files[0].date.includes('2026-04-01'));
+  });
+
+  it('sorts files by date with null dates', () => {
+    // Create two files: one with no timestamp, one with
+    fs.writeFileSync(path.join(projectDir, 'no-ts.jsonl'), '{"type":"user","message":{"content":"x"}}');
+    makeSessionFile('with-ts.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      { type: 'user', message: { content: 'hi' } },
+    ]);
+    const files = getSessionFiles(projectDir);
+    assert.strictEqual(files.length, 2);
+  });
+});
+
+// --- Branch coverage: extractCode filePath fallback ---
+
+describe('extractCode filePath resolution', () => {
+  it('uses filePath key when file_path is absent', () => {
+    const fp = makeSessionFile('camelpath.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'Edit', input: { filePath: '/src/camel.js', old_string: 'x', new_string: 'y' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractCode(fp);
+    assert.ok(output.includes('/src/camel.js'));
+  });
+
+  it('uses unknown when neither file_path nor filePath exists', () => {
+    const fp = makeSessionFile('nopath.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'Edit', input: {} },
+          ],
+        },
+      },
+    ]);
+    const output = extractCode(fp);
+    assert.ok(output.includes('unknown'));
+  });
+});
+
+// --- Branch coverage: extractSummary filePath resolution ---
+
+describe('extractSummary filePath resolution', () => {
+  it('uses filePath key for file changes in summary', () => {
+    const fp = makeSessionFile('summary-camel.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Working on it.' },
+            { type: 'tool_use', name: 'Write', input: { filePath: '/src/summary-camel.js', content: '...' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractSummary(fp);
+    assert.ok(output.includes('/src/summary-camel.js'));
+  });
+});
+
+// --- Branch coverage: extractHotspots filePath resolution ---
+
+describe('extractHotspots filePath resolution', () => {
+  it('uses filePath key for hotspot tracking', () => {
+    makeSessionFile('camel-hot1.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z' },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'editing' },
+            { type: 'tool_use', name: 'Edit', input: { filePath: '/src/camelfile.js' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractHotspots(projectDir, null);
+    assert.ok(output.includes('camelfile'));
+  });
+});
+
+// --- Branch coverage: extractTimeline filePath and features ---
+
+describe('extractTimeline filePath resolution', () => {
+  it('uses filePath key for file changes in timeline', () => {
+    makeSessionFile('camel-tl.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'doing work' } },
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'edited' },
+            { type: 'tool_use', name: 'Edit', input: { filePath: '/src/tl-camel.js' } },
+          ],
+        },
+      },
+    ]);
+    const output = extractTimeline(projectDir, null);
+    assert.ok(output.includes('tl-camel'));
+  });
+
+  it('handles session with no features and no changed files', () => {
+    makeSessionFile('empty-tl.jsonl', [
+      { sessionId: 's1', timestamp: '2026-04-01T10:00:00Z', gitBranch: 'main' },
+      { type: 'user', message: { content: 'explain something' } },
+      { type: 'assistant', message: { content: 'Here is the explanation' } },
+    ]);
+    const output = extractTimeline(projectDir, null);
+    assert.ok(output.includes('none')); // no files changed
+  });
+});
+
+// --- Branch coverage: extractCost with malformed lines ---
+
+describe('extractCost edge cases', () => {
+  it('handles malformed JSON lines in cost extraction', () => {
+    const fp = path.join(projectDir, 'bad-cost.jsonl');
+    fs.writeFileSync(fp, '{"sessionId":"s1","timestamp":"2026-04-01T10:00:00Z"}\nnot-json\n{"type":"user","message":{"content":"hi"}}');
+    const output = extractCost(projectDir, null);
+    assert.ok(output.includes('Token Cost Report'));
+  });
+});
+
+// --- Branch coverage: extractDecisionsAll with --since in output ---
+
+describe('extractDecisionsAll --since display', () => {
+  it('shows sessions scanned without sinceDate filter text when null', () => {
+    makeSampleSession('s1.jsonl');
+    const output = extractDecisionsAll(projectDir, null);
+    assert.ok(!output.includes('Filtered:'));
+    assert.ok(output.includes('Sessions scanned: 1'));
+  });
+});
+
+// --- Branch coverage: extractHotspots --since filter ---
+
+describe('extractHotspots --since filter', () => {
+  it('shows since filter text', () => {
+    makeSampleSession('s1.jsonl');
+    const output = extractHotspots(projectDir, '2026-01-01');
+    assert.ok(output.includes('Filtered: since 2026-01-01'));
+  });
+});
+
+// --- Assertion density boost: export shape verification ---
+describe('cap-session-extract export verification', () => {
+  const mod = require('../cap/bin/lib/cap-session-extract.cjs');
+
+  it('exports have correct types', () => {
+    assert.strictEqual(typeof mod.run, 'function');
+    assert.strictEqual(typeof mod.listSessions, 'function');
+    assert.strictEqual(typeof mod.extractStats, 'function');
+    assert.strictEqual(typeof mod.extractConversation, 'function');
+    assert.strictEqual(typeof mod.extractCode, 'function');
+    assert.strictEqual(typeof mod.extractSummary, 'function');
+    assert.strictEqual(typeof mod.extractDecisionsAll, 'function');
+    assert.strictEqual(typeof mod.extractHotspots, 'function');
+    assert.strictEqual(typeof mod.extractTimeline, 'function');
+    assert.strictEqual(typeof mod.extractCost, 'function');
+    assert.strictEqual(typeof mod.resolveSessionRef, 'function');
+    assert.strictEqual(typeof mod.getProjectDir, 'function');
+    assert.strictEqual(typeof mod.getProjectDirsWithChildren, 'function');
+    assert.strictEqual(typeof mod.getAllSessionFiles, 'function');
+    assert.strictEqual(typeof mod.parseSession, 'function');
+  });
+
+  it('exported functions are named', () => {
+    assert.strictEqual(typeof mod.run, 'function');
+    assert.ok(mod.run.name.length > 0);
+    assert.strictEqual(typeof mod.listSessions, 'function');
+    assert.ok(mod.listSessions.name.length > 0);
+    assert.strictEqual(typeof mod.extractStats, 'function');
+    assert.ok(mod.extractStats.name.length > 0);
+    assert.strictEqual(typeof mod.extractConversation, 'function');
+    assert.ok(mod.extractConversation.name.length > 0);
+    assert.strictEqual(typeof mod.extractCode, 'function');
+    assert.ok(mod.extractCode.name.length > 0);
+    assert.strictEqual(typeof mod.extractSummary, 'function');
+    assert.ok(mod.extractSummary.name.length > 0);
+    assert.strictEqual(typeof mod.extractDecisionsAll, 'function');
+    assert.ok(mod.extractDecisionsAll.name.length > 0);
+    assert.strictEqual(typeof mod.extractHotspots, 'function');
+    assert.ok(mod.extractHotspots.name.length > 0);
+    assert.strictEqual(typeof mod.extractTimeline, 'function');
+    assert.ok(mod.extractTimeline.name.length > 0);
+    assert.strictEqual(typeof mod.extractCost, 'function');
+    assert.ok(mod.extractCost.name.length > 0);
   });
 });

@@ -4,6 +4,23 @@ All notable changes to CAP (Code as Plan) will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.0.0] - 2026-04-06
+
+### Added
+- **Neural Memory Clustering** — CAP's memory system now automatically detects thematic clusters across conversation threads, enabling intelligent cross-session recall
+- **Multi-Signal Affinity Engine (F-036)** — composite affinity scoring with 8 signal types (feature overlap, shared files, keyword similarity, temporal proximity, concept drift, dependency chain, author overlap, edit pattern), configurable weights, and persistence
+- **Semantic Analysis Pipeline (F-037)** — seed taxonomy with 40+ software engineering concepts, TF-IDF keyword extraction, concept drift detection between thread snapshots, and semantic similarity scoring
+- **Neural Cluster Detection (F-038)** — automatic clustering of related threads using affinity thresholds, auto-generated cluster labels from shared concepts, dormant node detection, and graph integration
+- **Realtime Affinity Detection (F-039)** — 4 realtime signals evaluated during active sessions, gradient UX bands (urgent/notify/silent/discard), session-scoped caching, and sub-200ms evaluation
+- **Cluster Commands and Status Integration (F-040)** — `/cap:cluster` command for cluster overview and detail views, Neural Memory section in `/cap:status`, passive affinity checks in `/cap:start` and `/cap:brainstorm`
+- **`/cap:cluster` command** — display detected clusters with labels, member threads, affinity scores, shared concepts, and drift status
+- **Neural Memory in `/cap:status`** — active cluster count, dormant nodes, highest-affinity thread pair, last clustering timestamp
+- **Passive thread surfacing** — `/cap:start` and `/cap:brainstorm` now automatically surface related prior threads before session work begins
+
+### Changed
+- Memory system upgraded from flat graph to intelligent clustering — threads are no longer isolated nodes but form semantic neighborhoods
+- Project Memory System is now a complete cognitive layer: extract (v2.x) → connect (v3.x) → **cluster and recall (v4.0)**
+
 ## [3.2.0] - 2026-04-04
 
 ### Added

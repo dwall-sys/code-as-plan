@@ -124,6 +124,24 @@ console.log(JSON.stringify({ filesWithTags: filesWithTags.size, totalFiles, tota
 
 Store as `tag_stats`.
 
+## Step 3b: Load Neural Memory status
+
+<!-- @cap-todo(ac:F-040/AC-3) Extend /cap:status with Neural Memory section: active cluster count, dormant nodes, highest-affinity pair, last clustering timestamp -->
+
+```bash
+node -e "
+const clusterDisplay = require('./cap/bin/lib/cap-cluster-display.cjs');
+try {
+  const output = clusterDisplay.loadAndFormatStatus(process.cwd());
+  console.log(output);
+} catch (e) {
+  console.log('Neural Memory: (not available)');
+}
+"
+```
+
+Store as `neural_memory_status`.
+
 ## Step 4: Present formatted dashboard
 
 Display:
@@ -158,6 +176,8 @@ Tag Coverage:
     @cap-decision: {byType.decision or 0}
 
 Last scan: {fm_status.lastScan or "never"}
+
+{neural_memory_status}
 ```
 
 **If `verbose` is true:**

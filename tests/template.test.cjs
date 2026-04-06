@@ -86,6 +86,12 @@ describe('template select command', () => {
     assert.strictEqual(out.type, 'complex');
   });
 
+  test('errors when no plan-path provided', () => {
+    const result = runGsdTools('template select', tmpDir);
+    assert.ok(!result.success, 'should fail without plan-path');
+    assert.ok(result.error.includes('plan-path required'), 'error should mention plan-path required');
+  });
+
   test('returns standard as fallback for nonexistent file', () => {
     const result = runGsdTools(`template select .planning/phases/01-setup/nonexistent.md`, tmpDir);
     assert.ok(result.success, `Failed: ${result.error}`);
@@ -175,6 +181,39 @@ describe('template fill command', () => {
     assert.ok(result.success);
     const out = JSON.parse(result.output);
     assert.ok(out.error, 'should report phase not found');
+  });
+
+  test('errors when no template type provided', () => {
+    const result = runGsdTools('template fill', tmpDir);
+    assert.ok(!result.success, 'should fail without template type');
+    assert.ok(result.error.includes('template type required'), 'error should mention template type');
+  });
+
+  test('errors when no --phase provided', () => {
+    const result = runGsdTools('template fill summary', tmpDir);
+    assert.ok(!result.success, 'should fail without phase');
+    assert.ok(result.error.includes('--phase required'), 'error should mention phase required');
+  });
+
+  test('fills plan template with --type and --wave options', () => {
+    const result = runGsdTools('template fill plan --phase 1 --plan 02 --type refactor --wave 3', tmpDir);
+    assert.ok(result.success, `Failed: ${result.error}`);
+    const out = JSON.parse(result.output);
+    assert.strictEqual(out.created, true);
+
+    const content = fs.readFileSync(path.join(tmpDir, out.path), 'utf-8');
+    assert.ok(content.includes('type: refactor'), 'should have type refactor in frontmatter');
+    assert.ok(content.includes('wave: 3'), 'should have wave 3 in frontmatter');
+  });
+
+  test('fills summary template with --name and --fields options', () => {
+    const result = runGsdTools(['template', 'fill', 'summary', '--phase', '1', '--name', 'Custom Phase Name'], tmpDir);
+    assert.ok(result.success, `Failed: ${result.error}`);
+    const out = JSON.parse(result.output);
+    assert.strictEqual(out.created, true);
+
+    const content = fs.readFileSync(path.join(tmpDir, out.path), 'utf-8');
+    assert.ok(content.includes('Custom Phase Name'), 'should use custom phase name');
   });
 
   test('respects --plan option for plan number', () => {

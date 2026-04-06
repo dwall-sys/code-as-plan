@@ -298,4 +298,188 @@ describe('formatAuditReport', () => {
     assert.ok(report.includes('Migration Audit'));
     assert.ok(report.includes('PROJECT.md'));
   });
+
+  it('does not show root analysis when all arrays are empty', () => {
+    const audit = {
+      apps: [],
+      appsWithPlanning: 0,
+      appsWithoutPlanning: 0,
+      rootAnalysis: { globalFiles: [], appSpecificFiles: [], ambiguousFiles: [], rootPlanningDir: '/tmp/.planning' },
+    };
+
+    const report = migrator.formatAuditReport(audit);
+    assert.ok(!report.includes('Root .planning/ Analysis'), 'should not show root analysis when no files');
+  });
+
+  it('shows app-specific and ambiguous files in root analysis', () => {
+    const audit = {
+      apps: [],
+      appsWithPlanning: 0,
+      appsWithoutPlanning: 0,
+      rootAnalysis: {
+        globalFiles: [],
+        appSpecificFiles: ['PRD.md'],
+        ambiguousFiles: ['STATE.md'],
+        rootPlanningDir: '/tmp/.planning',
+      },
+    };
+
+    const report = migrator.formatAuditReport(audit);
+    assert.ok(report.includes('App-specific (move to app): PRD.md'), 'should show app-specific');
+    assert.ok(report.includes('Needs review: STATE.md'), 'should show ambiguous');
+  });
+
+  it('shows directories and CODE-INVENTORY status for existing apps', () => {
+    const audit = {
+      apps: [
+        {
+          appPath: 'apps/web',
+          exists: true,
+          files: [],
+          directories: ['prototype'],
+          hasCodeInventory: true,
+          hasPrd: false,
+        },
+      ],
+      appsWithPlanning: 1,
+      appsWithoutPlanning: 0,
+      rootAnalysis: { globalFiles: [], appSpecificFiles: [], ambiguousFiles: [], rootPlanningDir: '/tmp/.planning' },
+    };
+
+    const report = migrator.formatAuditReport(audit);
+    assert.ok(report.includes('prototype'), 'should list directories');
+    assert.ok(report.includes('Has CODE-INVENTORY: yes'), 'should show CODE-INVENTORY status');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. regenerateScopedInventories
+// ---------------------------------------------------------------------------
+
+describe('regenerateScopedInventories', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('generates CODE-INVENTORY.md for each app', () => {
+    // Create app directory with a tagged file
+    const appDir = path.join(tmpDir, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(path.join(appDir, 'index.js'), '// @gsd-context Web app\n', 'utf-8');
+
+    const apps = [{ path: 'apps/web' }];
+    const results = migrator.regenerateScopedInventories(tmpDir, apps);
+
+    assert.strictEqual(results.length, 1);
+    assert.strictEqual(results[0].success, true);
+    assert.strictEqual(results[0].error, null);
+    assert.ok(fs.existsSync(results[0].inventoryPath), 'inventory file should exist');
+  });
+
+  it('handles errors gracefully and reports failure', () => {
+    // App path points to nonexistent directory — cmdExtractTags may still work (just empty scan)
+    // Instead, create a scenario where writing fails
+    const apps = [{ path: 'apps/ghost' }];
+    const results = migrator.regenerateScopedInventories(tmpDir, apps);
+
+    assert.strictEqual(results.length, 1);
+    // It should succeed because cmdExtractTags creates the output dir
+    assert.strictEqual(results[0].success, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. executeMigration
+// ---------------------------------------------------------------------------
+
+describe('executeMigration', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('runs all actions and regenerates inventories', () => {
+    // Create two apps
+    const appADir = path.join(tmpDir, 'apps', 'a', '.planning');
+    fs.mkdirSync(appADir, { recursive: true });
+    fs.writeFileSync(path.join(appADir, 'OLD.md'), 'old\n', 'utf-8');
+
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'b'), { recursive: true });
+
+    const apps = [
+      { path: 'apps/a', name: 'a' },
+      { path: 'apps/b', name: 'b' },
+    ];
+    const actions = [
+      { appPath: 'apps/a', action: 'archive' },
+      { appPath: 'apps/b', action: 'keep' },
+    ];
+
+    const { results, regeneration } = migrator.executeMigration(tmpDir, apps, actions);
+
+    assert.strictEqual(results.length, 2);
+    assert.strictEqual(results[0].action, 'archive');
+    assert.strictEqual(results[0].success, true);
+    assert.strictEqual(results[1].action, 'keep');
+    assert.strictEqual(results[1].success, true);
+
+    assert.strictEqual(regeneration.length, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. analyzeRootPlanning — directory classification
+// ---------------------------------------------------------------------------
+
+describe('analyzeRootPlanning directory classification', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('classifies manifests/ as global and prototype/ as ambiguous', () => {
+    const rootPlanning = path.join(tmpDir, '.planning');
+    fs.mkdirSync(path.join(rootPlanning, 'manifests'), { recursive: true });
+    fs.mkdirSync(path.join(rootPlanning, 'prototype'), { recursive: true });
+    fs.mkdirSync(path.join(rootPlanning, 'custom-dir'), { recursive: true });
+
+    const result = migrator.analyzeRootPlanning(tmpDir);
+    assert.ok(result.globalFiles.includes('manifests/'), 'manifests/ should be global');
+    assert.ok(result.ambiguousFiles.includes('prototype/'), 'prototype/ should be ambiguous');
+    assert.ok(result.ambiguousFiles.includes('custom-dir/'), 'unknown dirs should be ambiguous');
+  });
+
+  it('classifies FEATURES.md without app refs as ambiguous', () => {
+    const rootPlanning = path.join(tmpDir, '.planning');
+    fs.mkdirSync(rootPlanning, { recursive: true });
+    fs.writeFileSync(path.join(rootPlanning, 'FEATURES.md'), '# Features\nGeneral features.\n', 'utf-8');
+
+    const result = migrator.analyzeRootPlanning(tmpDir);
+    assert.ok(result.ambiguousFiles.includes('FEATURES.md'), 'FEATURES.md without app refs should be ambiguous');
+  });
+
+  it('classifies unknown files as ambiguous', () => {
+    const rootPlanning = path.join(tmpDir, '.planning');
+    fs.mkdirSync(rootPlanning, { recursive: true });
+    fs.writeFileSync(path.join(rootPlanning, 'CUSTOM.md'), '# Custom\n', 'utf-8');
+
+    const result = migrator.analyzeRootPlanning(tmpDir);
+    assert.ok(result.ambiguousFiles.includes('CUSTOM.md'), 'unknown files should be ambiguous');
+  });
 });

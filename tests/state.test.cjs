@@ -1607,5 +1607,372 @@ Progress: [..........] 0%
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// signal-waiting and signal-resume commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('state signal-waiting command', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('writes WAITING.json to .planning directory', () => {
+    const result = runGsdTools(
+      ['state', 'signal-waiting', '--type', 'decision_point', '--question', 'Which DB?', '--options', 'Postgres|MySQL', '--phase', '2'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.signaled, true);
+    assert.ok(output.path.includes('WAITING.json'), 'path should contain WAITING.json');
+
+    const waitingPath = path.join(tmpDir, '.planning', 'WAITING.json');
+    assert.ok(fs.existsSync(waitingPath), 'WAITING.json should exist');
+    const signal = JSON.parse(fs.readFileSync(waitingPath, 'utf-8'));
+    assert.strictEqual(signal.status, 'waiting');
+    assert.strictEqual(signal.type, 'decision_point');
+    assert.strictEqual(signal.question, 'Which DB?');
+    assert.deepStrictEqual(signal.options, ['Postgres', 'MySQL']);
+    assert.strictEqual(signal.phase, '2');
+    assert.ok(signal.since, 'should have since timestamp');
+  });
+
+  test('writes WAITING.json with defaults when no options provided', () => {
+    const result = runGsdTools(['state', 'signal-waiting'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.signaled, true);
+
+    const waitingPath = path.join(tmpDir, '.planning', 'WAITING.json');
+    const signal = JSON.parse(fs.readFileSync(waitingPath, 'utf-8'));
+    assert.strictEqual(signal.type, 'decision_point');
+    assert.strictEqual(signal.question, null);
+    assert.deepStrictEqual(signal.options, []);
+    assert.strictEqual(signal.phase, null);
+  });
+
+  test('writes to .gsd directory if it exists', () => {
+    const gsdDir = path.join(tmpDir, '.gsd');
+    fs.mkdirSync(gsdDir, { recursive: true });
+    const result = runGsdTools(
+      ['state', 'signal-waiting', '--type', 'approval', '--question', 'OK?'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.signaled, true);
+    assert.ok(
+      fs.existsSync(path.join(gsdDir, 'WAITING.json')),
+      'WAITING.json should be in .gsd directory'
+    );
+  });
+});
+
+describe('state signal-resume command', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('removes WAITING.json from .planning directory', () => {
+    const waitingPath = path.join(tmpDir, '.planning', 'WAITING.json');
+    fs.writeFileSync(waitingPath, JSON.stringify({ status: 'waiting' }));
+    assert.ok(fs.existsSync(waitingPath), 'WAITING.json should exist before resume');
+
+    const result = runGsdTools(['state', 'signal-resume'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.resumed, true);
+    assert.strictEqual(output.removed, true);
+    assert.ok(!fs.existsSync(waitingPath), 'WAITING.json should be removed after resume');
+  });
+
+  test('removes WAITING.json from .gsd directory', () => {
+    const gsdDir = path.join(tmpDir, '.gsd');
+    fs.mkdirSync(gsdDir, { recursive: true });
+    const waitingPath = path.join(gsdDir, 'WAITING.json');
+    fs.writeFileSync(waitingPath, JSON.stringify({ status: 'waiting' }));
+
+    const result = runGsdTools(['state', 'signal-resume'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.resumed, true);
+    assert.strictEqual(output.removed, true);
+    assert.ok(!fs.existsSync(waitingPath), 'WAITING.json should be removed from .gsd');
+  });
+
+  test('returns removed=false when no WAITING.json exists', () => {
+    const result = runGsdTools(['state', 'signal-resume'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.resumed, true);
+    assert.strictEqual(output.removed, false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// begin-phase edge cases (lines 912-914, 930-931, 938-939)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('state begin-phase additional branches', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('updates Current focus body text line', () => {
+    const stateMd = `# Project State
+
+**Current Phase:** 1
+**Current Phase Name:** old
+**Status:** Ready to plan
+**Last Activity:** 2026-03-20
+
+**Current focus:** Phase 1 — old
+
+## Current Position
+Phase: 1 (old)
+Plan: 0 of ?
+Status: Ready to plan
+Last activity: 2026-03-20
+
+## Decisions Made
+
+| Phase | Decision | Rationale |
+|-------|----------|-----------|
+`;
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), stateMd);
+
+    const result = runGsdTools(
+      ['state', 'begin-phase', '--phase', '2', '--name', 'API Layer', '--plans', '3'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.ok(output.updated.includes('Current focus'), 'should update Current focus');
+
+    const content = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(content.includes('Phase 2 — API Layer'), 'Current focus should be updated');
+  });
+
+  test('inserts Phase line when not present in Current Position', () => {
+    const stateMd = `# Project State
+
+**Current Phase:** 1
+**Status:** Ready to plan
+**Last Activity:** 2026-03-20
+
+## Current Position
+Status: Ready to plan
+Last activity: 2026-03-20
+
+## Decisions Made
+None yet
+`;
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), stateMd);
+
+    const result = runGsdTools(
+      ['state', 'begin-phase', '--phase', '3', '--name', 'Testing'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const content = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    assert.ok(content.includes('Phase: 3 (Testing)'), 'should insert Phase line');
+  });
+
+  test('inserts Plan line when not present in Current Position', () => {
+    const stateMd = `# Project State
+
+**Current Phase:** 1
+**Status:** Ready to plan
+**Last Activity:** 2026-03-20
+
+## Current Position
+Phase: 1 — EXECUTING
+Status: Ready to plan
+
+## Decisions Made
+None yet
+`;
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'STATE.md'), stateMd);
+
+    const result = runGsdTools(
+      ['state', 'begin-phase', '--phase', '2', '--name', 'Build', '--plans', '5'],
+      tmpDir
+    );
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const content = fs.readFileSync(path.join(tmpDir, '.planning', 'STATE.md'), 'utf-8');
+    // Plan line should be inserted after Phase line
+    assert.ok(content.includes('Plan: 1 of 5'), 'should insert Plan line');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Direct import tests for uncovered branches in state.cjs
+// ──────────────────────────────────────────────────────────────���──────────────
+
+const stateModule = require('../cap/bin/lib/state.cjs');
+
+describe('buildStateFrontmatter status normalization (direct)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    const os = require('os');
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-state-test-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning', 'phases'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('discussing status normalizes to discussing', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** Discussing architecture options\n**Last Activity:** 2026-01-01\n`
+    );
+    // Call cmdStateJson which triggers buildStateFrontmatter
+    const result = runGsdTools(['state', 'json'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'discussing');
+  });
+
+  test('paused status normalizes to paused', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** Paused for review\n**Last Activity:** 2026-01-01\n`
+    );
+    const result = runGsdTools(['state', 'json'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'paused');
+  });
+
+  test('verification status normalizes to verifying', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** Verifying phase 2\n**Last Activity:** 2026-01-01\n`
+    );
+    const result = runGsdTools(['state', 'json'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'verifying');
+  });
+
+  test('completed status normalizes to completed', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** Complete\n**Last Activity:** 2026-01-01\n`
+    );
+    const result = runGsdTools(['state', 'json'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'completed');
+  });
+
+  test('ready to execute normalizes to executing', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** Ready to execute\n**Last Activity:** 2026-01-01\n`
+    );
+    const result = runGsdTools(['state', 'json'], tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.status, 'executing');
+  });
+});
+
+describe('cmdSignalWaiting and cmdSignalResume direct (in-process)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    const os = require('os');
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-signal-test-'));
+    fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('cmdSignalWaiting writes signal file in-process', () => {
+    const origWrite = fs.writeSync;
+    let captured = '';
+    fs.writeSync = function(fd, data) {
+      if (fd === 1 || fd === 2) { captured += data; return data.length; }
+      return origWrite.apply(fs, arguments);
+    };
+    try {
+      stateModule.cmdSignalWaiting(tmpDir, 'approval', 'Ship it?', 'Yes|No|Maybe', '3', false);
+    } finally {
+      fs.writeSync = origWrite;
+    }
+    const output = JSON.parse(captured);
+    assert.strictEqual(output.signaled, true);
+    const waitingPath = path.join(tmpDir, '.planning', 'WAITING.json');
+    assert.ok(fs.existsSync(waitingPath), 'WAITING.json should exist');
+    const signal = JSON.parse(fs.readFileSync(waitingPath, 'utf-8'));
+    assert.strictEqual(signal.type, 'approval');
+    assert.strictEqual(signal.question, 'Ship it?');
+    assert.deepStrictEqual(signal.options, ['Yes', 'No', 'Maybe']);
+    assert.strictEqual(signal.phase, '3');
+  });
+
+  test('cmdSignalResume removes signal file in-process', () => {
+    const waitingPath = path.join(tmpDir, '.planning', 'WAITING.json');
+    fs.writeFileSync(waitingPath, JSON.stringify({ status: 'waiting' }));
+
+    const origWrite = fs.writeSync;
+    let captured = '';
+    fs.writeSync = function(fd, data) {
+      if (fd === 1 || fd === 2) { captured += data; return data.length; }
+      return origWrite.apply(fs, arguments);
+    };
+    try {
+      stateModule.cmdSignalResume(tmpDir, false);
+    } finally {
+      fs.writeSync = origWrite;
+    }
+    const output = JSON.parse(captured);
+    assert.strictEqual(output.resumed, true);
+    assert.strictEqual(output.removed, true);
+    assert.ok(!fs.existsSync(waitingPath));
+  });
+
+  test('cmdSignalResume returns removed=false when no file', () => {
+    const origWrite = fs.writeSync;
+    let captured = '';
+    fs.writeSync = function(fd, data) {
+      if (fd === 1 || fd === 2) { captured += data; return data.length; }
+      return origWrite.apply(fs, arguments);
+    };
+    try {
+      stateModule.cmdSignalResume(tmpDir, false);
+    } finally {
+      fs.writeSync = origWrite;
+    }
+    const output = JSON.parse(captured);
+    assert.strictEqual(output.resumed, true);
+    assert.strictEqual(output.removed, false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // summary-extract command
 // ─────────────────────────────────────────────────────────────────────────────

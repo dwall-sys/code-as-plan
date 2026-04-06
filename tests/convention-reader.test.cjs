@@ -170,4 +170,119 @@ describe('detectNamingConvention', () => {
   it('returns unknown for single-char names', () => {
     assert.strictEqual(detectNamingConvention(['a', 'b', 'c']), 'unknown');
   });
+
+  it('returns unknown when no directories match any pattern', () => {
+    // Single-word lowercase names don't match kebab, camel, pascal, or snake
+    assert.strictEqual(detectNamingConvention(['src', 'lib', 'bin']), 'unknown');
+  });
+});
+
+// ─── additional readProjectConventions branches ─────────────────────────────
+
+describe('readProjectConventions additional branches', () => {
+  it('reads jsconfig.json when tsconfig.json does not exist', () => {
+    fs.writeFileSync(path.join(tmpDir, 'jsconfig.json'), JSON.stringify({
+      compilerOptions: { paths: { '~/*': ['src/*'] } }
+    }));
+    const report = readProjectConventions(tmpDir);
+    assert.deepStrictEqual(report.pathAliases, { '~/*': ['src/*'] });
+  });
+
+  it('handles malformed tsconfig.json gracefully', () => {
+    fs.writeFileSync(path.join(tmpDir, 'tsconfig.json'), 'not valid json at all');
+    const report = readProjectConventions(tmpDir);
+    assert.deepStrictEqual(report.pathAliases, {});
+  });
+
+  it('detects mocha as test runner', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      devDependencies: { mocha: '^10.0.0' }
+    }));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.testRunner, 'mocha');
+  });
+
+  it('detects ava as test runner', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      devDependencies: { ava: '^5.0.0' }
+    }));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.testRunner, 'ava');
+  });
+
+  it('detects vite as build tool', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      devDependencies: { vite: '^5.0.0' }
+    }));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.buildTool, 'vite');
+  });
+
+  it('detects webpack as build tool', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      devDependencies: { webpack: '^5.0.0' }
+    }));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.buildTool, 'webpack');
+  });
+
+  it('detects rollup as build tool', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({
+      devDependencies: { rollup: '^4.0.0' }
+    }));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.buildTool, 'rollup');
+  });
+
+  it('detects __tests__/ as separate test directory', () => {
+    fs.mkdirSync(path.join(tmpDir, '__tests__'));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.testPattern, 'separate-dir');
+  });
+
+  it('detects nested tests/ directory as separate-dir', { skip: process.platform === 'win32' }, () => {
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'src', 'tests'), { recursive: true });
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.testPattern, 'separate-dir');
+  });
+
+  it('detects .eslintrc.js as eslint', () => {
+    fs.writeFileSync(path.join(tmpDir, '.eslintrc.js'), 'module.exports = {};');
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.linter, 'eslint');
+  });
+
+  it('detects biome.jsonc as biome', () => {
+    fs.writeFileSync(path.join(tmpDir, 'biome.jsonc'), '{}');
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.linter, 'biome');
+  });
+
+  it('handles package.json without devDependencies', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'test' }));
+    const report = readProjectConventions(tmpDir);
+    assert.strictEqual(report.testRunner, null);
+    assert.strictEqual(report.buildTool, null);
+  });
+});
+
+// ─── discoverDirectories edge cases ─────────────────────────────────────────
+
+describe('discoverDirectories edge cases', () => {
+  it('skips .planning directory', () => {
+    fs.mkdirSync(path.join(tmpDir, '.planning'));
+    fs.mkdirSync(path.join(tmpDir, 'src'));
+    const dirs = discoverDirectories(tmpDir, 1);
+    assert.ok(!dirs.includes('.planning'));
+    assert.ok(dirs.includes('src'));
+  });
+
+  it('handles permission errors gracefully', () => {
+    // Passing a file instead of a directory — readdirSync will fail
+    const filePath = path.join(tmpDir, 'afile.txt');
+    fs.writeFileSync(filePath, 'content');
+    const dirs = discoverDirectories(filePath, 1);
+    assert.deepStrictEqual(dirs, []);
+  });
 });

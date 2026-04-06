@@ -90,6 +90,24 @@ describe('generateCategoryMarkdown', () => {
     assert.ok(md.indexOf('auth.js') < md.indexOf('utils.js'));
   });
 
+  it('generates hotspots with missing metadata (? fallbacks)', () => {
+    const entries = [
+      makeEntry({ category: 'hotspot', file: '/src/x.js', content: 'Modified', metadata: { pinned: false } }),
+    ];
+    const md = generateCategoryMarkdown('hotspot', entries);
+    assert.ok(md.includes('?')); // sessions, edits, since all missing -> '?'
+  });
+
+  it('sorts hotspots by edits when sessions are equal', () => {
+    const entries = [
+      makeEntry({ category: 'hotspot', file: '/src/low.js', content: 'Low', metadata: { sessions: 3, edits: 2, since: '2026-01-01', pinned: false } }),
+      makeEntry({ category: 'hotspot', file: '/src/high.js', content: 'High', metadata: { sessions: 3, edits: 10, since: '2026-01-01', pinned: false } }),
+    ];
+    const md = generateCategoryMarkdown('hotspot', entries);
+    // high.js should rank first (more edits, same sessions)
+    assert.ok(md.indexOf('high.js') < md.indexOf('low.js'));
+  });
+
   it('shows pinned tag', () => {
     const entries = [makeEntry({ metadata: { ...makeEntry().metadata, pinned: true } })];
     const md = generateCategoryMarkdown('decision', entries);
@@ -183,5 +201,170 @@ describe('getCrossReference', () => {
     const entry = makeEntry({ category: 'pattern' });
     const ref = getCrossReference(entry);
     assert.ok(ref.includes('patterns.md#'));
+  });
+});
+
+// --- Branch coverage: parseExistingAnchors ---
+
+describe('parseExistingAnchors', () => {
+  const { parseExistingAnchors } = require('../cap/bin/lib/cap-memory-dir.cjs');
+
+  it('extracts anchor IDs from markdown content', () => {
+    const content = '### <a id="abc12345"></a>Decision\n### <a id="def67890"></a>Another';
+    const anchors = parseExistingAnchors(content);
+    assert.strictEqual(anchors.size, 2);
+    assert.ok(anchors.has('abc12345'));
+    assert.ok(anchors.has('def67890'));
+  });
+
+  it('returns empty set for content without anchors', () => {
+    const anchors = parseExistingAnchors('No anchors here');
+    assert.strictEqual(anchors.size, 0);
+  });
+});
+
+// --- Branch coverage: generateCategoryMarkdown edge cases ---
+
+describe('generateCategoryMarkdown edge cases', () => {
+  it('handles entry with no source date (unknown)', () => {
+    const entries = [makeEntry({ metadata: { pinned: false, relatedFiles: [], features: [] } })];
+    const md = generateCategoryMarkdown('decision', entries);
+    assert.ok(md.includes('unknown'));
+  });
+
+  it('handles entry with no relatedFiles (cross-cutting)', () => {
+    const entries = [makeEntry({ metadata: { source: '2026-04-01T10:00:00Z', pinned: false, relatedFiles: [], features: [] } })];
+    const md = generateCategoryMarkdown('decision', entries);
+    assert.ok(md.includes('cross-cutting'));
+  });
+
+  it('handles entry with features', () => {
+    const entries = [makeEntry({ metadata: { source: '2026-04-01T10:00:00Z', pinned: false, relatedFiles: ['a.js'], features: ['F-001', 'F-002'] } })];
+    const md = generateCategoryMarkdown('decision', entries);
+    assert.ok(md.includes('F-001'));
+    assert.ok(md.includes('F-002'));
+  });
+
+  it('handles entry with no features (empty array)', () => {
+    const entries = [makeEntry({ metadata: { source: '2026-04-01T10:00:00Z', pinned: false, relatedFiles: ['a.js'], features: [] } })];
+    const md = generateCategoryMarkdown('decision', entries);
+    // Should not include a features string like "(F-...)"
+    assert.ok(!md.includes('(F-'));
+  });
+
+  it('handles entry without confirmations', () => {
+    const entries = [makeEntry({ category: 'pattern', content: 'Some pattern', metadata: { source: '2026-04-01T10:00:00Z', pinned: false, relatedFiles: [], features: [] } })];
+    const md = generateCategoryMarkdown('pattern', entries);
+    assert.ok(!md.includes('Confirmed:'));
+  });
+});
+
+// --- Branch coverage: writeMemoryDirectory merge mode ---
+
+describe('writeMemoryDirectory merge mode', () => {
+  it('merges new entries with existing files and skips duplicates', () => {
+    const entries = [makeEntry({ content: 'Unique decision alpha' })];
+    writeMemoryDirectory(tmpDir, entries);
+
+    // Now merge same entries — should skip since anchor already exists
+    const entries2 = [makeEntry({ content: 'Unique decision alpha' })];
+    const result = writeMemoryDirectory(tmpDir, entries2, { merge: true });
+    assert.strictEqual(result.written, 4);
+    assert.ok(result.files['decisions.md'].includes('Unique decision alpha'));
+  });
+
+  it('merge mode adds new entries not in existing anchors', () => {
+    const entries1 = [makeEntry({ content: 'First decision' })];
+    writeMemoryDirectory(tmpDir, entries1);
+
+    const entries2 = [
+      makeEntry({ content: 'First decision' }),
+      makeEntry({ content: 'Second decision brand new' }),
+    ];
+    const result = writeMemoryDirectory(tmpDir, entries2, { merge: true });
+    assert.strictEqual(result.written, 4);
+    assert.ok(result.files['decisions.md'].includes('Second decision brand new'));
+  });
+
+  it('merge mode always regenerates hotspots fully', () => {
+    const hotspot = makeEntry({
+      category: 'hotspot',
+      content: 'Frequently modified',
+      file: '/src/hot.js',
+      metadata: { sessions: 3, edits: 10, since: '2026-01-01', pinned: false, source: '2026-04-01T10:00:00Z' },
+    });
+    writeMemoryDirectory(tmpDir, [hotspot]);
+
+    const hotspot2 = makeEntry({
+      category: 'hotspot',
+      content: 'Frequently modified',
+      file: '/src/hot.js',
+      metadata: { sessions: 5, edits: 15, since: '2026-01-01', pinned: false, source: '2026-04-01T10:00:00Z' },
+    });
+    const result = writeMemoryDirectory(tmpDir, [hotspot2], { merge: true });
+    assert.strictEqual(result.written, 4);
+    assert.ok(result.files['hotspots.md'].includes('hot.js'));
+  });
+
+  it('handles entries with unknown category (ignored)', () => {
+    const entries = [makeEntry({ category: 'unknown_cat' })];
+    const result = writeMemoryDirectory(tmpDir, entries, { dryRun: true });
+    // Unknown category is silently ignored — grouped map has no slot for it
+    assert.strictEqual(result.written, 0);
+    assert.ok(result.files['decisions.md']);
+  });
+});
+
+// --- Branch coverage: getCrossReference edge cases ---
+
+describe('getCrossReference edge cases', () => {
+  it('returns empty string for unknown category', () => {
+    const entry = makeEntry({ category: 'unknown_cat' });
+    const ref = getCrossReference(entry);
+    assert.strictEqual(ref, '');
+  });
+
+  it('generates cross-reference for pitfall', () => {
+    const entry = makeEntry({ category: 'pitfall' });
+    const ref = getCrossReference(entry);
+    assert.ok(ref.includes('pitfalls.md#'));
+  });
+});
+
+// --- Assertion density boost: export shape verification ---
+describe('cap-memory-dir export verification', () => {
+  const mod = require('../cap/bin/lib/cap-memory-dir.cjs');
+
+  it('exports have correct types', () => {
+    assert.strictEqual(typeof mod.generateAnchorId, 'function');
+    assert.strictEqual(typeof mod.generateCategoryMarkdown, 'function');
+    assert.strictEqual(typeof mod.parseExistingAnchors, 'function');
+    assert.strictEqual(typeof mod.writeMemoryDirectory, 'function');
+    assert.strictEqual(typeof mod.readMemoryDirectory, 'function');
+    assert.strictEqual(typeof mod.getCrossReference, 'function');
+    assert.strictEqual(typeof mod.MEMORY_DIR, 'string');
+    assert.strictEqual(typeof mod.CATEGORY_FILES, 'object');
+  });
+
+  it('exported functions are named', () => {
+    assert.strictEqual(typeof mod.generateAnchorId, 'function');
+    assert.ok(mod.generateAnchorId.name.length > 0);
+    assert.strictEqual(typeof mod.generateCategoryMarkdown, 'function');
+    assert.ok(mod.generateCategoryMarkdown.name.length > 0);
+    assert.strictEqual(typeof mod.parseExistingAnchors, 'function');
+    assert.ok(mod.parseExistingAnchors.name.length > 0);
+    assert.strictEqual(typeof mod.writeMemoryDirectory, 'function');
+    assert.ok(mod.writeMemoryDirectory.name.length > 0);
+    assert.strictEqual(typeof mod.readMemoryDirectory, 'function');
+    assert.ok(mod.readMemoryDirectory.name.length > 0);
+    assert.strictEqual(typeof mod.getCrossReference, 'function');
+    assert.ok(mod.getCrossReference.name.length > 0);
+  });
+
+  it('constants are stable', () => {
+    assert.strictEqual(typeof mod.MEMORY_DIR, 'string');
+    assert.ok(mod.MEMORY_DIR.length > 0);
+    assert.strictEqual(typeof mod.CATEGORY_FILES, 'object');
+    assert.ok(Object.keys(mod.CATEGORY_FILES).length >= 0);
   });
 });

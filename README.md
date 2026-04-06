@@ -189,6 +189,7 @@ Green tests mean verified. No separate verification document.
 | `/cap:save` | Save current session context to snapshot file for cross-session continuity |
 | `/cap:continue` | Restore a saved context snapshot |
 | `/cap:memory` | Project memory management -- `init`, `status`, `pin`, `unpin` subcommands |
+| `/cap:cluster` | Neural Memory cluster overview and detail views |
 
 ---
 
@@ -624,6 +625,133 @@ Both developers' decisions, hotspots, and threads are accumulated into a shared 
 /cap:memory pin       # mark a pitfall as permanent (immune to aging)
 /cap:memory unpin     # remove permanent mark
 ```
+
+---
+
+## Neural Memory Clustering
+
+CAP v4.0 introduces intelligent clustering on top of the memory graph. Instead of isolated nodes, threads now form **semantic neighborhoods** -- groups of related conversations that CAP detects, labels, and surfaces automatically.
+
+### How it works
+
+```
+Conversation Threads         Affinity Engine              Clusters
+┌──────────────┐        ┌──────────────────┐       ┌─────────────────┐
+│ Auth Refactor │───────>│ 8 signal types   │──────>│ auth · session  │
+│ Cookie SSO    │───────>│ composite score  │──────>│ · cookies       │
+│ Session Store │───────>│ gradient UX band │       │ (3 threads)     │
+└──────────────┘        └──────────────────┘       └─────────────────┘
+```
+
+**8 affinity signals** are scored and combined:
+- Feature ID overlap, shared files, keyword similarity, temporal proximity
+- Concept drift, dependency chain, author overlap, edit pattern
+
+**Gradient UX bands** control how related threads are surfaced:
+
+| Band | Score | Behavior |
+|------|-------|----------|
+| Urgent | > 0.8 | Full context block with shared concepts |
+| Notify | 0.5 - 0.8 | One-line mention before session starts |
+| Silent | 0.3 - 0.5 | Stored for queries, not shown proactively |
+| Discard | < 0.3 | Dropped entirely |
+
+### Automatic surfacing
+
+When you run `/cap:start` or `/cap:brainstorm`, CAP passively checks affinity against your selected feature and surfaces related prior threads. No manual lookup required -- relevant context finds you.
+
+### Cluster commands
+
+```bash
+/cap:cluster              # show all detected clusters with labels, member counts, affinity scores
+/cap:cluster auth          # detail view: members, pairwise affinity, shared concepts, drift status
+/cap:status               # now includes Neural Memory section (cluster count, dormant nodes, highest pair)
+```
+
+### Initializing Neural Memory Clustering
+
+The clustering system works on top of the memory graph and conversation threads. It runs on-the-fly -- no separate clustering step needed. But the prerequisites must exist:
+
+```bash
+# Step 1: Initialize CAP (creates .cap/, detects stack)
+/cap:init
+
+# Step 2: Bootstrap the memory graph from code tags
+/cap:memory init
+# This creates .cap/memory/graph.json with nodes from @cap-decision,
+# @cap-todo risk:, and session hotspots
+
+# Step 3: Create conversation threads via brainstorming
+/cap:brainstorm
+# Each brainstorm session creates a thread in .cap/memory/threads/
+# Threads are the input for affinity scoring and clustering
+
+# Step 4: Clustering activates automatically
+# After 2+ threads exist, /cap:cluster shows detected clusters
+/cap:cluster
+# /cap:status shows the Neural Memory section
+# /cap:start and /cap:brainstorm surface related threads passively
+```
+
+**For existing projects with no threads yet:**
+
+If you have an existing codebase with `@cap-decision` and `@cap-todo` tags but no brainstorm threads, the clustering system has nothing to cluster. Threads are created by:
+
+1. Running `/cap:brainstorm` (creates a thread per session)
+2. Running `/cap:init` with `--migrate` (migrates past sessions to threads)
+3. Manual thread creation is not needed -- just use CAP normally and threads accumulate
+
+**For monorepos:** Threads are stored at the root level (`.cap/memory/threads/`), not per-app. This means clustering works across apps -- a thread about auth in `apps/booking` can cluster with a thread about SSO in `apps/hub`.
+
+**Minimum for clustering:** 2 threads with overlapping keywords, shared features, or shared files. With fewer than 2 threads, `/cap:cluster` shows "No clusters detected."
+
+### The complete memory evolution
+
+```
+v2.x  Extract    — decisions, pitfalls, hotspots from code tags and sessions
+v3.x  Connect    — memory graph with typed nodes, edges, temporal queries, thread tracking
+v4.0  Cluster    — automatic clustering, multi-signal affinity, intelligent recall
+```
+
+---
+
+## Getting Started with an Existing Project
+
+CAP works with both greenfield and brownfield codebases. Here is how to initialize an existing project -- including monorepos:
+
+### Single repository
+
+```bash
+npx code-as-plan@latest          # install CAP
+/cap:init                         # detects stack, creates .cap/, runs brownfield analysis
+/cap:brainstorm                   # discover features from existing code
+/cap:annotate                     # retroactively tag existing code with @cap-feature / @cap-todo
+/cap:memory init                  # bootstrap memory from code tags and sessions
+```
+
+### Monorepo (NX, Turbo, pnpm, npm workspaces)
+
+```bash
+npx code-as-plan@latest          # install CAP (auto-detects monorepo)
+/cap:init                         # creates root .cap/, detects all workspace apps
+/cap:switch-app                   # select which app to focus on (e.g., apps/booking)
+/cap:brainstorm                   # discover features for the active app
+/cap:annotate                     # tag existing code in active app
+/cap:memory init                  # bootstrap memory (scans all apps)
+```
+
+Each app gets its own `FEATURE-MAP.md`. Shared packages are scanned as dependency context. Switch between apps with `/cap:switch-app` at any time.
+
+### What /cap:init does for existing codebases
+
+1. **Stack detection** -- reads `package.json`, `pyproject.toml`, `go.mod`, etc. to identify language, framework, and test framework
+2. **Brownfield analysis** -- scans existing source files to estimate project size and complexity
+3. **Monorepo detection** -- checks for `nx.json`, `pnpm-workspace.yaml`, `lerna.json`, npm workspaces
+4. **Context7 docs** -- fetches current library documentation for detected dependencies
+5. **Memory bootstrap** -- builds the memory graph from existing code tags and session history
+6. **Thread migration** -- migrates past brainstorm sessions to conversation threads (one-time)
+
+After `/cap:init`, run `/cap:annotate` to retroactively tag your existing code. This is the fastest way to bring an existing codebase into the CAP workflow.
 
 ---
 

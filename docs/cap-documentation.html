@@ -590,7 +590,7 @@ tr:hover td { background: rgba(59,130,246,0.03); }
 <aside class="sidebar">
   <div class="sidebar-brand">
     <h2>CAP</h2>
-    <div class="version">Code as Plan &middot; v3.0</div>
+    <div class="version">Code as Plan &middot; v4.0</div>
   </div>
   <nav>
     <ul>
@@ -611,6 +611,7 @@ tr:hover td { background: rgba(59,130,246,0.03); }
           <li><a href="#mem-reconnection">Thread Reconnection</a></li>
           <li><a href="#mem-impact">Impact Analysis</a></li>
           <li><a href="#mem-graph">Memory Graph</a></li>
+          <li><a href="#mem-clustering">Neural Memory Clustering</a></li>
           <li><a href="#mem-multidev">Multi-Developer</a></li>
           <li><a href="#mem-commands">Memory Commands</a></li>
         </ul>
@@ -795,6 +796,8 @@ npx code-as-plan@latest --runtime cursor</code></pre>
       <tr><td><code>/cap:memory</code></td><td>Project memory management (init / status / pin / unpin)</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
       <tr><td><code>/cap:memory init</code></td><td>Bootstrap memory from all sessions + code tags</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
       <tr><td><code>/cap:memory status</code></td><td>Show memory summary</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
+      <tr><td><code>/cap:cluster</code></td><td>Neural Memory cluster overview &mdash; labels, members, affinity scores</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
+      <tr><td><code>/cap:cluster {label}</code></td><td>Cluster detail &mdash; pairwise affinity, shared concepts, drift status</td><td><span class="badge badge-cyan">&mdash;</span></td></tr>
     </tbody>
   </table>
 </section>
@@ -1309,6 +1312,96 @@ v
     </div>
   </div>
 
+  <!-- 7.8b Neural Memory Clustering (F-036 to F-040) -->
+  <div id="mem-clustering">
+    <h3>Neural Memory Clustering <span class="badge badge-purple" style="background:rgba(167,139,250,0.15);color:var(--purple);border:1px solid var(--purple);padding:0.15em 0.5em;border-radius:4px;font-size:0.75rem;">v4.0</span></h3>
+    <p>CAP v4.0 transforms the memory graph from a passive store into an <strong>intelligent clustering system</strong>. Threads automatically form semantic neighborhoods &mdash; groups of related conversations that CAP detects, labels, and surfaces proactively.</p>
+
+    <div class="card" style="border-left: 3px solid var(--purple); margin: 1.5rem 0;">
+      <div class="card-title" style="color: var(--purple);">The Memory Evolution</div>
+      <pre style="border:none;margin:0;padding:0.75rem 0 0;"><code>v2.x  <span class="hl">Extract</span>    &mdash; decisions, pitfalls, hotspots from code tags
+v3.x  <span class="hl2">Connect</span>    &mdash; memory graph, typed nodes, thread tracking
+v4.0  <span class="hl3">Cluster</span>    &mdash; automatic clustering, multi-signal affinity, intelligent recall</code></pre>
+    </div>
+
+    <h4>Multi-Signal Affinity Engine</h4>
+    <p>8 signal types are scored and combined into a composite affinity score between any two threads:</p>
+    <div class="node-types" style="margin: 1rem 0;">
+      <span class="chip" style="background: rgba(59,130,246,0.15); color: var(--primary); border-color: var(--primary);">feature overlap</span>
+      <span class="chip" style="background: rgba(34,211,238,0.15); color: var(--accent); border-color: var(--accent);">shared files</span>
+      <span class="chip" style="background: rgba(34,197,94,0.15); color: var(--green); border-color: var(--green);">keyword similarity</span>
+      <span class="chip" style="background: rgba(245,158,11,0.15); color: var(--orange); border-color: var(--orange);">temporal proximity</span>
+      <span class="chip" style="background: rgba(167,139,250,0.15); color: var(--purple); border-color: var(--purple);">concept drift</span>
+      <span class="chip" style="background: rgba(239,68,68,0.15); color: var(--red); border-color: var(--red);">dependency chain</span>
+      <span class="chip" style="background: rgba(244,114,182,0.15); color: var(--pink); border-color: var(--pink);">author overlap</span>
+      <span class="chip" style="background: rgba(100,116,139,0.15); color: var(--text-dim); border-color: var(--border);">edit pattern</span>
+    </div>
+
+    <h4>Gradient UX Bands</h4>
+    <p>Affinity scores map to presentation tiers that control how aggressively related threads are surfaced:</p>
+    <table>
+      <thead><tr><th>Band</th><th>Score</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td><span style="color:var(--red);font-weight:600;">Urgent</span></td><td>&gt; 0.8</td><td>Full context block with shared concepts shown before session starts</td></tr>
+        <tr><td><span style="color:var(--orange);font-weight:600;">Notify</span></td><td>0.5 &ndash; 0.8</td><td>One-line mention before session work begins</td></tr>
+        <tr><td><span style="color:var(--text-dim);font-weight:600;">Silent</span></td><td>0.3 &ndash; 0.5</td><td>Stored for queries, not shown proactively</td></tr>
+        <tr><td><span style="color:var(--text-muted);">Discard</span></td><td>&lt; 0.3</td><td>Dropped entirely</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Automatic Surfacing</h4>
+    <p>When you run <code>/cap:start</code> or <code>/cap:brainstorm</code>, CAP passively checks affinity against your selected feature. Related prior threads appear automatically &mdash; no manual lookup required. Relevant context finds you.</p>
+
+    <h4>Cluster Commands</h4>
+    <pre><code>/cap:cluster              <span class="cmt"># overview: labels, member counts, affinity, dormant nodes</span>
+/cap:cluster auth         <span class="cmt"># detail: members, pairwise affinity, shared concepts, drift</span>
+/cap:status               <span class="cmt"># Neural Memory section: clusters, dormant nodes, highest pair</span></code></pre>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Initializing Neural Memory Clustering</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+          <p>Clustering runs on-the-fly &mdash; no separate bootstrap step. But the prerequisites must exist:</p>
+<pre><code><span class="cmt"># 1. Initialize CAP + bootstrap memory graph</span>
+/cap:init
+/cap:memory init
+
+<span class="cmt"># 2. Create conversation threads via brainstorming</span>
+/cap:brainstorm
+<span class="cmt"># Each session creates a thread in .cap/memory/threads/</span>
+
+<span class="cmt"># 3. After 2+ threads: clustering activates automatically</span>
+/cap:cluster          <span class="cmt"># show detected clusters</span>
+/cap:status           <span class="cmt"># Neural Memory section appears</span></code></pre>
+          <p><strong>Minimum:</strong> 2 threads with overlapping keywords, shared features, or shared files.</p>
+          <p><strong>Monorepos:</strong> Threads are stored at root level (<code>.cap/memory/threads/</code>), not per-app. Clustering works across apps &mdash; a thread about auth in <code>apps/booking</code> can cluster with a thread about SSO in <code>apps/hub</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <h4>Example: Cluster Overview</h4>
+        <span class="collapsible-arrow">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <div class="collapsible-content">
+<pre><code>Neural Memory Clusters
+
+| # | Label                      | Members   | Avg Affinity | Dormant |
+|---|----------------------------|-----------|-------------|---------|
+| 1 | auth &middot; session &middot; cookies   | 3 threads | 0.75        | 0       |
+| 2 | memory &middot; graph &middot; clustering | 2 threads | 0.72        | 0       |
+
+Total: 2 clusters, 5 threads, 0 dormant nodes</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 7.9 Multi-Developer Workflow -->
   <div id="mem-multidev">
     <h3>Multi-Developer Workflow</h3>
@@ -1540,7 +1633,7 @@ git push</code></pre>
 
 <!-- Footer -->
 <footer style="padding: 3rem 2rem; text-align: center; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem;">
-  <p>CAP &mdash; Code as Plan &middot; v3.0.0</p>
+  <p>CAP &mdash; Code as Plan &middot; v4.0.0</p>
   <p style="margin-top: 0.5rem;">Build first. Plan from code. Ship with confidence.</p>
 </footer>
 

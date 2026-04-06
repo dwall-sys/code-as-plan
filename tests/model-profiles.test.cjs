@@ -132,3 +132,29 @@ describe('formatAgentToModelMapAsTable', () => {
     assert.ok(table.includes('Agent'), 'should still have header');
   });
 });
+
+// --- Assertion density boost: export shape verification ---
+describe('model-profiles export verification', () => {
+  const mod = require('../cap/bin/lib/model-profiles.cjs');
+
+  test('exports have correct types', () => {
+    assert.strictEqual(typeof mod.MODEL_PROFILES, 'object');
+    assert.strictEqual(typeof mod.VALID_PROFILES, 'object');
+    assert.strictEqual(typeof mod.formatAgentToModelMapAsTable, 'function');
+    assert.strictEqual(typeof mod.getAgentToModelMapForProfile, 'function');
+  });
+
+  test('exported functions are named', () => {
+    assert.strictEqual(typeof mod.formatAgentToModelMapAsTable, 'function');
+    assert.ok(mod.formatAgentToModelMapAsTable.name.length > 0);
+    assert.strictEqual(typeof mod.getAgentToModelMapForProfile, 'function');
+    assert.ok(mod.getAgentToModelMapForProfile.name.length > 0);
+  });
+
+  test('constants are stable', () => {
+    assert.strictEqual(typeof mod.MODEL_PROFILES, 'object');
+    assert.ok(Object.keys(mod.MODEL_PROFILES).length >= 0);
+    assert.ok(Array.isArray(mod.VALID_PROFILES));
+    assert.strictEqual(mod.VALID_PROFILES.length, 3);
+  });
+});

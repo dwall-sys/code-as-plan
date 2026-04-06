@@ -272,6 +272,44 @@ console.log('Session updated');
 "
 ```
 
+## Step 5b: Passively check realtime affinity for selected feature
+
+<!-- @cap-todo(ac:F-040/AC-4) /cap:start passively checks realtime affinity and surfaces urgent/notify threads relevant to the selected feature before session work begins -->
+
+If an active feature was selected, check for related threads via realtime affinity:
+
+```bash
+node -e "
+const realtimeAffinity = require('./cap/bin/lib/cap-realtime-affinity.cjs');
+const clusterDisplay = require('./cap/bin/lib/cap-cluster-display.cjs');
+const tracker = require('./cap/bin/lib/cap-thread-tracker.cjs');
+
+try {
+  // Find threads related to the active feature
+  const threads = tracker.listThreads(process.cwd());
+  const activeThread = threads.find(t => t.featureIds && t.featureIds.includes('{selected_feature_id}'));
+
+  if (activeThread) {
+    const fullThread = tracker.loadThread(process.cwd(), activeThread.id);
+    const notifications = realtimeAffinity.onSessionStart(process.cwd(), fullThread);
+    const output = clusterDisplay.formatRealtimeNotifications(notifications);
+    if (output) console.log(output);
+    else console.log('');
+  } else {
+    console.log('');
+  }
+} catch (e) {
+  console.log('');
+}
+"
+```
+
+If output is non-empty, display it before suggesting next action:
+
+```
+{realtime_affinity_output}
+```
+
 ## Step 6: Suggest next action
 
 Based on current state, suggest:

@@ -704,6 +704,172 @@ describe('requirements mark-complete command', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// requirements mark-complete error paths
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('requirements mark-complete error paths', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('errors when no requirement IDs provided', () => {
+    const result = runGsdTools('requirements mark-complete', tmpDir);
+    assert.ok(!result.success, 'should fail when no IDs provided');
+  });
+
+  test('errors when IDs resolve to empty after parsing', () => {
+    const result = runGsdTools('requirements mark-complete []', tmpDir);
+    assert.ok(!result.success, 'should fail when IDs resolve to empty');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// milestone complete additional branches
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('milestone complete additional branches', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  test('errors when version is missing', () => {
+    const result = runGsdTools('milestone complete', tmpDir);
+    assert.ok(!result.success, 'should fail when version is missing');
+  });
+
+  test('archives audit file if it exists', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap v2.0\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** In progress\n**Last Activity:** 2025-01-01\n**Last Activity Description:** Working\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'v2.0-MILESTONE-AUDIT.md'),
+      `# Audit for v2.0\n\nAll checks passed.\n`
+    );
+
+    const result = runGsdTools('milestone complete v2.0 --name AuditTest', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.archived.audit, true, 'audit should be archived');
+    assert.ok(
+      fs.existsSync(path.join(tmpDir, '.planning', 'milestones', 'v2.0-MILESTONE-AUDIT.md')),
+      'audit file should be in milestones archive'
+    );
+    assert.ok(
+      !fs.existsSync(path.join(tmpDir, '.planning', 'v2.0-MILESTONE-AUDIT.md')),
+      'original audit file should be removed'
+    );
+  });
+
+  test('handles empty existing MILESTONES.md', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap v1.0\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** In progress\n**Last Activity:** 2025-01-01\n**Last Activity Description:** Working\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'MILESTONES.md'),
+      ''
+    );
+
+    const result = runGsdTools('milestone complete v1.0 --name EmptyMilestones', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.milestones_updated, true);
+    const milestones = fs.readFileSync(path.join(tmpDir, '.planning', 'MILESTONES.md'), 'utf-8');
+    assert.ok(milestones.includes('# Milestones'), 'should have Milestones header');
+    assert.ok(milestones.includes('v1.0 EmptyMilestones'), 'should have milestone entry');
+  });
+
+  test('prepends to MILESTONES.md without recognizable header', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap v1.0\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** In progress\n**Last Activity:** 2025-01-01\n**Last Activity Description:** Working\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'MILESTONES.md'),
+      'Some plain text content without a header.\n\nMore text.\n'
+    );
+
+    const result = runGsdTools('milestone complete v1.0 --name NoHeader', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const milestones = fs.readFileSync(path.join(tmpDir, '.planning', 'MILESTONES.md'), 'utf-8');
+    assert.ok(milestones.includes('v1.0 NoHeader'), 'should contain milestone entry');
+    assert.ok(milestones.includes('Some plain text content'), 'original content should be preserved');
+    const entryIdx = milestones.indexOf('v1.0 NoHeader');
+    const oldIdx = milestones.indexOf('Some plain text content');
+    assert.ok(entryIdx < oldIdx, 'new entry should be prepended before old content');
+  });
+
+  test('counts tasks from XML task tags fallback', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap v1.0\n\n### Phase 1: Foundation\n**Goal:** Setup\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** In progress\n**Last Activity:** 2025-01-01\n**Last Activity Description:** Working\n`
+    );
+    const p1 = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(p1, { recursive: true });
+    fs.writeFileSync(
+      path.join(p1, '01-01-SUMMARY.md'),
+      `---\none-liner: Built foundation\n---\n# Summary\n\n<task id="1">First</task>\n<task id="2">Second</task>\n<task id="3">Third</task>\n`
+    );
+
+    const result = runGsdTools('milestone complete v1.0 --name XML', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.tasks, 3, 'should count tasks from XML task tags');
+  });
+
+  test('counts tasks from markdown Task headers fallback', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'ROADMAP.md'),
+      `# Roadmap v1.0\n\n### Phase 1: Foundation\n**Goal:** Setup\n`
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'STATE.md'),
+      `# State\n\n**Status:** In progress\n**Last Activity:** 2025-01-01\n**Last Activity Description:** Working\n`
+    );
+    const p1 = path.join(tmpDir, '.planning', 'phases', '01-foundation');
+    fs.mkdirSync(p1, { recursive: true });
+    fs.writeFileSync(
+      path.join(p1, '01-01-SUMMARY.md'),
+      `---\none-liner: Built foundation\n---\n# Summary\n\n## Task 1\nDid X\n\n## Task 2\nDid Y\n`
+    );
+
+    const result = runGsdTools('milestone complete v1.0 --name MDTasks', tmpDir);
+    assert.ok(result.success, `Command failed: ${result.error}`);
+    const output = JSON.parse(result.output);
+    assert.strictEqual(output.tasks, 2, 'should count tasks from markdown headers');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // new-milestone workflow verification gate (#1269)
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -20,7 +20,7 @@ const LIB_DIR = path.join(__dirname, '..', 'cap', 'bin', 'lib');
 
 describe('CAP_MODULE_MANIFEST', () => {
   it('contains expected module entries', () => {
-    assert.equal(CAP_MODULE_MANIFEST.length, 45);
+    assert.equal(CAP_MODULE_MANIFEST.length, 50);
   });
 
   it('every entry ends with .cjs', () => {
@@ -46,7 +46,7 @@ describe('checkModuleIntegrity', () => {
   it('returns all modules as OK for the real lib directory', () => {
     const result = checkModuleIntegrity(LIB_DIR);
     assert.equal(result.modulesOk, result.modulesTotal);
-    assert.equal(result.modulesTotal, 45);
+    assert.equal(result.modulesTotal, 50);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -59,7 +59,7 @@ describe('checkModuleIntegrity', () => {
   it('reports FAIL for a non-existent directory', () => {
     const result = checkModuleIntegrity('/tmp/cap-test-nonexistent-dir');
     assert.equal(result.modulesOk, 0);
-    assert.equal(result.modulesTotal, 45);
+    assert.equal(result.modulesTotal, 50);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -180,7 +180,7 @@ describe('runDoctor includes module integrity', () => {
     const report = runDoctor();
     assert.ok(typeof report.modulesOk === 'number');
     assert.ok(typeof report.modulesTotal === 'number');
-    assert.equal(report.modulesTotal, 45);
+    assert.equal(report.modulesTotal, 50);
   });
 
   it('report includes platformPaths', () => {
@@ -454,7 +454,8 @@ describe('checkPlatformPaths — adversarial edge cases', () => {
   // @cap-todo(ac:F-019/AC-6) Edge case: non-existent directory passed to checkPlatformPaths
   it('handles non-existent directory without throwing', () => {
     const result = checkPlatformPaths('/tmp/cap-totally-nonexistent-dir-xyz');
-    assert.ok(typeof result === 'object', 'should return a result object');
+    assert.strictEqual(typeof result, 'object', 'should return a result object');
+    assert.notStrictEqual(result, null, 'result should not be null');
     assert.equal(result.isSymlink, false, 'non-existent dir is not a symlink');
     assert.equal(result.installDir, '/tmp/cap-totally-nonexistent-dir-xyz');
   });
@@ -475,7 +476,7 @@ describe('checkPlatformPaths — adversarial edge cases', () => {
       } else {
         assert.equal(result.homeMatch, true, 'both are empty so they match');
       }
-      assert.ok(typeof result.ok === 'boolean');
+      assert.strictEqual(typeof result.ok, 'boolean', 'ok should be a boolean');
     } finally {
       process.env.HOME = originalHome;
     }
@@ -489,7 +490,7 @@ describe('checkPlatformPaths — adversarial edge cases', () => {
       const result = checkPlatformPaths(tmpFile);
       // lstatSync should succeed on a file — it's not a symlink
       assert.equal(result.isSymlink, false, 'regular file is not a symlink');
-      assert.ok(typeof result.ok === 'boolean');
+      assert.strictEqual(typeof result.ok, 'boolean', 'ok should be a boolean');
     } finally {
       fs.unlinkSync(tmpFile);
     }
@@ -513,7 +514,8 @@ describe('formatReport — adversarial edge cases', () => {
       platformPaths: { envHome: '/home', osHomedir: '/home', homeMatch: true, installDir: '/test', isSymlink: false, ok: true, warnings: [] },
     };
     const output = formatReport(report);
-    assert.ok(typeof output === 'string', 'should return a string');
+    assert.strictEqual(typeof output, 'string', 'should return a string');
+    assert.ok(output.length > 0, 'output should not be empty');
     assert.ok(output.includes('Modules:'), 'should still show Modules line');
     assert.ok(output.includes('0/0 OK'), 'should show 0/0');
   });
@@ -532,7 +534,8 @@ describe('formatReport — adversarial edge cases', () => {
     };
     // Should not throw
     const output = formatReport(report);
-    assert.ok(typeof output === 'string');
+    assert.strictEqual(typeof output, 'string', 'should return a string');
+    assert.ok(output.length > 0, 'output should not be empty');
   });
 
   // @cap-todo(ac:F-019/AC-3) Edge case: multiple failed modules with long error messages
@@ -594,9 +597,10 @@ describe('runDoctor — adversarial edge cases', () => {
   // @cap-todo(ac:F-019/AC-4) Edge case: runDoctor with non-existent projectRoot
   it('handles non-existent projectRoot gracefully', () => {
     const report = runDoctor('/tmp/cap-nonexistent-project-root-xyz');
-    assert.ok(typeof report === 'object', 'should still return a report');
-    assert.ok(Array.isArray(report.tools), 'should still have tools');
-    assert.ok(typeof report.healthy === 'boolean', 'should still have healthy flag');
+    assert.strictEqual(typeof report, 'object', 'should still return a report');
+    assert.notStrictEqual(report, null, 'report should not be null');
+    assert.strictEqual(Array.isArray(report.tools), true, 'should still have tools');
+    assert.strictEqual(typeof report.healthy, 'boolean', 'should still have healthy flag');
   });
 
   // @cap-todo(ac:F-019/AC-4) Edge case: runDoctor with projectRoot pointing to file
@@ -605,8 +609,9 @@ describe('runDoctor — adversarial edge cases', () => {
     fs.writeFileSync(tmpFile, '{}');
     try {
       const report = runDoctor(tmpFile);
-      assert.ok(typeof report === 'object');
-      assert.ok(Array.isArray(report.tools));
+      assert.strictEqual(typeof report, 'object', 'should return an object');
+      assert.notStrictEqual(report, null, 'report should not be null');
+      assert.strictEqual(Array.isArray(report.tools), true, 'should have tools array');
     } finally {
       fs.unlinkSync(tmpFile);
     }
@@ -618,8 +623,9 @@ describe('runDoctor — adversarial edge cases', () => {
     fs.writeFileSync(path.join(tmpDir, 'package.json'), 'NOT VALID JSON {{{');
     try {
       const report = runDoctor(tmpDir);
-      assert.ok(typeof report === 'object', 'should not throw on bad package.json');
-      assert.ok(Array.isArray(report.tools));
+      assert.strictEqual(typeof report, 'object', 'should not throw on bad package.json');
+      assert.notStrictEqual(report, null, 'report should not be null');
+      assert.strictEqual(Array.isArray(report.tools), true, 'should have tools array');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
