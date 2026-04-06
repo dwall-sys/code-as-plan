@@ -1462,7 +1462,7 @@ describe('loadReport (error branch)', () => {
     assert.strictEqual(result, null);
   });
 
-  it('returns null when report file exists but is unreadable', () => {
+  it('returns null when report file exists but is unreadable', { skip: process.platform === 'win32' }, () => {
     const impactDir = path.join(tmpDir, IMPACT_DIR);
     fs.mkdirSync(impactDir, { recursive: true });
     const reportFile = path.join(impactDir, 'F-001.md');

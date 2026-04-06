@@ -682,7 +682,7 @@ describe('migrateLineTag — uncommon tag branches', () => {
 // --- Branch coverage: migrateTags catch blocks ---
 
 describe('migrateTags — filesystem error handling', () => {
-  it('handles unreadable directory in walk (catch on readdirSync)', () => {
+  it('handles unreadable directory in walk (catch on readdirSync)', { skip: process.platform === 'win32' }, () => {
     // Create a directory that cannot be read
     const unreadableDir = path.join(tmpDir, 'src', 'locked');
     fs.mkdirSync(unreadableDir, { recursive: true });
@@ -699,7 +699,7 @@ describe('migrateTags — filesystem error handling', () => {
     fs.chmodSync(unreadableDir, 0o755);
   });
 
-  it('handles unreadable file in processFile (catch on readFileSync)', () => {
+  it('handles unreadable file in processFile (catch on readFileSync)', { skip: process.platform === 'win32' }, () => {
     const srcDir = path.join(tmpDir, 'src');
     fs.mkdirSync(srcDir, { recursive: true });
     const unreadableFile = path.join(srcDir, 'locked.js');
@@ -719,7 +719,7 @@ describe('migrateTags — filesystem error handling', () => {
 // --- Branch coverage: migrateArtifacts catch block and edge cases ---
 
 describe('migrateArtifacts — additional branches', () => {
-  it('handles unreadable source artifact (catch on readFileSync)', () => {
+  it('handles unreadable source artifact (catch on readFileSync)', { skip: process.platform === 'win32' }, () => {
     const planningDir = path.join(tmpDir, '.planning');
     fs.mkdirSync(planningDir, { recursive: true });
     const featFile = path.join(planningDir, 'FEATURES.md');

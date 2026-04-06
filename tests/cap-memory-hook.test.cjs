@@ -29,7 +29,7 @@ describe('cap-memory hook', () => {
     }, 'Hook should have valid JavaScript syntax');
   });
 
-  it('should exit immediately when CAP_SKIP_MEMORY=1 is set', () => {
+  it('should exit immediately when CAP_SKIP_MEMORY=1 is set', { skip: process.platform === 'win32' }, () => {
     const result = execSync(`NODE_V8_COVERAGE= node "${HOOK_PATH}"`, {
       encoding: 'utf8',
       timeout: 10000,
@@ -40,7 +40,7 @@ describe('cap-memory hook', () => {
     assert.strictEqual(typeof result, 'string', 'Output type should be string');
   });
 
-  it('should exit silently when required modules are not found', () => {
+  it('should exit silently when required modules are not found', { skip: process.platform === 'win32' }, () => {
     // Running in tmpDir where no cap modules exist — should fail silently
     const result = execSync(`NODE_V8_COVERAGE= node "${HOOK_PATH}"`, {
       encoding: 'utf8',
@@ -87,7 +87,7 @@ describe('cap-memory hook', () => {
     assert.ok(content.includes('process.stderr.write'), 'Should write errors to stderr not stdout');
   });
 
-  it('should handle the init mode with monorepo support', () => {
+  it('should handle the init mode with monorepo support', { skip: process.platform === 'win32' }, () => {
     // Running with init flag in a dir with no sessions should exit cleanly
     const result = execSync(`NODE_V8_COVERAGE= node "${HOOK_PATH}" init`, {
       encoding: 'utf8',

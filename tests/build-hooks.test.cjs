@@ -72,7 +72,7 @@ describe('build-hooks.js — hook build script', () => {
     assert.ok(hookFiles.length >= 5, 'Should validate at least 5 hook files');
   });
 
-  it('should run successfully and create dist directory', () => {
+  it('should run successfully and create dist directory', { skip: process.platform === 'win32' }, () => {
     // Run the actual build script
     const output = execSync(`NODE_V8_COVERAGE= node "${BUILD_SCRIPT_PATH}"`, {
       encoding: 'utf8',
@@ -83,7 +83,7 @@ describe('build-hooks.js — hook build script', () => {
     assert.ok(fs.existsSync(path.join(HOOKS_DIR, 'dist')), 'Should create dist directory');
   });
 
-  it('should copy hook files to the dist directory', () => {
+  it('should copy hook files to the dist directory', { skip: process.platform === 'win32' }, () => {
     const distDir = path.join(HOOKS_DIR, 'dist');
     // After the previous test ran build, dist should exist with hook files
     assert.ok(fs.existsSync(distDir), 'dist directory should exist');

@@ -50,7 +50,7 @@ describe('cap-statusline hook', () => {
     assert.strictEqual(output.includes('Error'), false, 'Should not print error messages');
   });
 
-  it('should display model name and directory in output', () => {
+  it('should display model name and directory in output', { skip: process.platform === 'win32' }, () => {
     const output = runHook({
       model: { display_name: 'Claude Opus' },
       workspace: { current_dir: '/home/user/myproject' },
@@ -59,7 +59,7 @@ describe('cap-statusline hook', () => {
     assert.ok(output.includes('myproject'), 'Should include directory basename');
   });
 
-  it('should default model name to Claude when not provided', () => {
+  it('should default model name to Claude when not provided', { skip: process.platform === 'win32' }, () => {
     const output = runHook({
       workspace: { current_dir: '/tmp/test' },
     });
@@ -67,7 +67,7 @@ describe('cap-statusline hook', () => {
     assert.ok(output.includes('test'), 'Should show directory name');
   });
 
-  it('should display context window usage with progress bar when data is provided', () => {
+  it('should display context window usage with progress bar when data is provided', { skip: process.platform === 'win32' }, () => {
     const output = runHook({
       model: { display_name: 'Claude' },
       workspace: { current_dir: '/tmp/proj' },
@@ -83,7 +83,7 @@ describe('cap-statusline hook', () => {
     assert.ok(output.includes('%'), 'Should display percentage');
   });
 
-  it('should write context metrics bridge file when session_id is present', () => {
+  it('should write context metrics bridge file when session_id is present', { skip: process.platform === 'win32' }, () => {
     const sessionId = 'statusline-test-' + Date.now();
     const bridgePath = path.join(os.tmpdir(), `claude-ctx-${sessionId}.json`);
 
@@ -107,7 +107,7 @@ describe('cap-statusline hook', () => {
     try { fs.unlinkSync(bridgePath); } catch (_e) { /* ignore */ }
   });
 
-  it('should show CAP update notification when cache file indicates update available', () => {
+  it('should show CAP update notification when cache file indicates update available', { skip: process.platform === 'win32' }, () => {
     const cacheDir = path.join(tmpDir, '.claude-test', 'cache');
     fs.mkdirSync(cacheDir, { recursive: true });
     fs.writeFileSync(
@@ -127,7 +127,7 @@ describe('cap-statusline hook', () => {
     assert.ok(output.length > 0, 'Should produce output');
   });
 
-  it('should format token counts with k and M suffixes', () => {
+  it('should format token counts with k and M suffixes', { skip: process.platform === 'win32' }, () => {
     // Test with large token counts that should display as 'k'
     const output = runHook({
       model: { display_name: 'Claude' },

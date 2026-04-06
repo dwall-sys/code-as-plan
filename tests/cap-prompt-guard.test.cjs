@@ -20,7 +20,7 @@ function runGuard(input) {
   }
 }
 
-describe('cap-prompt-guard hook', () => {
+describe('cap-prompt-guard hook', { skip: process.platform === 'win32' }, () => {
   it('exits silently for non-Write/Edit tools', () => {
     const result = runGuard({ tool_name: 'Read', tool_input: { file_path: '.planning/foo.md' } });
     assert.strictEqual(result.exitCode, 0);

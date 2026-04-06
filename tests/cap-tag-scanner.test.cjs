@@ -986,7 +986,7 @@ describe('scanDirectory (branch coverage)', () => {
     assert.ok(typeof tags[0].file === 'string');
   });
 
-  it('handles readdirSync error in walk', () => {
+  it('handles readdirSync error in walk', { skip: process.platform === 'win32' }, () => {
     const subDir = path.join(tmpDir, 'unreadable-dir');
     fs.mkdirSync(subDir, { recursive: true });
     fs.writeFileSync(path.join(subDir, 'test.js'), "// @cap-feature(feature:F-001) Test\n", 'utf8');

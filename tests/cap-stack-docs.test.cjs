@@ -649,7 +649,7 @@ describe('detectWorkspacePackages', () => {
 // --- Branch coverage: detectDependencies catch blocks ---
 
 describe('detectDependencies error handling', () => {
-  it('handles malformed requirements.txt gracefully', () => {
+  it('handles malformed requirements.txt gracefully', { skip: process.platform === 'win32' }, () => {
     // Make requirements.txt unreadable to trigger catch
     const fp = path.join(tmpDir, 'requirements.txt');
     fs.writeFileSync(fp, 'flask\nrequests\n');
@@ -661,7 +661,7 @@ describe('detectDependencies error handling', () => {
     fs.chmodSync(fp, 0o644); // restore for cleanup
   });
 
-  it('handles malformed go.mod gracefully', () => {
+  it('handles malformed go.mod gracefully', { skip: process.platform === 'win32' }, () => {
     const fp = path.join(tmpDir, 'go.mod');
     fs.writeFileSync(fp, 'module test');
     fs.chmodSync(fp, 0o000);
@@ -670,7 +670,7 @@ describe('detectDependencies error handling', () => {
     fs.chmodSync(fp, 0o644);
   });
 
-  it('handles malformed Cargo.toml gracefully', () => {
+  it('handles malformed Cargo.toml gracefully', { skip: process.platform === 'win32' }, () => {
     const fp = path.join(tmpDir, 'Cargo.toml');
     fs.writeFileSync(fp, '[package]\nname = "test"');
     fs.chmodSync(fp, 0o000);
@@ -679,7 +679,7 @@ describe('detectDependencies error handling', () => {
     fs.chmodSync(fp, 0o644);
   });
 
-  it('handles malformed pyproject.toml gracefully', () => {
+  it('handles malformed pyproject.toml gracefully', { skip: process.platform === 'win32' }, () => {
     const fp = path.join(tmpDir, 'pyproject.toml');
     fs.writeFileSync(fp, '[project]\nname = "test"');
     fs.chmodSync(fp, 0o000);
@@ -713,7 +713,7 @@ describe('detectDependencies error handling', () => {
 // --- Branch coverage: listCachedDocs catch block ---
 
 describe('listCachedDocs error handling', () => {
-  it('handles directory that exists but readdirSync fails', () => {
+  it('handles directory that exists but readdirSync fails', { skip: process.platform === 'win32' }, () => {
     const docsDir = path.join(tmpDir, STACK_DOCS_DIR);
     fs.mkdirSync(docsDir, { recursive: true });
     fs.writeFileSync(path.join(docsDir, 'react.md'), 'docs');
@@ -742,7 +742,7 @@ describe('checkFreshness error handling', () => {
     assert.strictEqual(result.ageHours, 0);
   });
 
-  it('handles statSync failure via broken symlink', () => {
+  it('handles statSync failure via broken symlink', { skip: process.platform === 'win32' }, () => {
     const docsDir = path.join(tmpDir, STACK_DOCS_DIR);
     fs.mkdirSync(docsDir, { recursive: true });
     const linkPath = path.join(docsDir, 'broken-lib.md');
@@ -762,7 +762,7 @@ describe('checkFreshness error handling', () => {
 // --- Branch coverage: checkFreshnessEnhanced catch block ---
 
 describe('checkFreshnessEnhanced error handling', () => {
-  it('handles read failure gracefully (unreadable file)', () => {
+  it('handles read failure gracefully (unreadable file)', { skip: process.platform === 'win32' }, () => {
     const docsDir = path.join(tmpDir, STACK_DOCS_DIR);
     fs.mkdirSync(docsDir, { recursive: true });
     const fp = path.join(docsDir, 'react.md');

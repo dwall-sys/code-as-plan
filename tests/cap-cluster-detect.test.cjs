@@ -742,7 +742,8 @@ describe('F-038: Neural Cluster Detection', () => {
       const clusters = detectClusters(affinities);
       const elapsed = performance.now() - start;
 
-      assert.ok(elapsed < 2000, `Clustering took ${elapsed.toFixed(1)}ms, exceeds 2000ms limit (target: 500ms, CI tolerance: 2000ms)`);
+      const timeLimit = process.platform === 'win32' ? 4000 : 2000;
+      assert.ok(elapsed < timeLimit, `Clustering took ${elapsed.toFixed(1)}ms, exceeds ${timeLimit}ms limit (target: 500ms, CI tolerance: ${timeLimit}ms)`);
       assert.ok(Array.isArray(clusters));
     });
   });

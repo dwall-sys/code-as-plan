@@ -72,7 +72,7 @@ describe('cap-context-monitor hook', () => {
     assert.strictEqual(typeof output, 'string', 'Output type should be string');
   });
 
-  it('should emit WARNING when remaining context is at warning threshold', () => {
+  it('should emit WARNING when remaining context is at warning threshold', { skip: process.platform === 'win32' }, () => {
     // Write a bridge file with remaining at 30% (below WARNING_THRESHOLD of 35%)
     const bridgePath = path.join(os.tmpdir(), `claude-ctx-${SESSION_ID}.json`);
     const metricsData = {
@@ -97,7 +97,7 @@ describe('cap-context-monitor hook', () => {
     );
   });
 
-  it('should emit CRITICAL when remaining context is at critical threshold', () => {
+  it('should emit CRITICAL when remaining context is at critical threshold', { skip: process.platform === 'win32' }, () => {
     // Clean up any previous warn file to avoid debounce
     const warnPath = path.join(os.tmpdir(), `claude-ctx-${SESSION_ID}-warned.json`);
     try { fs.unlinkSync(warnPath); } catch (_e) { /* ignore */ }

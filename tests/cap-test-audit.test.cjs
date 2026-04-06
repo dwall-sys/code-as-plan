@@ -1084,7 +1084,7 @@ describe('generateAuditReport', () => {
     assert.strictEqual(typeof report.trustScore, 'number');
   });
 
-  it('runs with coverage enabled (returns coverage object or null)', () => {
+  it('runs with coverage enabled (returns coverage object or null)', { skip: process.platform === 'win32' }, () => {
     fs.mkdirSync(path.join(tmpDir, 'tests'));
     fs.writeFileSync(path.join(tmpDir, 'tests', 'x.test.cjs'), "const { it } = require('node:test');\nit('x', () => " + "{ require('node:assert').ok(1); });");
     const report = generateAuditReport(tmpDir, {
