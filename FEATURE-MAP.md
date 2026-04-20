@@ -701,6 +701,140 @@
 **Files:**
 - `cap/bin/lib/cap-cluster-display.cjs`
 
+### F-041: Fix Feature Map Parser Roundtrip Symmetry [planned]
+
+**Depends on:** F-002
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | serializeFeatureMap shall preserve all AC status values that parseFeatureMapContent accepted, including those parsed from checkbox format `- [x]` / `- [ ]` |
+| AC-2 | pending | A roundtrip test (parse → serialize → parse) shall produce structurally equivalent FeatureMap objects with identical AC counts, IDs, descriptions, and statuses |
+| AC-3 | pending | serializeFeatureMap shall write status values that match the canonical lifecycle (pending, prototyped, tested, shipped) without lowercasing transformation losses |
+| AC-4 | pending | parseFeatureMapContent shall not silently drop AC entries when both checkbox and table formats coexist in the same feature block |
+| AC-5 | pending | The fix shall include a regression test loading the actual repository FEATURE-MAP.md and asserting roundtrip stability for F-019 through F-040 |
+| AC-6 | pending | serializeFeatureMap shall emit Status lines as a serialization option to support the legacy non-table input format without forcing all features to table format on first write |
+
+### F-042: Propagate Feature State Transitions to Acceptance Criteria [planned]
+
+**Depends on:** F-002, F-041
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | updateFeatureState shall update child AC statuses according to a defined propagation rule when a feature transitions to tested or shipped |
+| AC-2 | pending | The propagation rule shall be documented as: state prototyped does not change AC status; state tested promotes ACs from pending/prototyped to tested; state shipped requires all ACs already at tested and rejects the transition otherwise |
+| AC-3 | pending | A new function setAcStatus(projectRoot, featureId, acId, newState, appPath) shall provide explicit per-AC state mutation for finer-grained control |
+| AC-4 | pending | Status drift detection shall flag features where feature state is shipped/tested but one or more ACs are still pending, returning a structured drift report |
+| AC-5 | pending | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
+| AC-6 | pending | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
+
+### F-043: Reconcile Status Drift in Existing Feature Map [planned]
+
+**Depends on:** F-041, F-042
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | A one-shot reconciliation script shall scan FEATURE-MAP.md and propose AC status updates for features F-019 through F-026 and F-036 through F-040 |
+| AC-2 | pending | The script shall output a dry-run diff first, requiring explicit confirmation before writing changes |
+| AC-3 | pending | F-027, F-028, F-029, F-034 shall have their feature state reconciled from planned to the correct lifecycle state based on actual code presence, verified via tag scanner |
+| AC-4 | pending | The reconciliation shall preserve historical accuracy by emitting a .cap/memory/reconciliation-2026-04.md audit log of every state change |
+| AC-5 | pending | A regression test shall assert that running the parser on the reconciled file produces zero drift warnings |
+
+### F-044: Audit and Right-Size Agent Behaviors for Opus 4.7 [planned]
+
+**Depends on:** F-024
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | An audit document shall enumerate every Context7 fetch and convention-detection step performed by cap-prototyper, cap-tester, cap-reviewer, cap-debugger, and cap-brainstormer with rationale for keeping or removing each |
+| AC-2 | pending | Pitfall research (F-024) shall become opt-in via an explicit --research flag rather than always-on, removing redundant Context7 calls for libraries the model already knows well |
+| AC-3 | pending | Convention detection shall be replaced with a single high-signal probe (read CLAUDE.md + package.json) instead of 6 to 7 file reads, with the agent inferring the rest |
+| AC-4 | pending | A measurable benchmark shall compare token usage and output quality before and after right-sizing across 5 representative tasks (prototype, iterate, test, review, debug) |
+| AC-5 | pending | The 4-mode architecture of cap-prototyper shall be evaluated against a single-agent-with-explicit-prompt approach; the audit shall recommend keep/collapse/refactor with evidence |
+| AC-6 | pending | All changes shall preserve the public command surface — /cap:prototype, /cap:test, etc. continue to work without user-facing breakage |
+
+### F-045: Improve AC-to-Code Traceability for Multi-File Acceptance Criteria [planned]
+
+**Depends on:** F-001, F-002
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | The tag syntax shall support a primary:true flag on @cap-feature to designate the canonical implementation file when an AC spans multiple files |
+| AC-2 | pending | cap-tag-scanner shall aggregate file references per AC and emit a structured acFileMap field showing all files contributing to each AC |
+| AC-3 | pending | When no primary:true tag exists for a multi-file AC, the scanner shall log a warning and pick the file with the highest tag density as a heuristic primary |
+| AC-4 | pending | A new /cap:trace AC-N command shall print the call graph from the primary file across referenced files for a given acceptance criterion |
+| AC-5 | pending | Documentation shall describe the multi-file tagging convention with two worked examples (one JS, one TS) |
+
+### F-046: Strengthen Polylingual Comment-Token Detection in Tag Scanner [planned]
+
+**Depends on:** F-001
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | cap-tag-scanner shall correctly parse @cap-* tags inside Python (#, triple-quote), Ruby (#, =begin/=end), Shell (#), Go (//, /* */), Rust (//, ///, /* */), HTML (<!-- -->), and CSS (/* */) comment styles |
+| AC-2 | pending | A test fixture shall contain at least one polyglot file per supported language with embedded @cap-feature, @cap-todo, @cap-risk, @cap-decision tags |
+| AC-3 | pending | The scanner shall emit a structured warning when it encounters a @cap-* token outside any recognized comment context (e.g., string literal) rather than parsing it as a tag |
+| AC-4 | pending | A new --strict mode shall fail the scan if any tag is found outside a comment, supporting CI enforcement |
+| AC-5 | pending | Existing tests shall pass unchanged — this feature adds coverage without modifying the JS/TS parsing path |
+
+### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [planned]
+
+**Depends on:** F-001, F-045, F-046
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | A new anchor syntax /* @cap feature:F-001 acs:[AC-1,AC-3] role:primary */ shall be parsed by cap-tag-scanner as a single unified block replacing fragmented multi-line tag clusters |
+| AC-2 | pending | The unified block shall coexist with legacy fragmented tags during a deprecation window — both formats valid, with a CLI flag --legacy-tags=warn|error controlling enforcement |
+| AC-3 | pending | A migration tool cap migrate-tags shall convert existing fragmented tags to unified anchors with a dry-run mode and a per-file diff preview |
+| AC-4 | pending | The unified block shall be language-agnostic — same syntax inside /* */, # (Python/Ruby), <!-- --> (HTML), with comment delimiters varying but block content identical |
+| AC-5 | pending | Decision document shall justify the breaking change with a measurable benefit (e.g., reduced parser ambiguity, improved AI agent comprehension) before merge |
+| AC-6 | pending | Feature shall remain opt-in until at least 80% of repository code has been migrated, controlled by a config flag in .cap/config.json |
+
+### F-048: Implementation Completeness Score (CAP v3 — Optional) [planned]
+
+**Depends on:** F-001, F-002, F-045
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | A new metric module shall compute per-AC a 4-point completeness score: (a) tag exists in code, (b) test exists referencing the AC, (c) test invokes the tagged code, (d) tagged code is reachable from the public surface |
+| AC-2 | pending | The score shall be exposed via cap status --completeness as a per-feature breakdown showing N/4 for each AC |
+| AC-3 | pending | A feature shall not be allowed to transition to shipped if its average completeness score is below a configurable threshold (default 3.5/4) |
+| AC-4 | pending | The score computation shall be deterministic and run in under 5 seconds for a 100-feature project |
+| AC-5 | pending | A markdown report cap completeness-report shall produce a printable audit suitable for code review attachment |
+| AC-6 | pending | Feature is opt-in via .cap/config.json flag — does not affect projects that have not enabled it |
+
+### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [planned]
+
+**Depends on:** F-001, F-002
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | cap-tag-scanner shall be extended to follow import/require statements within tagged files and resolve them to feature IDs of the imported modules |
+| AC-2 | pending | An inferred-dependency report shall compare FEATURE-MAP DEPENDS_ON declarations against scanner-inferred dependencies and emit a diff |
+| AC-3 | pending | A --auto-fix mode shall update DEPENDS_ON to match inferred dependencies, requiring confirmation |
+| AC-4 | pending | The inference shall handle CJS, ESM, and TypeScript import syntax, with a documented limitation list for dynamic imports |
+| AC-5 | pending | A cap deps --graph command shall emit a Mermaid graph of feature dependencies for visual review |
+| AC-6 | pending | Feature is opt-in via .cap/config.json flag — projects without it see no behavior change |
+
+### F-050: Refactor cap-cluster-display.cjs and Improve Error Diagnostics [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | cap-cluster-display.cjs shall be split into at least three modules: a pure formatter (no I/O), an I/O layer (file reads), and a thin orchestrator, with no single file exceeding 300 lines |
+| AC-2 | pending | The 4 silent catch-blocks in _loadClusterData() shall each log a structured diagnostic (error type, file path, recovery action taken) at debug level via the existing logger |
+| AC-3 | pending | Each refactored module shall have unit tests achieving at least 70% line coverage |
+| AC-4 | pending | The public API of cap-cluster-display shall remain unchanged — callers see no behavioral difference |
+| AC-5 | pending | A before/after complexity comparison (cyclomatic complexity per function) shall be included in the PR description |
+
+### F-051: Close Test Coverage Gap for F-036 to F-040 Modules [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | All 16 critical modules currently flagged by TEST-AUDIT as 0% coverage shall reach at least 70% line coverage as enforced by c8 |
+| AC-2 | pending | Coverage shall be reported per module in a new tests/COVERAGE-AUDIT.md updated by npm run test:coverage |
+| AC-3 | pending | Skipped Windows-incompatible tests shall be replaced with explicit describe.skipIf(process.platform === win32, ...) markers carrying a @cap-risk windows-compat annotation |
+| AC-4 | pending | A CI matrix entry for Windows shall run all non-skipped tests and report which modules have platform-specific gaps |
+| AC-5 | pending | No new module shall be merged without accompanying tests — enforced via a pre-merge check counting test files vs source files in changed paths |
+
 ## Legend
 
 | State | Meaning |
@@ -711,4 +845,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-06T06:25:54.718Z*
+*Last updated: 2026-04-20T09:18:03.609Z*
