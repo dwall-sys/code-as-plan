@@ -36,6 +36,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-logger.cjs',
   'cap-memory-dir.cjs',
   'cap-memory-engine.cjs',
+  'cap-memory-pin.cjs',
   'cap-memory-graph.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',

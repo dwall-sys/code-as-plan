@@ -104,8 +104,43 @@ Project Memory Status
   pitfalls.md:   {N} entries ({P} pinned)
 ```
 
-## Subcommand: pin / unpin
+## Subcommand: pin `<file>` `<content-prefix>`
 
-Read the target file, find the annotation matching the content prefix, add or remove `pinned:true` from its metadata.
+<!-- @cap-todo(ac:F-030/AC-4) /cap:memory pin adds pinned:true to the matching @cap-pitfall annotation. -->
+
+```bash
+node -e "
+const pin = require('./cap/bin/lib/cap-memory-pin.cjs');
+const file = process.argv[1];
+const prefix = process.argv[2];
+const result = pin.pin(file, prefix);
+console.log(pin.formatResult(result));
+process.exit(result.changed || result.status === 'already-pinned' ? 0 : 1);
+" '<FILE>' '<PREFIX>'
+```
+
+Argument usage:
+
+- `<file>` — path to the source file that carries the `@cap-pitfall` annotation (absolute or relative to the project root).
+- `<content-prefix>` — a prefix of the pitfall description (case-sensitive). Use enough to disambiguate if multiple pitfalls live in the same file.
+
+On `ambiguous` status the command prints the candidate descriptions; rerun with a longer prefix to select one.
+
+## Subcommand: unpin `<file>` `<content-prefix>`
+
+<!-- @cap-todo(ac:F-030/AC-5) /cap:memory unpin removes pinned:true from the matching annotation. -->
+
+```bash
+node -e "
+const pin = require('./cap/bin/lib/cap-memory-pin.cjs');
+const file = process.argv[1];
+const prefix = process.argv[2];
+const result = pin.unpin(file, prefix);
+console.log(pin.formatResult(result));
+process.exit(result.changed || result.status === 'not-pinned' ? 0 : 1);
+" '<FILE>' '<PREFIX>'
+```
+
+Same argument semantics as `pin`. An already-unpinned annotation exits 0 with a no-op message.
 
 </process>
