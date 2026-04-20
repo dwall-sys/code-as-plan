@@ -841,18 +841,23 @@
 | AC-5 | pending | A markdown report cap completeness-report shall produce a printable audit suitable for code review attachment |
 | AC-6 | pending | Feature is opt-in via .cap/config.json flag — does not affect projects that have not enabled it |
 
-### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [planned]
+### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [tested]
 
 **Depends on:** F-001, F-002
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | cap-tag-scanner shall be extended to follow import/require statements within tagged files and resolve them to feature IDs of the imported modules |
-| AC-2 | pending | An inferred-dependency report shall compare FEATURE-MAP DEPENDS_ON declarations against scanner-inferred dependencies and emit a diff |
-| AC-3 | pending | A --auto-fix mode shall update DEPENDS_ON to match inferred dependencies, requiring confirmation |
-| AC-4 | pending | The inference shall handle CJS, ESM, and TypeScript import syntax, with a documented limitation list for dynamic imports |
-| AC-5 | pending | A cap deps --graph command shall emit a Mermaid graph of feature dependencies for visual review |
-| AC-6 | pending | Feature is opt-in via .cap/config.json flag — projects without it see no behavior change |
+| AC-1 | tested | `cap-deps.cjs` follows `require`/`import`/`export-from`/`import()` statements within `@cap-feature`-tagged files and resolves them to feature IDs via `buildFileToFeatureMap()` + `resolveImportToFile()` |
+| AC-2 | tested | `diffDeclaredVsInferred()` compares FEATURE-MAP `**Depends on:**` to inferred edges and returns per-feature `missing`/`extraneous` rows; `formatDiffReport()` renders a human-readable report |
+| AC-3 | tested | `applyInferredDeps()` writes merged dependency lines back to FEATURE-MAP.md; `/cap:deps --auto-fix` orchestrator requires explicit user confirmation. `removeExtraneous` flag opt-in for destructive removal |
+| AC-4 | tested | Regex-based parser handles CJS `require()`, ESM `import … from`, ESM re-exports, and static `import()` for both .js/.cjs/.mjs and .ts/.tsx. Dynamic/computed specifiers are documented as explicit limitations in module header |
+| AC-5 | tested | `renderMermaidGraph()` emits a fenced `flowchart TD` with solid arrows for declared edges and dashed `-.->\|inferred\|` arrows for inferred-only edges; `/cap:deps --graph` surfaces it |
+| AC-6 | tested | `loadDepsConfig()` reads `.cap/config.json → autoDepsInference.enabled` (default false). `/cap:deps` command exits with an informative message when disabled — zero runtime impact on projects that don't opt in |
+
+**Files:**
+- `cap/bin/lib/cap-deps.cjs`
+- `commands/cap/deps.md`
+- `tests/cap-deps.test.cjs`
 
 ### F-050: Refactor cap-cluster-display.cjs and Improve Error Diagnostics [tested]
 
