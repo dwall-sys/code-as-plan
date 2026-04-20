@@ -732,6 +732,11 @@
 | AC-5 | tested | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
 | AC-6 | tested | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
 
+**Files:**
+- `.claude/cap/bin/lib/cap-feature-map.cjs`
+- `cap/bin/lib/cap-feature-map.cjs`
+- `tests/cap-feature-map.test.cjs`
+
 ### F-043: Reconcile Status Drift in Existing Feature Map [tested]
 
 **Depends on:** F-041, F-042
@@ -743,6 +748,12 @@
 | AC-3 | tested | F-027, F-028, F-029, F-034 shall have their feature state reconciled from planned to the correct lifecycle state based on actual code presence, verified via tag scanner |
 | AC-4 | tested | The reconciliation shall preserve historical accuracy by emitting a .cap/memory/reconciliation-2026-04.md audit log of every state change |
 | AC-5 | tested | A regression test shall assert that running the parser on the reconciled file produces zero drift warnings |
+
+**Files:**
+- `.claude/cap/bin/lib/cap-reconcile.cjs`
+- `cap/bin/lib/cap-reconcile.cjs`
+- `tests/cap-reconcile-adversarial.test.cjs`
+- `tests/cap-reconcile.test.cjs`
 
 ### F-044: Audit and Right-Size Agent Behaviors for Opus 4.7 [tested]
 
@@ -757,6 +768,11 @@
 | AC-5 | tested | The 4-mode architecture of cap-prototyper shall be evaluated against a single-agent-with-explicit-prompt approach; the audit shall recommend keep/collapse/refactor with evidence |
 | AC-6 | tested | All changes shall preserve the public command surface — /cap:prototype, /cap:test, etc. continue to work without user-facing breakage |
 
+**Files:**
+- `.claude/cap/bin/lib/convention-reader.cjs`
+- `cap/bin/lib/convention-reader.cjs`
+- `tests/cap-f044-audit.test.cjs`
+
 ### F-045: Improve AC-to-Code Traceability for Multi-File Acceptance Criteria [tested]
 
 **Depends on:** F-001, F-002
@@ -769,17 +785,35 @@
 | AC-4 | tested | A new /cap:trace AC-N command shall print the call graph from the primary file across referenced files for a given acceptance criterion |
 | AC-5 | tested | Documentation shall describe the multi-file tagging convention with two worked examples (one JS, one TS) |
 
-### F-046: Strengthen Polylingual Comment-Token Detection in Tag Scanner [planned]
+**Files:**
+- `.claude/cap/bin/lib/cap-tag-scanner.cjs`
+- `.claude/cap/bin/lib/cap-trace.cjs`
+- `cap/bin/lib/cap-tag-scanner.cjs`
+- `cap/bin/lib/cap-trace.cjs`
+- `tests/cap-trace.test.cjs`
+
+### F-046: Strengthen Polylingual Comment-Token Detection in Tag Scanner [tested]
 
 **Depends on:** F-001
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | cap-tag-scanner shall correctly parse @cap-* tags inside Python (#, triple-quote), Ruby (#, =begin/=end), Shell (#), Go (//, /* */), Rust (//, ///, /* */), HTML (<!-- -->), and CSS (/* */) comment styles |
-| AC-2 | pending | A test fixture shall contain at least one polyglot file per supported language with embedded @cap-feature, @cap-todo, @cap-risk, @cap-decision tags |
-| AC-3 | pending | The scanner shall emit a structured warning when it encounters a @cap-* token outside any recognized comment context (e.g., string literal) rather than parsing it as a tag |
-| AC-4 | pending | A new --strict mode shall fail the scan if any tag is found outside a comment, supporting CI enforcement |
-| AC-5 | pending | Existing tests shall pass unchanged — this feature adds coverage without modifying the JS/TS parsing path |
+| AC-1 | tested | cap-tag-scanner shall correctly parse @cap-* tags inside Python (#, triple-quote), Ruby (#, =begin/=end), Shell (#), Go (//, /* */), Rust (//, ///, /* */), HTML (<!-- -->), and CSS (/* */) comment styles |
+| AC-2 | tested | A test fixture shall contain at least one polyglot file per supported language with embedded @cap-feature, @cap-todo, @cap-risk, @cap-decision tags |
+| AC-3 | tested | The scanner shall emit a structured warning when it encounters a @cap-* token outside any recognized comment context (e.g., string literal) rather than parsing it as a tag |
+| AC-4 | tested | A new --strict mode shall fail the scan if any tag is found outside a comment, supporting CI enforcement |
+| AC-5 | tested | Existing tests shall pass unchanged — this feature adds coverage without modifying the JS/TS parsing path |
+
+**Files:**
+- `.claude/cap/bin/lib/cap-tag-scanner.cjs`
+- `cap/bin/lib/cap-tag-scanner.cjs`
+- `tests/cap-tag-scanner-polylingual.test.cjs`
+- `tests/fixtures/polyglot/example.go`
+- `tests/fixtures/polyglot/example.py`
+- `tests/fixtures/polyglot/example.rb`
+- `tests/fixtures/polyglot/example.rs`
+- `tests/fixtures/polyglot/example.sh`
+- `tests/fixtures/polyglot/example_string_literal.py`
 
 ### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [planned]
 
@@ -850,4 +884,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T11:42:19.259Z*
+*Last updated: 2026-04-20T12:33:30.398Z*

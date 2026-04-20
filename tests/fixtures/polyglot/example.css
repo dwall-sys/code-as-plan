@@ -1,0 +1,11 @@
+/* @cap-feature(feature:F-046) CSS polyglot fixture — block-only comment syntax. */
+/* @cap-todo(ac:F-046/AC-1) CSS uses /* */ exclusively. */
+
+body {
+  /* @cap-risk CSS line comments do not exist in vanilla CSS — only SCSS supports //. */
+  color: black;
+}
+
+/*
+ * @cap-decision Multi-line CSS comments preserved across newlines.
+ */

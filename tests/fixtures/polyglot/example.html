@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- @cap-feature(feature:F-046) HTML polyglot fixture using <!-- --> block comments. -->
+  <!-- @cap-todo(ac:F-046/AC-1) HTML comments span open and close tokens. -->
+  <title>Polyglot HTML</title>
+</head>
+<body>
+  <!--
+    @cap-risk Multi-line HTML comments must keep the scanner block-state open across newlines.
+    @cap-decision HTML comments are the only comment style in raw HTML — no line-comment equivalent.
+  -->
+  <p>Hello.</p>
+</body>
+</html>

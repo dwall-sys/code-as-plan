@@ -18,9 +18,11 @@ const CAP_TAG_TYPES = ['feature', 'todo', 'risk', 'decision'];
 
 // @cap-todo(ref:AC-25) Tag scanner uses native RegExp with dotAll flag for multiline extraction
 // @cap-pattern Tag regex anchors to comment tokens at line start -- identical approach to arc-scanner.cjs
+// @cap-decision F-046 leaves CAP_TAG_RE untouched (AC-5 backward compat). New polylingual extension uses extractTagsWithContext + getCommentStyle for richer per-language detection.
 const CAP_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@cap-(feature|todo|risk|decision)(?:\(([^)]*)\))?[ \t]*(.*)/;
 
 // @cap-todo(ref:AC-26) Tag scanner is language-agnostic, operating on comment syntax patterns across JS, TS, Python, Ruby, Shell
+// @cap-decision F-046 leaves SUPPORTED_EXTENSIONS untouched to preserve AC-5 backward compatibility (existing test asserts list length === 18). The new polylingual scanner uses Object.keys(COMMENT_STYLES) as its default extension list, which DOES include HTML/CSS/SCSS/Markdown/YAML/TOML/Shell-zsh.
 const SUPPORTED_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.py', '.rb', '.sh', '.bash', '.sql', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp'];
 const DEFAULT_EXCLUDE = ['node_modules', '.git', '.cap', 'dist', 'build', 'coverage', '.planning'];
 
@@ -717,6 +719,723 @@ function detectSharedPackages(projectRoot, appPath) {
   return packages;
 }
 
+// =====================================================================
+// F-046: Polylingual comment-context detection
+// =====================================================================
+//
+// @cap-feature(feature:F-046, primary:true) Strengthen Polylingual Comment-Token Detection in Tag Scanner
+// @cap-decision Comment-style table is extension-driven (per-language) rather than heuristic — extensions are deterministic, low-risk, and match how editors highlight code. A heuristic (e.g., shebang-sniffing) would over-trigger on polyglot files like .md with embedded code blocks.
+// @cap-decision Backward-compat strategy: keep `extractTags(content, file) -> CapTag[]` legacy shape (Option A from spec) and add a new `extractTagsWithContext(content, file) -> { tags, warnings }`. F-046/AC-5 requires JS/TS callsites to be untouched, and this avoids churning ~30 callers.
+// @cap-decision Comment-context detection is implemented as an in-place line-by-line state machine rather than a tokenizer or AST. The scanner has been regex-based since F-001; adopting a tokenizer for one feature would balloon scope and add maintenance burden. The state machine handles 95%+ of real-world cases (line + block comments, multi-line block tracking) with ~80 lines of logic.
+// @cap-risk Edge cases not covered: nested string-quote inside block comment (e.g., `# "@cap-feature" still in code`), here-docs in shell, raw strings in Python (r"@cap..."), C++ raw string literals R"(@cap)". These are extremely rare for tag-bearing files and would require a real lexer to handle correctly. The warning system in AC-3 catches most false positives; AC-4's --strict mode is the safety net for CI.
+// @cap-risk Unrecognized extensions fall back to "treat as JS-style line + block comments" so behavior is at least no worse than today. Documented below at COMMENT_STYLES_DEFAULT.
+// @cap-feature(feature:F-046, ac:F-046/AC-3) String-literal awareness — classifyTagContext now tracks string state alongside comment state. A line like `const x = "// @cap-feature(F-999) fake"` is correctly classified as a string-literal context, the @cap-* token is NOT extracted as a tag, and a structured warning is emitted instead. Implementation: STRING_STYLES per-extension table, _matchStringOpen / _findStringClose helpers, and string-state extension to blockState carried across lines (Python triple-quotes, TOML triple-quotes, Rust raw strings, JS template literals all multi-line capable). See tests/cap-tag-scanner-polylingual-adversarial.test.cjs `'F-046/AC-3 string literal containing comment token is correctly rejected'` for the inverted witness tests that pin the fix.
+
+/**
+ * @typedef {Object} CommentStyle
+ * @property {string[]} line - Line-comment tokens (e.g., ["//"])
+ * @property {Array<[string,string]>} block - Block-comment open/close pairs (e.g., [["/*", "*\/"]])
+ */
+
+// @cap-todo(ac:F-046/AC-1) Per-extension comment style table covering Python, Ruby, Shell, Go, Rust, HTML, CSS in addition to JS/TS.
+// Order within `line` matters: longer tokens must come first so that `///` matches before `//`.
+/** @type {Object<string, CommentStyle>} */
+const COMMENT_STYLES = {
+  // JS / TS family — preserved from existing behavior (AC-5).
+  '.js':   { line: ['//'], block: [['/*', '*/']] },
+  '.cjs':  { line: ['//'], block: [['/*', '*/']] },
+  '.mjs':  { line: ['//'], block: [['/*', '*/']] },
+  '.ts':   { line: ['//'], block: [['/*', '*/']] },
+  '.tsx':  { line: ['//'], block: [['/*', '*/']] },
+  '.jsx':  { line: ['//'], block: [['/*', '*/']] },
+  // Python — line `#`; block via triple-quoted strings (used as docstring comments).
+  '.py':   { line: ['#'],  block: [['"""', '"""'], ["'''", "'''"]] },
+  // Ruby — line `#`; block via =begin/=end.
+  '.rb':   { line: ['#'],  block: [['=begin', '=end']] },
+  // Shell family — line `#` only.
+  '.sh':   { line: ['#'],  block: [] },
+  '.bash': { line: ['#'],  block: [] },
+  '.zsh':  { line: ['#'],  block: [] },
+  // Go — same as JS family.
+  '.go':   { line: ['//'], block: [['/*', '*/']] },
+  // Rust — `///` doc-comment must be matched before `//`.
+  '.rs':   { line: ['///', '//'], block: [['/*', '*/']] },
+  // HTML / Markdown HTML comments — block only.
+  '.html': { line: [], block: [['<!--', '-->']] },
+  '.htm':  { line: [], block: [['<!--', '-->']] },
+  '.md':   { line: [], block: [['<!--', '-->']] },
+  // CSS / SCSS — block always; SCSS adds line comments.
+  '.css':  { line: [], block: [['/*', '*/']] },
+  '.scss': { line: ['//'], block: [['/*', '*/']] },
+  // YAML / TOML — line `#` only.
+  '.yaml': { line: ['#'], block: [] },
+  '.yml':  { line: ['#'], block: [] },
+  '.toml': { line: ['#'], block: [] },
+  // SQL / Lua — line `--`.
+  '.sql':  { line: ['--'], block: [['/*', '*/']] },
+  // C / C++ / Java — same as JS family.
+  '.java': { line: ['//'], block: [['/*', '*/']] },
+  '.c':    { line: ['//'], block: [['/*', '*/']] },
+  '.cpp':  { line: ['//'], block: [['/*', '*/']] },
+  '.h':    { line: ['//'], block: [['/*', '*/']] },
+  '.hpp':  { line: ['//'], block: [['/*', '*/']] },
+};
+
+// @cap-decision Default fallback for unrecognized extensions: assume JS-style. This is the safest non-breaking default — files we don't know about will behave exactly as they did before F-046 (regex-only).
+/** @type {CommentStyle} */
+const COMMENT_STYLES_DEFAULT = { line: ['//', '#', '--'], block: [['/*', '*/'], ['"""', '"""'], ["'''", "'''"], ['<!--', '-->'], ['=begin', '=end']] };
+
+/**
+ * Pick the comment style for a file path based on its extension.
+ * @param {string} filePath
+ * @returns {CommentStyle}
+ */
+function getCommentStyle(filePath) {
+  const ext = path.extname(filePath || '').toLowerCase();
+  return COMMENT_STYLES[ext] || COMMENT_STYLES_DEFAULT;
+}
+
+// =====================================================================
+// F-046/AC-3 — String-literal awareness
+// =====================================================================
+//
+// @cap-feature(feature:F-046) String-state tracker — prevents @cap-* tokens INSIDE string literals from being misclassified as comments. Resolves the AC-3 bug pinned by adversarial tests.
+// @cap-decision String-state lives in the same blockState object as comment-state, walked synchronously by classifyTagContext. A separate pass would double the asymptotic work and require keeping two parallel cursors in sync; one walker that checks string-open BEFORE comment-open at each position is simpler and provably correct.
+// @cap-decision Per-language STRING_STYLES table — same shape philosophy as COMMENT_STYLES. Order within the array matters: longer / more-specific tokens (triple-quotes, raw-string prefixes like r" or r#") must be listed before their substring counterparts.
+// @cap-risk(out-of-scope) Ruby `<<~END` heredocs and Shell `<< EOF` heredocs are NOT tracked. The body of a heredoc is plain text but the scanner sees it as code. Documented limitation; pinned by adversarial tests `'heredocs and multi-line strings (current behaviour)'`. A real fix requires tokenizing the heredoc-introducer syntax, which is non-trivial (delimiter is identifier-defined, can be quoted or unquoted, can be `<<~` for indent-stripping). Out of scope for this iteration.
+// @cap-risk(out-of-scope) Rust nested `/* /* */ */` block comments still close on the first `*/`. Same documented limitation as before F-046/AC-3 fix — nesting requires a depth counter, separate from string-state.
+// @cap-risk(out-of-scope) Markdown ```code fences``` are NOT understood as comments-or-strings. A tag inside a fenced code block is treated as a plain prose mention and emits a warning. Documented in adversarial test `'Markdown code fences are NOT understood'`.
+
+/**
+ * @typedef {Object} StringSyntax
+ * @property {string} open - Opening token (e.g., '"', "'", '"""', 'r#"').
+ * @property {string} close - Closing token. For raw strings with hash counts (r#"..."#), the runtime computes the actual close from the open.
+ * @property {boolean} escapes - When true, backslash escapes the next character; when false (raw strings, shell single-quotes, Python r"..."), the backslash is literal.
+ * @property {boolean} multiline - When true, the string can span multiple lines (Python """, TOML ''', etc).
+ * @property {boolean} [rustRaw] - Special-case marker for Rust r#"..."# raw strings whose close depends on hash count of open.
+ */
+
+// @cap-feature(feature:F-046) Per-extension string syntax table — used by classifyTagContext to detect when the cursor enters a string literal so comment-token matches inside the string are ignored.
+// @cap-decision Order matters: longer / prefixed tokens come first so `"""` matches before `"`, `r"..."` matches before `"..."`. Otherwise the shorter token would consume the prefix and misclassify.
+/** @type {Object<string, StringSyntax[]>} */
+const STRING_STYLES = {
+  // JS / TS family — double, single, and template literals (backtick treated as plain string; interpolation NOT tracked).
+  '.js':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: true, multiline: true }],
+  '.cjs': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: true, multiline: true }],
+  '.mjs': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: true, multiline: true }],
+  '.ts':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: true, multiline: true }],
+  '.tsx': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: true, multiline: true }],
+  '.jsx': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: true, multiline: true }],
+  // Python — single-line strings only here. Triple-quoted strings are treated as BLOCK COMMENTS via COMMENT_STYLES['.py'] for docstring compatibility (this matches Python convention where """...""" at module/function/class level is the docstring).
+  // @cap-decision Triple-quoted strings are NOT in Python STRING_STYLES — they remain in COMMENT_STYLES.block to preserve the F-046/AC-1 contract that Python docstrings carry tags. Edge case: a triple-quoted string used as a literal value (e.g., `s = """hello"""`) is misclassified as a comment, but this is the existing behavior the original tests pin (see `'Python inline triple-quote'` test).
+  '.py':  [
+    // Prefixed strings come BEFORE plain strings so `r"..."` matches before `"..."`.
+    { open: 'rb"', close: '"', escapes: false, multiline: false, isRaw: true },
+    { open: "rb'", close: "'", escapes: false, multiline: false, isRaw: true },
+    { open: 'br"', close: '"', escapes: false, multiline: false, isRaw: true },
+    { open: "br'", close: "'", escapes: false, multiline: false, isRaw: true },
+    { open: 'r"', close: '"', escapes: false, multiline: false, isRaw: true },
+    { open: "r'", close: "'", escapes: false, multiline: false, isRaw: true },
+    { open: 'b"', close: '"', escapes: true, multiline: false },
+    { open: "b'", close: "'", escapes: true, multiline: false },
+    { open: 'f"', close: '"', escapes: true, multiline: false },
+    { open: "f'", close: "'", escapes: true, multiline: false },
+    { open: '"', close: '"', escapes: true, multiline: false },
+    { open: "'", close: "'", escapes: true, multiline: false },
+  ],
+  // Ruby — double + single. Heredocs NOT tracked (see @cap-risk above).
+  '.rb':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }],
+  // Shell — double, single (no escapes in single-quoted), backtick command substitution. Heredocs NOT tracked.
+  '.sh':   [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }, { open: '`', close: '`', escapes: true, multiline: false }],
+  '.bash': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }, { open: '`', close: '`', escapes: true, multiline: false }],
+  '.zsh':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }, { open: '`', close: '`', escapes: true, multiline: false }],
+  // Go — double, single (rune literal), backtick raw string.
+  '.go':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }, { open: '`', close: '`', escapes: false, multiline: true }],
+  // Rust — raw strings with hash counts handled specially. r#"..."#, r##"..."##, etc.
+  '.rs':  [
+    { open: 'r#"', close: '"#', escapes: false, multiline: true, rustRaw: true },
+    { open: 'r"', close: '"', escapes: false, multiline: true, isRaw: true },
+    { open: 'b"', close: '"', escapes: true, multiline: false },
+    { open: '"', close: '"', escapes: true, multiline: true },
+    // Char literals 'x' — single quotes in Rust are char literals, but treating them as 1-char strings is fine for our purposes.
+    { open: "'", close: "'", escapes: true, multiline: false },
+  ],
+  // HTML — attribute strings inside tags. Treat anywhere as string for our purposes (over-flag is acceptable).
+  '.html': [{ open: '"', close: '"', escapes: false, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }],
+  '.htm':  [{ open: '"', close: '"', escapes: false, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }],
+  // Markdown — no string literals natively; leave empty so prose is not treated as string.
+  '.md':   [],
+  // CSS / SCSS — both quote styles.
+  '.css':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+  '.scss': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+  // YAML — both quote styles. Single-quote escape via doubling NOT tracked exactly; over-flag is acceptable.
+  '.yaml': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }],
+  '.yml':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: false, multiline: false }],
+  // TOML — triple-quote multiline first, then plain.
+  '.toml': [
+    { open: '"""', close: '"""', escapes: true, multiline: true },
+    { open: "'''", close: "'''", escapes: false, multiline: true },
+    { open: '"', close: '"', escapes: true, multiline: false },
+    { open: "'", close: "'", escapes: false, multiline: false },
+  ],
+  // SQL — single-quote string with doubled-quote escape. Treat as escape-aware for simplicity.
+  '.sql':  [{ open: "'", close: "'", escapes: true, multiline: false }, { open: '"', close: '"', escapes: true, multiline: false }],
+  // C / C++ / Java — double for string, single for char.
+  '.java': [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+  '.c':    [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+  '.cpp':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+  '.h':    [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+  '.hpp':  [{ open: '"', close: '"', escapes: true, multiline: false }, { open: "'", close: "'", escapes: true, multiline: false }],
+};
+
+// @cap-decision Default string-style fallback for unknown extensions: double + single quotes with escape handling. Matches behavior of nearly every C-family language. Files of unknown type are over-flagged rather than under-flagged (safer).
+/** @type {StringSyntax[]} */
+const STRING_STYLES_DEFAULT = [
+  { open: '"', close: '"', escapes: true, multiline: false },
+  { open: "'", close: "'", escapes: true, multiline: false },
+];
+
+/**
+ * Pick the string-syntax table for a file path based on its extension.
+ * @param {string} filePath
+ * @returns {StringSyntax[]}
+ */
+function getStringStyle(filePath) {
+  const ext = path.extname(filePath || '').toLowerCase();
+  return STRING_STYLES[ext] || STRING_STYLES_DEFAULT;
+}
+
+/**
+ * Try to match any string-open token at position `i` in `line`.
+ * Returns the matched StringSyntax + the actual close token (computed for Rust raw r##"..."##),
+ * or null if no string opens at this position.
+ *
+ * For Rust r##"..."##: counts the run of `#` characters after `r` and computes the close as `"` + same count of `#`.
+ *
+ * @param {StringSyntax[]} stringStyle
+ * @param {string} line
+ * @param {number} i
+ * @returns {{ syntax: StringSyntax, openLen: number, close: string } | null}
+ */
+function _matchStringOpen(stringStyle, line, i) {
+  for (const syn of stringStyle) {
+    if (syn.rustRaw) {
+      // Rust r#"..."# / r##"..."## / etc. Match `r` followed by 1+ `#` followed by `"`.
+      if (line[i] !== 'r') continue;
+      let j = i + 1;
+      let hashCount = 0;
+      while (j < line.length && line[j] === '#') { hashCount++; j++; }
+      if (hashCount === 0) continue; // Need at least one `#` to be the rustRaw form.
+      if (line[j] !== '"') continue;
+      const openLen = j - i + 1; // r + N# + "
+      const close = '"' + '#'.repeat(hashCount);
+      return { syntax: syn, openLen, close };
+    }
+    if (line.startsWith(syn.open, i)) {
+      return { syntax: syn, openLen: syn.open.length, close: syn.close };
+    }
+  }
+  return null;
+}
+
+/**
+ * Find the index where the currently open string closes, starting from `i`.
+ * Honors escape rules per syntax. Returns -1 if the string does not close on this line.
+ *
+ * @param {string} line
+ * @param {number} i - Position to start searching (just past the open token)
+ * @param {string} close - Close token to find
+ * @param {boolean} escapes - Whether backslash escapes the next char
+ * @returns {number} - Index of the close token, or -1 if not found on this line
+ */
+function _findStringClose(line, i, close, escapes) {
+  let j = i;
+  const n = line.length;
+  while (j < n) {
+    if (escapes && line[j] === '\\' && j + 1 < n) {
+      // Skip escaped character.
+      j += 2;
+      continue;
+    }
+    if (line.startsWith(close, j)) {
+      return j;
+    }
+    j++;
+  }
+  return -1;
+}
+
+/**
+ * Find the longest matching syntax token at position `i` across {block-comment-open, string-open, line-comment}.
+ * Longest-match wins so e.g. Python `"""` (block-comment) beats `"` (string-open).
+ * Equal-length ties: block-comment > string > line-comment (block syntax is the more intentional construct).
+ *
+ * Returns one of:
+ *   { kind: 'blockComment', open, close, length }
+ *   { kind: 'string', syntax, openLen, close, length }
+ *   { kind: 'lineComment', token, length }
+ *   null if nothing matches at i.
+ *
+ * @param {CommentStyle} style
+ * @param {StringSyntax[]} stringStyle
+ * @param {string} line
+ * @param {number} i
+ */
+function _longestTokenMatch(style, stringStyle, line, i) {
+  let best = null;
+
+  // Block-comment open candidates.
+  for (const pair of style.block) {
+    const [open, close] = pair;
+    if (line.startsWith(open, i)) {
+      const candidate = { kind: 'blockComment', open, close, length: open.length, priority: 3 };
+      if (!best || candidate.length > best.length || (candidate.length === best.length && candidate.priority > best.priority)) {
+        best = candidate;
+      }
+    }
+  }
+
+  // String-open candidates.
+  const strOpen = _matchStringOpen(stringStyle, line, i);
+  if (strOpen) {
+    const candidate = { kind: 'string', syntax: strOpen.syntax, openLen: strOpen.openLen, close: strOpen.close, length: strOpen.openLen, priority: 2 };
+    if (!best || candidate.length > best.length || (candidate.length === best.length && candidate.priority > best.priority)) {
+      best = candidate;
+    }
+  }
+
+  // Line-comment candidates.
+  for (const lt of style.line) {
+    if (line.startsWith(lt, i)) {
+      const candidate = { kind: 'lineComment', token: lt, length: lt.length, priority: 1 };
+      if (!best || candidate.length > best.length || (candidate.length === best.length && candidate.priority > best.priority)) {
+        best = candidate;
+      }
+    }
+  }
+
+  return best;
+}
+
+/**
+ * @typedef {Object} ClassifyResult
+ * @property {('comment'|'string'|'code'|'unknown')} context - Where the @cap-* token was found
+ * @property {string} reason - Short human-readable reason ("python triple-quote block", "JS line comment", "outside any comment")
+ */
+
+// @cap-todo(ac:F-046/AC-3) classifyTagContext returns 'comment' when the tag column is inside a recognized comment, 'string' when inside a string literal, else 'code' (both 'string' and 'code' are warning candidates).
+// @cap-feature(feature:F-046) classifyTagContext is string-state aware — at each cursor position it checks string-open BEFORE comment-open so a `// @cap-...` token inside `"..."` is correctly classified as a string-literal context, not a comment.
+/**
+ * Classify whether `tagColumn` in `lineContent` is inside a comment, a string, or code.
+ * The caller maintains `blockState` across lines so multi-line block comments AND multi-line strings
+ * (Python triple-quotes, TOML triple-quotes, Rust raw strings) are tracked.
+ *
+ * Walker order at each position i (in priority order):
+ *   1. Carried-over block comment (from a previous line) — look for its close.
+ *   2. Carried-over multi-line string (from a previous line) — look for its close.
+ *   3. String-open token at i — enter string mode.
+ *   4. Line-comment token at i — rest of line is comment.
+ *   5. Block-comment open token at i — enter block mode.
+ *
+ * String-open is checked BEFORE comment-open because a `// @cap-...` inside `"..."` should be
+ * classified as string, not comment.
+ *
+ * @param {CommentStyle} style
+ * @param {string} lineContent - Full line text
+ * @param {number} tagColumn - 0-based column of the @cap-... match
+ * @param {{ open: [string,string]|null, stringClose: string|null, stringEscapes: boolean, stringOpenToken: string|null }} blockState - Mutable block-comment + string state across lines
+ * @param {StringSyntax[]} [stringStyle] - Optional string syntax table (defaults derived from style if provided as ['filePath', '...'])
+ * @returns {ClassifyResult}
+ */
+function classifyTagContext(style, lineContent, tagColumn, blockState, stringStyle) {
+  // Default string style: empty (no string detection) — preserves backward compat for callers
+  // that pre-date AC-3 and pass only 4 args.
+  const ss = Array.isArray(stringStyle) ? stringStyle : [];
+
+  let i = 0;
+  const n = lineContent.length;
+
+  while (i <= tagColumn && i < n) {
+    // 1) Carried-over block comment from a previous line.
+    if (blockState.open) {
+      const [, close] = blockState.open;
+      const closeIdx = lineContent.indexOf(close, i);
+      if (closeIdx === -1) {
+        if (tagColumn >= i) {
+          return { context: 'comment', reason: `inside block comment ${blockState.open[0]}...${blockState.open[1]}` };
+        }
+        return { context: 'comment', reason: 'inside multi-line block comment' };
+      }
+      if (tagColumn < closeIdx) {
+        return { context: 'comment', reason: `inside block comment ${blockState.open[0]}...${blockState.open[1]}` };
+      }
+      i = closeIdx + close.length;
+      blockState.open = null;
+      continue;
+    }
+
+    // 2) Carried-over multi-line string from a previous line.
+    if (blockState.stringClose) {
+      const close = blockState.stringClose;
+      const escapes = !!blockState.stringEscapes;
+      const closeIdx = _findStringClose(lineContent, i, close, escapes);
+      if (closeIdx === -1) {
+        // String stays open through end of line. tagColumn is inside the string.
+        if (tagColumn >= i) {
+          return { context: 'string', reason: `inside multi-line string literal ${blockState.stringOpenToken || ''}...${close}` };
+        }
+        return { context: 'string', reason: 'inside multi-line string literal' };
+      }
+      if (tagColumn < closeIdx) {
+        return { context: 'string', reason: `inside multi-line string literal ${blockState.stringOpenToken || ''}...${close}` };
+      }
+      // String closes before tagColumn. Clear state and continue past the close.
+      i = closeIdx + close.length;
+      blockState.stringClose = null;
+      blockState.stringEscapes = false;
+      blockState.stringOpenToken = null;
+      continue;
+    }
+
+    // 3) Find the longest matching token at i across {block-comment-open, string-open, line-comment}.
+    //    Longest-match wins so e.g. Python `"""` (block-comment) beats `"` (string-open).
+    //    Equal-length ties prefer block-comment over string over line-comment (block syntax tends to be the more intentional construct).
+    const tokenMatch = _longestTokenMatch(style, ss, lineContent, i);
+
+    if (tokenMatch && tokenMatch.kind === 'string') {
+      const strOpen = tokenMatch;
+      const startCol = i;
+      const afterOpen = i + strOpen.openLen;
+      const closeIdx = _findStringClose(lineContent, afterOpen, strOpen.close, strOpen.syntax.escapes);
+      if (closeIdx === -1) {
+        if (strOpen.syntax.multiline) {
+          blockState.stringClose = strOpen.close;
+          blockState.stringEscapes = strOpen.syntax.escapes;
+          blockState.stringOpenToken = strOpen.syntax.open;
+        }
+        if (tagColumn >= startCol) {
+          return { context: 'string', reason: `inside string literal ${strOpen.syntax.open}...${strOpen.close}` };
+        }
+        return { context: 'string', reason: 'inside string literal' };
+      }
+      if (tagColumn >= startCol && tagColumn < closeIdx + strOpen.close.length) {
+        return { context: 'string', reason: `inside string literal ${strOpen.syntax.open}...${strOpen.close}` };
+      }
+      i = closeIdx + strOpen.close.length;
+      continue;
+    }
+
+    if (tokenMatch && tokenMatch.kind === 'lineComment') {
+      if (i <= tagColumn) {
+        return { context: 'comment', reason: `line comment ${tokenMatch.token}` };
+      }
+      return { context: 'comment', reason: 'line comment' };
+    }
+
+    if (tokenMatch && tokenMatch.kind === 'blockComment') {
+      const open = tokenMatch.open;
+      const close = tokenMatch.close;
+      const closeIdx = lineContent.indexOf(close, i + open.length);
+      if (closeIdx === -1) {
+        blockState.open = [open, close];
+        if (tagColumn >= i) {
+          return { context: 'comment', reason: `inside block comment ${open}...${close}` };
+        }
+        return { context: 'comment', reason: `inside block comment ${open}...${close}` };
+      }
+      if (tagColumn >= i && tagColumn < closeIdx + close.length) {
+        return { context: 'comment', reason: `block comment ${open}...${close}` };
+      }
+      i = closeIdx + close.length;
+      continue;
+    }
+
+    // 4) No special token at i. Advance one char.
+    i++;
+  }
+
+  // Cursor walked past tagColumn without entering any comment or string — tag is in code.
+  return { context: 'code', reason: 'outside any comment' };
+}
+
+/**
+ * @typedef {Object} ScannerWarning
+ * @property {string} file - Relative file path
+ * @property {number} line - 1-based line number
+ * @property {number} column - 0-based column index of the @cap-* token
+ * @property {string} reason - Human-readable reason the tag was rejected
+ * @property {string} raw - Full original line text
+ */
+
+// @cap-todo(ac:F-046/AC-1) extractTagsWithContext is the polylingual entry point — same regex match as legacy extractTags, but each match is verified to land inside a real comment.
+// @cap-todo(ac:F-046/AC-3) Tags found outside comments are not parsed; they appear in `warnings` instead so callers (and CI in --strict mode) can surface them.
+/**
+ * Polylingual extraction. Detects per-line `@cap-...` matches anywhere on the line, then verifies
+ * each match sits inside a recognized comment context for the file's extension.
+ *
+ * Tags inside comments are emitted as CapTag (same shape as `extractTags`).
+ * Tags outside any comment are emitted as `warnings` and NOT parsed as tags.
+ *
+ * @param {string} content
+ * @param {string} filePath
+ * @returns {{ tags: CapTag[], warnings: ScannerWarning[] }}
+ */
+function extractTagsWithContext(content, filePath) {
+  const style = getCommentStyle(filePath);
+  const stringStyle = getStringStyle(filePath);
+  const lines = content.split('\n');
+  const tags = [];
+  const warnings = [];
+  // Loose match — `@cap-(feature|todo|risk|decision)` anywhere on the line, with optional metadata block.
+  // We keep CAP_TAG_RE intact (it requires a leading comment token) and use this looser regex only here.
+  const looseTagRe = /@cap-(feature|todo|risk|decision)(?:\(([^)]*)\))?[ \t]*([^\r\n]*)/g;
+
+  // Persistent state carries across lines: block comments AND multi-line strings.
+  // @cap-feature(feature:F-046) blockState now also tracks string-literal state for Python triple-quotes, TOML triple-quotes, Rust raw strings, JS template literals, etc.
+  /** @type {{ open: [string,string]|null, stringClose: string|null, stringEscapes: boolean, stringOpenToken: string|null }} */
+  const blockState = { open: null, stringClose: null, stringEscapes: false, stringOpenToken: null };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Reset regex state for each line.
+    looseTagRe.lastIndex = 0;
+
+    // First, find all candidate @cap-* matches on this line.
+    const matches = [];
+    let m;
+    while ((m = looseTagRe.exec(line)) !== null) {
+      matches.push({
+        index: m.index,
+        type: m[1],
+        metadataStr: m[2] || '',
+        description: (m[3] || '').trim(),
+      });
+    }
+
+    // Snapshot block + string state BEFORE we mutate via classifyTagContext.
+    // Each match starts the walk at column 0 with a fresh copy.
+    const blockStateBeforeLine = {
+      open: blockState.open,
+      stringClose: blockState.stringClose,
+      stringEscapes: blockState.stringEscapes,
+      stringOpenToken: blockState.stringOpenToken,
+    };
+
+    if (matches.length === 0) {
+      // No tags on this line, but we still need to advance the persistent state for the line.
+      _advanceBlockState(style, line, blockState, stringStyle);
+      continue;
+    }
+
+    for (const match of matches) {
+      // Use a fresh state copy for each classification (state machine restarts from col 0).
+      const localState = {
+        open: blockStateBeforeLine.open,
+        stringClose: blockStateBeforeLine.stringClose,
+        stringEscapes: blockStateBeforeLine.stringEscapes,
+        stringOpenToken: blockStateBeforeLine.stringOpenToken,
+      };
+      const result = classifyTagContext(style, line, match.index, localState, stringStyle);
+
+      if (result.context === 'comment') {
+        // Strip subtype if @cap-todo
+        let subtype = null;
+        if (match.type === 'todo') {
+          const sm = match.description.match(SUBTYPE_RE);
+          if (sm) subtype = sm[1];
+        }
+        tags.push({
+          type: match.type,
+          file: filePath,
+          line: i + 1,
+          metadata: parseMetadata(match.metadataStr),
+          description: match.description,
+          raw: line,
+          subtype,
+        });
+      } else if (result.context === 'string') {
+        // @cap-feature(feature:F-046) Tag found inside a string literal — emit warning with explicit string-literal reason.
+        warnings.push({
+          file: filePath,
+          line: i + 1,
+          column: match.index,
+          reason: `@cap-${match.type} found inside a string literal (${result.reason}) — not parsed as tag`,
+          raw: line,
+        });
+      } else {
+        // Tag found outside any comment — emit a warning, do NOT parse as a tag.
+        warnings.push({
+          file: filePath,
+          line: i + 1,
+          column: match.index,
+          reason: `@cap-${match.type} found outside any comment context (${result.reason}) — likely a string literal or code reference`,
+          raw: line,
+        });
+      }
+    }
+
+    // Now advance the persistent state through the entire line so the next line picks up correctly.
+    _advanceBlockState(style, line, blockState, stringStyle);
+  }
+
+  return { tags, warnings };
+}
+
+/**
+ * Walk the line and update blockState to reflect any block comment open/close OR multi-line
+ * string open/close that crossed line boundaries. Internal helper — purely advances state.
+ *
+ * Walker order matches classifyTagContext: carried block → carried string → string-open → line-comment → block-open.
+ *
+ * @param {CommentStyle} style
+ * @param {string} line
+ * @param {{ open: [string,string]|null, stringClose: string|null, stringEscapes: boolean, stringOpenToken: string|null }} blockState
+ * @param {StringSyntax[]} [stringStyle] - Optional string syntax table; when omitted, string state is not advanced (back-compat).
+ */
+function _advanceBlockState(style, line, blockState, stringStyle) {
+  const ss = Array.isArray(stringStyle) ? stringStyle : [];
+  let i = 0;
+  const n = line.length;
+  while (i < n) {
+    // Carried block comment.
+    if (blockState.open) {
+      const [, close] = blockState.open;
+      const closeIdx = line.indexOf(close, i);
+      if (closeIdx === -1) {
+        return;
+      }
+      i = closeIdx + close.length;
+      blockState.open = null;
+      continue;
+    }
+    // Carried multi-line string.
+    if (blockState.stringClose) {
+      const close = blockState.stringClose;
+      const escapes = !!blockState.stringEscapes;
+      const closeIdx = _findStringClose(line, i, close, escapes);
+      if (closeIdx === -1) {
+        return;
+      }
+      i = closeIdx + close.length;
+      blockState.stringClose = null;
+      blockState.stringEscapes = false;
+      blockState.stringOpenToken = null;
+      continue;
+    }
+
+    // Longest-match across {block-comment-open, string-open, line-comment}.
+    const tokenMatch = _longestTokenMatch(style, ss, line, i);
+
+    if (tokenMatch && tokenMatch.kind === 'string') {
+      const afterOpen = i + tokenMatch.openLen;
+      const closeIdx = _findStringClose(line, afterOpen, tokenMatch.close, tokenMatch.syntax.escapes);
+      if (closeIdx === -1) {
+        if (tokenMatch.syntax.multiline) {
+          blockState.stringClose = tokenMatch.close;
+          blockState.stringEscapes = tokenMatch.syntax.escapes;
+          blockState.stringOpenToken = tokenMatch.syntax.open;
+        }
+        return;
+      }
+      i = closeIdx + tokenMatch.close.length;
+      continue;
+    }
+
+    if (tokenMatch && tokenMatch.kind === 'lineComment') {
+      // Line-comment consumes the rest of the line.
+      return;
+    }
+
+    if (tokenMatch && tokenMatch.kind === 'blockComment') {
+      const closeIdx = line.indexOf(tokenMatch.close, i + tokenMatch.open.length);
+      if (closeIdx === -1) {
+        blockState.open = [tokenMatch.open, tokenMatch.close];
+        return;
+      }
+      i = closeIdx + tokenMatch.close.length;
+      continue;
+    }
+
+    i++;
+  }
+}
+
+// @cap-todo(ac:F-046/AC-4) scanFileWithContext + scanDirectoryWithContext expose the new {tags, warnings} shape and support a strict mode that throws on any warning.
+/**
+ * Polylingual single-file scan. Returns {tags, warnings}.
+ * @param {string} filePath - Absolute path
+ * @param {string} projectRoot - Absolute project root
+ * @returns {{ tags: CapTag[], warnings: ScannerWarning[] }}
+ */
+function scanFileWithContext(filePath, projectRoot) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (_e) {
+    return { tags: [], warnings: [] };
+  }
+  const relativePath = path.relative(projectRoot, filePath);
+  return extractTagsWithContext(content, relativePath);
+}
+
+/**
+ * Polylingual directory scan. Returns {tags, warnings}.
+ *
+ * @param {string} dirPath
+ * @param {Object} [options]
+ * @param {string[]} [options.extensions]
+ * @param {string[]} [options.exclude]
+ * @param {string} [options.projectRoot]
+ * @param {boolean} [options.strict] - When true, throws an Error if any warnings are emitted.
+ * @returns {{ tags: CapTag[], warnings: ScannerWarning[] }}
+ */
+function scanDirectoryWithContext(dirPath, options = {}) {
+  const extensions = options.extensions || Object.keys(COMMENT_STYLES);
+  const exclude = options.exclude || DEFAULT_EXCLUDE;
+  const projectRoot = options.projectRoot || dirPath;
+  const tags = [];
+  const warnings = [];
+
+  function walk(dir) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_e) {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (exclude.includes(entry.name)) continue;
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name);
+        if (!extensions.includes(ext)) continue;
+        const result = scanFileWithContext(fullPath, projectRoot);
+        tags.push(...result.tags);
+        warnings.push(...result.warnings);
+      }
+    }
+  }
+
+  walk(dirPath);
+
+  if (options.strict && warnings.length > 0) {
+    const summary = warnings.slice(0, 5).map(w => `  ${w.file}:${w.line}:${w.column} - ${w.reason}`).join('\n');
+    const more = warnings.length > 5 ? `\n  ... and ${warnings.length - 5} more` : '';
+    const err = new Error(`cap-tag-scanner --strict: found ${warnings.length} tag(s) outside comment context\n${summary}${more}`);
+    err.warnings = warnings;
+    err.code = 'CAP_STRICT_TAG_VIOLATION';
+    throw err;
+  }
+
+  return { tags, warnings };
+}
+
+// =====================================================================
+// End F-046 polylingual extension
+// =====================================================================
+
 // @cap-todo Detect legacy @gsd-* tags and recommend /cap:migrate
 const LEGACY_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@gsd-(feature|todo|risk|decision|context|status|depends|ref|pattern|api|constraint)/;
 
@@ -808,4 +1527,15 @@ module.exports = {
   detectLegacyTags,
   scanApp,
   detectSharedPackages,
+  // F-046 polylingual extension
+  COMMENT_STYLES,
+  COMMENT_STYLES_DEFAULT,
+  STRING_STYLES,
+  STRING_STYLES_DEFAULT,
+  getCommentStyle,
+  getStringStyle,
+  classifyTagContext,
+  extractTagsWithContext,
+  scanFileWithContext,
+  scanDirectoryWithContext,
 };

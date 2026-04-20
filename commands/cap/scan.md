@@ -1,7 +1,7 @@
 ---
 name: cap:scan
 description: "Scan codebase for @cap-feature and @cap-todo tags with monorepo support. Traverses all workspace packages, updates Feature Map, reports coverage gaps."
-argument-hint: "[--features NAME] [--json] [--monorepo]"
+argument-hint: "[--features NAME] [--json] [--monorepo] [--strict]"
 allowed-tools:
   - Read
   - Write
@@ -18,6 +18,8 @@ allowed-tools:
 <!-- @cap-todo(ref:AC-78) /cap:scan shall traverse all packages in a monorepo -->
 <!-- @cap-todo(ref:AC-79) Feature Map entries shall support cross-package file references -->
 <!-- @cap-todo(ref:AC-80) CAP shall work seamlessly with normal single-repo projects with no monorepo-specific configuration required -->
+<!-- @cap-feature(feature:F-046) Polylingual tag context detection: --strict flag fails the scan if any @cap-* token is found outside a recognized comment context. -->
+<!-- @cap-todo(ac:F-046/AC-4) /cap:scan --strict invokes scanner.scanDirectoryWithContext with strict:true for CI enforcement. -->
 
 <objective>
 Scans the codebase for @cap-feature and @cap-todo tags. In monorepo projects, automatically detects and traverses all workspace packages. Cross-references against FEATURE-MAP.md, flags orphan tags, and auto-enriches Feature Map with discovered file references.
@@ -28,9 +30,15 @@ Scans the codebase for @cap-feature and @cap-todo tags. In monorepo projects, au
 - Traverses all workspace packages independently
 - File references use full paths from project root (e.g., `packages/core/src/auth.ts`)
 
+**Polylingual context detection (F-046):**
+- The scanner now classifies each `@cap-*` match against the file's comment syntax (per extension).
+- Tokens found outside any recognized comment (e.g. inside a string literal) are NOT parsed as tags but are reported as warnings.
+- Supported comment styles: `//`, `/* */` (JS/TS/Go/Rust/C/Java/CSS/SCSS), `#` (Python/Ruby/Shell/YAML/TOML), `"""`/`'''` (Python triple-quote), `=begin`/`=end` (Ruby), `///` (Rust doc), `<!-- -->` (HTML/Markdown), `--` (SQL).
+
 **Arguments:**
 - `--features NAME` -- scope scan to specific Feature Map entries (comma-separated)
 - `--json` -- output raw scan results as JSON instead of formatted report
+- `--strict` -- (F-046/AC-4) fail the scan with a non-zero exit code if ANY `@cap-*` token is found outside a recognized comment. Intended for CI enforcement.
 </objective>
 
 <context>
@@ -46,6 +54,7 @@ $ARGUMENTS
 Check `$ARGUMENTS` for:
 - `--features NAME` -- if present, store as `feature_filter`
 - `--json` -- if present, set `json_output = true`
+- `--strict` -- if present, set `strict_mode = true` (F-046/AC-4)
 
 ## Step 0b: Check active app scoping
 
@@ -224,6 +233,32 @@ if (monorepoInfo.isMonorepo) {
 Standard scan as before.
 
 Store as `all_tags`.
+
+## Step 2b: Polylingual context check (only when `--strict` is set)
+
+<!-- @cap-decision When --strict is set, run the polylingual scanner in strict mode. It throws on any @cap-* token outside a recognized comment (string literal, code reference). Intended for CI enforcement (F-046/AC-4). -->
+
+If `strict_mode === true`:
+
+```bash
+node -e "
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+try {
+  const result = scanner.scanDirectoryWithContext(process.cwd(), { strict: true });
+  console.log(JSON.stringify({ ok: true, tags: result.tags.length, warnings: result.warnings.length }));
+} catch (e) {
+  if (e.code === 'CAP_STRICT_TAG_VIOLATION') {
+    console.error(e.message);
+    process.exit(1);
+  }
+  throw e;
+}
+"
+```
+
+If the command exits non-zero, surface the violation list to the user and abort the scan (do NOT proceed to enrichment). Otherwise continue to Step 3.
+
+When `strict_mode === false` (default), the polylingual scan still runs but warnings are silently collected (available in `--json` output) and do not block the scan.
 
 ## Step 3: Group tags by feature and by package
 
