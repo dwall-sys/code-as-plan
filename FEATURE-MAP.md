@@ -719,18 +719,18 @@
 - `cap/bin/lib/cap-feature-map.cjs`
 - `tests/cap-feature-map.test.cjs`
 
-### F-042: Propagate Feature State Transitions to Acceptance Criteria [planned]
+### F-042: Propagate Feature State Transitions to Acceptance Criteria [tested]
 
 **Depends on:** F-002, F-041
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | updateFeatureState shall update child AC statuses according to a defined propagation rule when a feature transitions to tested or shipped |
-| AC-2 | pending | The propagation rule shall be documented as: state prototyped does not change AC status; state tested promotes ACs from pending/prototyped to tested; state shipped requires all ACs already at tested and rejects the transition otherwise |
-| AC-3 | pending | A new function setAcStatus(projectRoot, featureId, acId, newState, appPath) shall provide explicit per-AC state mutation for finer-grained control |
-| AC-4 | pending | Status drift detection shall flag features where feature state is shipped/tested but one or more ACs are still pending, returning a structured drift report |
-| AC-5 | pending | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
-| AC-6 | pending | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
+| AC-1 | tested | updateFeatureState shall update child AC statuses according to a defined propagation rule when a feature transitions to tested or shipped |
+| AC-2 | tested | The propagation rule shall be documented as: state prototyped does not change AC status; state tested promotes ACs from pending/prototyped to tested; state shipped requires all ACs already at tested and rejects the transition otherwise |
+| AC-3 | tested | A new function setAcStatus(projectRoot, featureId, acId, newState, appPath) shall provide explicit per-AC state mutation for finer-grained control |
+| AC-4 | tested | Status drift detection shall flag features where feature state is shipped/tested but one or more ACs are still pending, returning a structured drift report |
+| AC-5 | tested | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
+| AC-6 | tested | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
 
 ### F-043: Reconcile Status Drift in Existing Feature Map [planned]
 
@@ -850,4 +850,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T09:42:11.671Z*
+*Last updated: 2026-04-20T10:01:30.832Z*

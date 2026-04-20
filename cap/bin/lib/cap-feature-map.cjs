@@ -394,8 +394,23 @@ function addFeature(projectRoot, feature, appPath) {
   return newFeature;
 }
 
+// @cap-feature(feature:F-042) Propagate Feature State Transitions to Acceptance Criteria —
+// extends updateFeatureState with AC propagation and a shipped-gate so feature/AC status cannot drift.
+// @cap-decision(feature:F-042) Canonical AC status set for setAcStatus / propagation is
+// pending | prototyped | tested. Legacy 'implemented' / 'reviewed' values that the parser may have
+// read from older Feature Maps are tolerated on read but never written by this module.
+const AC_VALID_STATUSES = ['pending', 'prototyped', 'tested'];
+
 // @cap-api updateFeatureState(projectRoot, featureId, newState, appPath) -- Transition feature state.
 // @cap-todo(ref:AC-9) Enforce valid state transitions: planned->prototyped->tested->shipped
+// @cap-todo(ac:F-042/AC-1) Propagate transitions to ACs: tested promotes pending/prototyped ACs to tested.
+// @cap-todo(ac:F-042/AC-2) Propagation rule: prototyped does not change AC status; tested promotes
+// pending/prototyped ACs to tested; shipped requires all ACs already tested and rejects otherwise.
+// @cap-decision(feature:F-042) The shipped-gate REJECTS the transition by returning false (no throw).
+// Rationale: the existing updateFeatureState contract already returns false for any invalid transition
+// (unknown feature, illegal state hop, unknown state name). Throwing on the new gate would break every
+// caller that today relies on a boolean signal. The drift report (detectDrift) is the structured
+// diagnostic surface; updateFeatureState stays a simple predicate.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string} featureId - Feature ID (e.g., "F-001")
@@ -413,9 +428,134 @@ function updateFeatureState(projectRoot, featureId, newState, appPath) {
   const allowed = STATE_TRANSITIONS[feature.state];
   if (!allowed || !allowed.includes(newState)) return false;
 
+  // @cap-todo(ac:F-042/AC-2) shipped-gate: reject if any AC is not yet 'tested'.
+  // Empty AC list is treated as "no obligations" and is allowed through — matches the
+  // pre-F-042 behaviour where features without ACs could still be shipped.
+  if (newState === 'shipped') {
+    const blocking = feature.acs.filter(a => a.status !== 'tested');
+    if (blocking.length > 0) return false;
+  }
+
   feature.state = newState;
+
+  // @cap-todo(ac:F-042/AC-1) Promote ACs on transition to tested.
+  if (newState === 'tested') {
+    for (const ac of feature.acs) {
+      if (ac.status === 'pending' || ac.status === 'prototyped') {
+        ac.status = 'tested';
+      }
+    }
+  }
+  // 'planned' and 'prototyped' transitions intentionally leave ACs untouched.
+
   writeFeatureMap(projectRoot, featureMap, appPath);
   return true;
+}
+
+// @cap-feature(feature:F-042) setAcStatus — explicit per-AC mutation (AC-3).
+// @cap-todo(ac:F-042/AC-3) New function setAcStatus(projectRoot, featureId, acId, newStatus, appPath)
+// for finer-grained per-AC state changes. Does NOT propagate upward to feature state.
+/**
+ * Explicitly set the status of a single AC. Does not modify feature state.
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string} featureId - Feature ID (e.g., "F-001")
+ * @param {string} acId - AC ID (e.g., "AC-1")
+ * @param {string} newStatus - One of AC_VALID_STATUSES (pending | prototyped | tested)
+ * @param {string|null} [appPath=null] - Relative app path for monorepo scoping
+ * @returns {boolean} - True if the AC was found and updated, false otherwise
+ */
+function setAcStatus(projectRoot, featureId, acId, newStatus, appPath) {
+  if (!AC_VALID_STATUSES.includes(newStatus)) return false;
+
+  const featureMap = readFeatureMap(projectRoot, appPath);
+  const feature = featureMap.features.find(f => f.id === featureId);
+  if (!feature) return false;
+
+  const ac = feature.acs.find(a => a.id === acId);
+  if (!ac) return false;
+
+  ac.status = newStatus;
+  writeFeatureMap(projectRoot, featureMap, appPath);
+  return true;
+}
+
+/**
+ * @typedef {Object} DriftEntry
+ * @property {string} id - Feature ID
+ * @property {string} title - Feature title
+ * @property {string} state - Feature state (always 'tested' or 'shipped' in a drift entry)
+ * @property {{id: string, description: string}[]} pendingAcs - ACs still in 'pending' status
+ * @property {number} totalAcs - Total AC count for this feature
+ */
+
+/**
+ * @typedef {Object} DriftReport
+ * @property {boolean} hasDrift - True if any features show drift
+ * @property {number} driftCount - Number of features with drift
+ * @property {DriftEntry[]} features - Per-feature drift details
+ */
+
+// @cap-feature(feature:F-042) detectDrift — pure diagnostic over the parsed Feature Map (AC-4).
+// @cap-todo(ac:F-042/AC-4) Status drift detection: flag features where state is shipped/tested but
+// one or more ACs are still pending. Returns a structured DriftReport. No console output, no writes.
+/**
+ * Detect features whose feature state is 'shipped' or 'tested' but where ACs remain 'pending'.
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string|null} [appPath=null] - Relative app path for monorepo scoping
+ * @returns {DriftReport}
+ */
+function detectDrift(projectRoot, appPath) {
+  const featureMap = readFeatureMap(projectRoot, appPath);
+  const driftFeatures = [];
+
+  for (const f of featureMap.features) {
+    if (f.state !== 'shipped' && f.state !== 'tested') continue;
+    const pendingAcs = f.acs.filter(a => a.status === 'pending');
+    if (pendingAcs.length === 0) continue;
+
+    driftFeatures.push({
+      id: f.id,
+      title: f.title,
+      state: f.state,
+      pendingAcs: pendingAcs.map(a => ({ id: a.id, description: a.description })),
+      totalAcs: f.acs.length,
+    });
+  }
+
+  return {
+    hasDrift: driftFeatures.length > 0,
+    driftCount: driftFeatures.length,
+    features: driftFeatures,
+  };
+}
+
+// @cap-feature(feature:F-042) formatDriftReport — markdown-friendly renderer used by the
+// /cap:status --drift CLI (AC-6). Pure function: input report, output string. No I/O.
+/**
+ * Render a DriftReport as a markdown table for CLI display.
+ * @param {DriftReport} report
+ * @returns {string}
+ */
+function formatDriftReport(report) {
+  // @cap-todo(ac:F-042/AC-6) Defensive: nullish report is treated as the no-drift case so
+  // downstream CLI shells never explode when the upstream pipeline hands back a missing
+  // value (e.g. F-043 reconciliation tooling that may short-circuit before producing a report).
+  if (!report || !report.hasDrift) {
+    return 'Status Drift: none — Feature Map is consistent.';
+  }
+
+  const lines = [];
+  lines.push(`Status Drift Detected: ${report.driftCount} features`);
+  lines.push('');
+  lines.push('| Feature | State    | Pending ACs |');
+  lines.push('|---------|----------|-------------|');
+  for (const f of report.features) {
+    // pad state column to roughly the width of "shipped" + 1
+    const statePadded = f.state.padEnd(8, ' ');
+    const ratio = `${f.pendingAcs.length}/${f.totalAcs}`;
+    lines.push(`| ${f.id}   | ${statePadded} | ${ratio.padEnd(11, ' ')} |`);
+  }
+  return lines.join('\n');
 }
 
 // @cap-api enrichFromTags(projectRoot, scanResults, appPath) -- Update file references from tag scan.
@@ -774,6 +914,7 @@ module.exports = {
   FEATURE_MAP_FILE,
   VALID_STATES,
   STATE_TRANSITIONS,
+  AC_VALID_STATUSES,
   generateTemplate,
   readFeatureMap,
   writeFeatureMap,
@@ -781,6 +922,9 @@ module.exports = {
   serializeFeatureMap,
   addFeature,
   updateFeatureState,
+  setAcStatus,
+  detectDrift,
+  formatDriftReport,
   enrichFromTags,
   enrichFromDeps,
   getNextFeatureId,

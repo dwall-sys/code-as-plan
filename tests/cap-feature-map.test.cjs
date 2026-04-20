@@ -9,6 +9,7 @@ const os = require('node:os');
 const {
   FEATURE_MAP_FILE,
   VALID_STATES,
+  AC_VALID_STATUSES,
   generateTemplate,
   readFeatureMap,
   writeFeatureMap,
@@ -16,6 +17,9 @@ const {
   serializeFeatureMap,
   addFeature,
   updateFeatureState,
+  setAcStatus,
+  detectDrift,
+  formatDriftReport,
   enrichFromTags,
   enrichFromDeps,
   getNextFeatureId,
@@ -1580,4 +1584,646 @@ describe('F-041 adversarial verification', () => {
       }
     });
   });
+});
+
+// =============================================================================
+// F-042: Propagate Feature State Transitions to Acceptance Criteria
+// =============================================================================
+// @cap-feature(feature:F-042) Test suite for state propagation, setAcStatus,
+// and drift detection. Truth-table tests live under "F-042 truth table" below.
+
+function makeFeature(state, acStatuses) {
+  return {
+    id: 'F-001',
+    title: 'Test Feature',
+    state,
+    acs: acStatuses.map((s, i) => ({
+      id: `AC-${i + 1}`,
+      description: `criterion ${i + 1}`,
+      status: s,
+    })),
+    files: [],
+    dependencies: [],
+    metadata: {},
+  };
+}
+
+describe('F-042 state propagation — updateFeatureState extension', () => {
+  // @cap-todo(ac:F-042/AC-1) updateFeatureState shall update child AC statuses on transitions to tested or shipped.
+
+  it('planned -> prototyped does NOT change AC status', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending', 'pending', 'pending'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'prototyped'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['pending', 'pending', 'pending']);
+    assert.strictEqual(map.features[0].state, 'prototyped');
+  });
+
+  it('prototyped -> tested promotes pending ACs to tested', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['pending', 'pending', 'pending'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['tested', 'tested', 'tested']);
+  });
+
+  it('prototyped -> tested promotes prototyped ACs to tested', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['prototyped', 'prototyped'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['tested', 'tested']);
+  });
+
+  it('prototyped -> tested leaves already-tested ACs alone (mixed input)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['tested', 'pending', 'prototyped'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['tested', 'tested', 'tested']);
+  });
+
+  it('tested -> shipped is REJECTED when any AC is still pending (shipped-gate)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested', 'pending', 'tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+    const map = readFeatureMap(tmpDir);
+    // Feature state must be unchanged on rejection
+    assert.strictEqual(map.features[0].state, 'tested');
+    // ACs must be unchanged on rejection
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['tested', 'pending', 'tested']);
+  });
+
+  it('tested -> shipped is REJECTED when any AC is still prototyped', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested', 'prototyped', 'tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'tested');
+  });
+
+  it('tested -> shipped SUCCEEDS when all ACs are tested', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested', 'tested', 'tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.strictEqual(map.features[0].state, 'shipped');
+    // ACs unchanged on shipped (no further promotion)
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['tested', 'tested', 'tested']);
+  });
+
+  it('tested -> shipped SUCCEEDS when feature has zero ACs (no obligations)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', [])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), true);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'shipped');
+  });
+
+  it('still rejects illegal transitions (e.g. planned -> tested) without touching ACs', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending', 'pending'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), false);
+    const map = readFeatureMap(tmpDir);
+    assert.strictEqual(map.features[0].state, 'planned');
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['pending', 'pending']);
+  });
+});
+
+describe('F-042 truth table — feature transition × AC status', () => {
+  // @cap-todo(ac:F-042/AC-5) Tests cover all valid state-transition × AC-status combinations.
+  // Truth table dimensions:
+  //   from-state ∈ {planned, prototyped, tested}  (shipped has no legal exits)
+  //   to-state   ∈ legal successors of from-state
+  //   ac-status  ∈ {pending, prototyped, tested}
+  // For each combination we assert: (a) whether updateFeatureState returns true
+  // and (b) the resulting AC status.
+
+  /** @type {Array<{from:string,to:string,ac:string,expectAccept:boolean,expectAc:string}>} */
+  const truthTable = [
+    // planned -> prototyped: AC unchanged regardless
+    { from: 'planned',    to: 'prototyped', ac: 'pending',    expectAccept: true,  expectAc: 'pending' },
+    { from: 'planned',    to: 'prototyped', ac: 'prototyped', expectAccept: true,  expectAc: 'prototyped' },
+    { from: 'planned',    to: 'prototyped', ac: 'tested',     expectAccept: true,  expectAc: 'tested' },
+
+    // prototyped -> tested: pending/prototyped promoted to tested; tested left alone
+    { from: 'prototyped', to: 'tested',     ac: 'pending',    expectAccept: true,  expectAc: 'tested' },
+    { from: 'prototyped', to: 'tested',     ac: 'prototyped', expectAccept: true,  expectAc: 'tested' },
+    { from: 'prototyped', to: 'tested',     ac: 'tested',     expectAccept: true,  expectAc: 'tested' },
+
+    // tested -> shipped: gated; only allowed when AC is already tested
+    { from: 'tested',     to: 'shipped',    ac: 'pending',    expectAccept: false, expectAc: 'pending' },
+    { from: 'tested',     to: 'shipped',    ac: 'prototyped', expectAccept: false, expectAc: 'prototyped' },
+    { from: 'tested',     to: 'shipped',    ac: 'tested',     expectAccept: true,  expectAc: 'tested' },
+  ];
+
+  for (const row of truthTable) {
+    it(`${row.from} -> ${row.to} with AC=${row.ac} : accept=${row.expectAccept}, AC=>${row.expectAc}`, () => {
+      writeSampleFeatureMap(tmpDir, [makeFeature(row.from, [row.ac])]);
+      const result = updateFeatureState(tmpDir, 'F-001', row.to);
+      assert.strictEqual(result, row.expectAccept, 'transition acceptance mismatch');
+      const map = readFeatureMap(tmpDir);
+      const expectedFinalState = row.expectAccept ? row.to : row.from;
+      assert.strictEqual(map.features[0].state, expectedFinalState, 'feature state mismatch');
+      assert.strictEqual(map.features[0].acs[0].status, row.expectAc, 'AC status mismatch');
+    });
+  }
+
+  it('truth table covers every (from, to, ac) cell with a legal transition', () => {
+    // Sanity: there are 3 (from-states with successors) × 1 successor each × 3 AC statuses = 9 rows.
+    assert.strictEqual(truthTable.length, 9);
+  });
+});
+
+describe('F-042 setAcStatus', () => {
+  // @cap-todo(ac:F-042/AC-3) setAcStatus(projectRoot, featureId, acId, newStatus, appPath) — explicit per-AC mutation.
+
+  it('exports the canonical AC status set', () => {
+    assert.deepStrictEqual(AC_VALID_STATUSES, ['pending', 'prototyped', 'tested']);
+  });
+
+  it('updates a single AC and persists the change', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['pending', 'pending', 'pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-2', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['pending', 'tested', 'pending']);
+  });
+
+  it('does NOT modify feature state when promoting all ACs to tested', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['pending', 'pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'tested'), true);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-2', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.strictEqual(map.features[0].state, 'prototyped',
+      'setAcStatus must not auto-promote feature state');
+  });
+
+  it('returns false for unknown feature', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-999', 'AC-1', 'tested'), false);
+  });
+
+  it('returns false for unknown AC ID', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-99', 'tested'), false);
+  });
+
+  it('returns false for invalid status', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'reviewed'), false);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'shipped'), false);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'bogus'), false);
+    // verify the AC was not mutated
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, 'pending');
+  });
+
+  it('accepts each canonical status', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    for (const s of AC_VALID_STATUSES) {
+      assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', s), true, `status ${s} should be accepted`);
+      assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, s);
+    }
+  });
+});
+
+describe('F-042 drift detection', () => {
+  // @cap-todo(ac:F-042/AC-4) detectDrift returns a structured DriftReport over features whose
+  // state is shipped/tested but with one or more pending ACs.
+
+  it('returns hasDrift=false for an empty Feature Map', () => {
+    writeSampleFeatureMap(tmpDir, []);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.hasDrift, false);
+    assert.strictEqual(report.driftCount, 0);
+    assert.deepStrictEqual(report.features, []);
+  });
+
+  it('returns hasDrift=false when shipped features have only tested ACs', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('shipped', ['tested', 'tested']), id: 'F-100' },
+      { ...makeFeature('tested',  ['tested']),           id: 'F-101' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.hasDrift, false);
+    assert.strictEqual(report.driftCount, 0);
+  });
+
+  it('flags a shipped feature with pending ACs', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('shipped', ['tested', 'pending', 'tested']), id: 'F-100', title: 'Drifted' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.hasDrift, true);
+    assert.strictEqual(report.driftCount, 1);
+    assert.strictEqual(report.features[0].id, 'F-100');
+    assert.strictEqual(report.features[0].state, 'shipped');
+    assert.strictEqual(report.features[0].title, 'Drifted');
+    assert.strictEqual(report.features[0].totalAcs, 3);
+    assert.strictEqual(report.features[0].pendingAcs.length, 1);
+    assert.strictEqual(report.features[0].pendingAcs[0].id, 'AC-2');
+  });
+
+  it('flags a tested feature with pending ACs', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('tested', ['pending', 'pending']), id: 'F-200' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.driftCount, 1);
+    assert.strictEqual(report.features[0].state, 'tested');
+    assert.strictEqual(report.features[0].pendingAcs.length, 2);
+  });
+
+  it('does NOT flag planned or prototyped features even if ACs are pending', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('planned',    ['pending', 'pending']), id: 'F-300' },
+      { ...makeFeature('prototyped', ['pending', 'pending']), id: 'F-301' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.hasDrift, false);
+  });
+
+  it('does NOT flag features with prototyped ACs (only pending counts as drift)', () => {
+    // Decision: drift is about clearly-unverified ACs (pending). prototyped is in-flight,
+    // not necessarily a drift signal. AC-4 specifies "still pending" as the trigger.
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('shipped', ['tested', 'prototyped']), id: 'F-400' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.hasDrift, false);
+  });
+
+  it('handles multiple drifting features and preserves order', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('shipped',    ['tested']),          id: 'F-001' },  // clean
+      { ...makeFeature('shipped',    ['pending']),         id: 'F-002' },  // drift
+      { ...makeFeature('planned',    ['pending']),         id: 'F-003' },  // not flagged
+      { ...makeFeature('tested',     ['pending', 'tested']), id: 'F-004' }, // drift
+      { ...makeFeature('prototyped', ['pending']),         id: 'F-005' },  // not flagged
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.driftCount, 2);
+    assert.deepStrictEqual(report.features.map(f => f.id), ['F-002', 'F-004']);
+  });
+
+  it('returns a structured report with the documented shape', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('shipped', ['tested', 'pending']), id: 'F-500', title: 'Shape Check' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.ok('hasDrift' in report);
+    assert.ok('driftCount' in report);
+    assert.ok(Array.isArray(report.features));
+    const entry = report.features[0];
+    assert.deepStrictEqual(Object.keys(entry).sort(),
+      ['id', 'pendingAcs', 'state', 'title', 'totalAcs'].sort());
+    assert.deepStrictEqual(Object.keys(entry.pendingAcs[0]).sort(),
+      ['description', 'id'].sort());
+  });
+});
+
+describe('F-042 formatDriftReport', () => {
+  // @cap-feature(feature:F-042) formatDriftReport renders the DriftReport as a markdown table for the
+  // /cap:status --drift CLI (AC-6).
+
+  it('returns a "no drift" message when the report is clean', () => {
+    const out = formatDriftReport({ hasDrift: false, driftCount: 0, features: [] });
+    assert.match(out, /none/i);
+    assert.ok(!out.includes('|'));
+  });
+
+  it('renders a markdown table with one row per drifting feature', () => {
+    const report = {
+      hasDrift: true,
+      driftCount: 2,
+      features: [
+        { id: 'F-019', title: 'A', state: 'shipped', pendingAcs: [{id:'AC-1',description:'x'}], totalAcs: 6 },
+        { id: 'F-020', title: 'B', state: 'tested',  pendingAcs: [{id:'AC-1',description:'x'}, {id:'AC-2',description:'y'}], totalAcs: 4 },
+      ],
+    };
+    const out = formatDriftReport(report);
+    assert.match(out, /Status Drift Detected: 2 features/);
+    assert.match(out, /\| Feature \| State\s+\| Pending ACs \|/);
+    assert.match(out, /F-019/);
+    assert.match(out, /F-020/);
+    assert.match(out, /shipped/);
+    assert.match(out, /tested/);
+    assert.match(out, /1\/6/);
+    assert.match(out, /2\/4/);
+  });
+});
+
+describe('F-042 live Feature Map drift integration', () => {
+  // @cap-feature(feature:F-042) Integration check against the actual repository FEATURE-MAP.md.
+  // This test mirrors the acceptance gate for F-042/AC-4 — the drift report should detect every
+  // shipped/tested feature with pending ACs in the live map.
+  const repoFeatureMap = path.join(__dirname, '..', 'FEATURE-MAP.md');
+
+  it('detects at least 14 drifting features in the live Feature Map',
+    { skip: !fs.existsSync(repoFeatureMap) },
+    () => {
+      const report = detectDrift(path.dirname(repoFeatureMap));
+      // Live map currently shows ~17 drifting features (F-019..F-026, F-031..F-033, F-036..F-041).
+      // The lower bound of 14 leaves slack for F-043 reconciliation reducing the count later
+      // without making this test brittle to in-flight cleanup.
+      assert.ok(report.driftCount >= 14,
+        `expected at least 14 drifting features in live map, got ${report.driftCount}`);
+      assert.strictEqual(report.hasDrift, true);
+    });
+
+  it('formatDriftReport on live map produces a non-empty markdown table',
+    { skip: !fs.existsSync(repoFeatureMap) },
+    () => {
+      const report = detectDrift(path.dirname(repoFeatureMap));
+      const formatted = formatDriftReport(report);
+      assert.ok(formatted.includes('| Feature |'));
+      assert.ok(formatted.includes('shipped') || formatted.includes('tested'));
+    });
+});
+
+// =============================================================================
+// F-042 adversarial — edge cases the prototyper may have missed
+// =============================================================================
+// @cap-feature(feature:F-042) Adversarial verification of state propagation,
+// shipped-gate, setAcStatus defensive contract, drift detection borderlines,
+// and the live --drift CLI fast-path. Every assertion here is designed to
+// break the contract, not to demonstrate it.
+
+describe('F-042 adversarial — shipped-gate corner cases', () => {
+  // @cap-todo(ac:F-042/AC-2) Shipped-gate must reject illegal multi-step transitions
+  // and must never silently write to disk on rejection.
+
+  it('rejects planned -> shipped skip even when feature has zero ACs (transition guard wins)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', [])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'planned',
+      'shipped-gate must not bypass the underlying transition table');
+  });
+
+  it('rejects prototyped -> shipped skip even when all ACs are tested', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['tested', 'tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'prototyped');
+  });
+
+  it('rejects tested -> tested no-op (not in legal successor list)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'tested');
+  });
+
+  it('rejects shipped -> shipped (idempotency check; shipped is terminal)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('shipped', ['tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'shipped');
+  });
+
+  it('rejects backward transitions (shipped -> tested, tested -> prototyped) and leaves ACs untouched', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('shipped', ['tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'shipped');
+
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'prototyped'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, 'tested',
+      'rejected backward transition must not revert tested ACs');
+  });
+
+  it('rejected shipped-gate must NOT touch disk (mtime + content invariant)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['pending'])]);
+    const filePath = path.join(tmpDir, FEATURE_MAP_FILE);
+    const beforeMtime = fs.statSync(filePath).mtimeMs;
+    const beforeContent = fs.readFileSync(filePath, 'utf8');
+    // Spin to ensure the filesystem mtime resolution would actually advance
+    const t0 = Date.now();
+    while (Date.now() - t0 < 25) { /* spin */ }
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+    const afterMtime = fs.statSync(filePath).mtimeMs;
+    const afterContent = fs.readFileSync(filePath, 'utf8');
+    assert.strictEqual(beforeMtime, afterMtime, 'rejected transition must not rewrite the file');
+    assert.strictEqual(beforeContent, afterContent, 'file content must be byte-identical after rejection');
+  });
+
+  it('shipped-gate treats legacy implemented AC status as blocking (only "tested" passes)', () => {
+    // F-041 leaves room for legacy 'implemented' status to live in older feature maps.
+    // The shipped-gate must require canonical 'tested', not the legacy synonym.
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['implemented'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), false);
+  });
+
+  it('updateFeatureState on missing FEATURE-MAP.md returns false without throwing', () => {
+    // tmpDir exists but has no FEATURE-MAP.md
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), false);
+  });
+
+  it('rejects null/undefined/uppercase newState defensively', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', null), false);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', undefined), false);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'TESTED'), false,
+      'state names are lowercase canonical; uppercase variants must not be accepted');
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', ''), false);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'xyz'), false);
+  });
+
+  it('rejects empty/null featureId defensively', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, '', 'tested'), false);
+    assert.strictEqual(updateFeatureState(tmpDir, null, 'tested'), false);
+    assert.strictEqual(updateFeatureState(tmpDir, 'f-001', 'prototyped'), false,
+      'feature ID is case-sensitive; lowercase variant must not match');
+  });
+});
+
+describe('F-042 adversarial — propagation edge cases', () => {
+  // @cap-todo(ac:F-042/AC-1) Propagation must be a one-way ratchet on tested,
+  // and must be a true no-op on prototyped regardless of AC mix.
+
+  it('planned -> prototyped is a true no-op for every AC status (mixed)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending', 'prototyped', 'tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'prototyped'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status), ['pending', 'prototyped', 'tested']);
+  });
+
+  it('prototyped -> tested with NO ACs at all transitions cleanly', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', [])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.strictEqual(map.features[0].state, 'tested');
+    assert.deepStrictEqual(map.features[0].acs, []);
+  });
+
+  it('prototyped -> tested propagates only the affected AC subset (non-tested ones)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('prototyped', ['tested', 'pending', 'prototyped', 'tested'])]);
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'tested'), true);
+    const map = readFeatureMap(tmpDir);
+    assert.deepStrictEqual(map.features[0].acs.map(a => a.status),
+      ['tested', 'tested', 'tested', 'tested']);
+  });
+
+  it('tested -> shipped does NOT mutate AC statuses when accepted (no further promotion)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested', 'tested'])]);
+    const before = readFeatureMap(tmpDir).features[0].acs.map(a => ({ ...a }));
+    assert.strictEqual(updateFeatureState(tmpDir, 'F-001', 'shipped'), true);
+    const after = readFeatureMap(tmpDir).features[0].acs;
+    assert.deepStrictEqual(after, before, 'shipped acceptance must be AC-neutral');
+  });
+});
+
+describe('F-042 adversarial — setAcStatus contract', () => {
+  // @cap-todo(ac:F-042/AC-3) setAcStatus is the explicit per-AC mutation surface.
+  // It must be defensive on inputs, monorepo-aware, and orthogonal to feature state.
+
+  it('rejects null/undefined/empty/uppercase status defensively', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', null), false);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', undefined), false);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', ''), false);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'TESTED'), false,
+      'status is lowercase canonical; uppercase must not be accepted');
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', ' tested '), false,
+      'status must not be whitespace-padded');
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, 'pending',
+      'AC must remain unchanged after every rejection');
+  });
+
+  it('treats AC IDs as case-sensitive (ac-1 / Ac-1 do not match AC-1)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'ac-1', 'tested'), false);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'Ac-1', 'tested'), false);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, 'pending');
+  });
+
+  it('treats feature IDs as case-sensitive (f-001 does not match F-001)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'f-001', 'AC-1', 'tested'), false);
+    assert.strictEqual(setAcStatus(tmpDir, '', 'AC-1', 'tested'), false);
+    assert.strictEqual(setAcStatus(tmpDir, null, 'AC-1', 'tested'), false);
+  });
+
+  it('allows backward AC moves (tested -> pending) — explicit per-AC mutation, not a ratchet', () => {
+    // setAcStatus is the ESCAPE HATCH for explicit control. Unlike updateFeatureState
+    // which propagates monotonically, setAcStatus must not pretend to enforce a ratchet —
+    // that would re-create the old "no way to correct a wrongly-promoted AC" pain.
+    writeSampleFeatureMap(tmpDir, [makeFeature('tested', ['tested'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'pending'), true);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, 'pending');
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].state, 'tested',
+      'feature state stays put — setAcStatus must never auto-demote the feature either');
+  });
+
+  it('setting AC to its current value still succeeds (idempotent write)', () => {
+    writeSampleFeatureMap(tmpDir, [makeFeature('planned', ['pending'])]);
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'pending'), true);
+    assert.strictEqual(readFeatureMap(tmpDir).features[0].acs[0].status, 'pending');
+  });
+
+  it('returns false on missing FEATURE-MAP.md without throwing', () => {
+    // tmpDir is empty
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'tested'), false);
+  });
+
+  it('persists to the correct app-scoped FEATURE-MAP.md in monorepo mode', () => {
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'flow'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'apps', 'hub'), { recursive: true });
+    const flowMap = { features: [makeFeature('planned', ['pending'])], lastScan: null };
+    const hubMap  = { features: [makeFeature('planned', ['pending'])], lastScan: null };
+    writeFeatureMap(tmpDir, flowMap, 'apps/flow');
+    writeFeatureMap(tmpDir, hubMap,  'apps/hub');
+    assert.strictEqual(setAcStatus(tmpDir, 'F-001', 'AC-1', 'tested', 'apps/flow'), true);
+    // flow updated
+    assert.strictEqual(readFeatureMap(tmpDir, 'apps/flow').features[0].acs[0].status, 'tested');
+    // hub untouched (no cross-app bleed)
+    assert.strictEqual(readFeatureMap(tmpDir, 'apps/hub').features[0].acs[0].status, 'pending');
+  });
+});
+
+describe('F-042 adversarial — detectDrift borderline semantics', () => {
+  // @cap-todo(ac:F-042/AC-4) Drift policy: only state ∈ {tested,shipped} ∧ pending ACs.
+  // prototyped/implemented/tested ACs do NOT trigger drift, even under shipped state.
+
+  it('shipped feature with ZERO ACs is NOT drift (vacuous — no pending obligations)', () => {
+    writeSampleFeatureMap(tmpDir, [{ ...makeFeature('shipped', []), id: 'F-700' }]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.driftCount, 0,
+      'a shipped feature with zero ACs has no pending ACs and is therefore not drift');
+  });
+
+  it('shipped feature with all ACs prototyped is NOT drift (only "pending" counts)', () => {
+    writeSampleFeatureMap(tmpDir, [{ ...makeFeature('shipped', ['prototyped', 'prototyped']), id: 'F-701' }]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.driftCount, 0);
+  });
+
+  it('shipped feature with legacy "implemented" ACs is NOT drift (only "pending" counts)', () => {
+    writeSampleFeatureMap(tmpDir, [{ ...makeFeature('shipped', ['implemented']), id: 'F-702' }]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.driftCount, 0,
+      'detectDrift policy is pending-only; legacy implemented status does not surface as drift');
+  });
+
+  it('returns the no-drift shape on a missing FEATURE-MAP.md (no throw, hasDrift=false)', () => {
+    // tmpDir exists but has no map
+    const report = detectDrift(tmpDir);
+    assert.deepStrictEqual(report, { hasDrift: false, driftCount: 0, features: [] });
+  });
+
+  it('totalAcs in drift entry counts ALL ACs, not just pending ones', () => {
+    writeSampleFeatureMap(tmpDir, [
+      { ...makeFeature('shipped', ['tested', 'tested', 'pending', 'prototyped']), id: 'F-800' },
+    ]);
+    const report = detectDrift(tmpDir);
+    assert.strictEqual(report.driftCount, 1);
+    assert.strictEqual(report.features[0].totalAcs, 4);
+    assert.strictEqual(report.features[0].pendingAcs.length, 1);
+    assert.strictEqual(report.features[0].pendingAcs[0].id, 'AC-3');
+  });
+});
+
+describe('F-042 adversarial — formatDriftReport defensive', () => {
+  // @cap-todo(ac:F-042/AC-6) formatDriftReport is the CLI surface; nullish input must
+  // degrade gracefully rather than throw and crash the user-visible status command.
+
+  it('does not throw on null input (treated as no-drift)', () => {
+    let out;
+    assert.doesNotThrow(() => { out = formatDriftReport(null); });
+    assert.match(out, /none/i);
+  });
+
+  it('does not throw on undefined input (treated as no-drift)', () => {
+    let out;
+    assert.doesNotThrow(() => { out = formatDriftReport(undefined); });
+    assert.match(out, /none/i);
+  });
+
+  it('does not throw on a fabricated empty-but-shaped report', () => {
+    const out = formatDriftReport({ hasDrift: false, driftCount: 0, features: [] });
+    assert.match(out, /none/i);
+  });
+});
+
+describe('F-042 adversarial — live repo invariants', () => {
+  // @cap-feature(feature:F-042) End-to-end invariants over the live repo Feature Map:
+  // F-041 (state=tested, ACs still pending) must surface in drift; F-042 (state=prototyped)
+  // must NOT — prototyped is intentionally outside the drift policy.
+  const repoRoot = path.join(__dirname, '..');
+  const repoFeatureMap = path.join(repoRoot, 'FEATURE-MAP.md');
+
+  it('F-041 appears in the live drift report (state=tested, ACs pending)',
+    { skip: !fs.existsSync(repoFeatureMap) },
+    () => {
+      const report = detectDrift(repoRoot);
+      const f041 = report.features.find(f => f.id === 'F-041');
+      assert.ok(f041, 'F-041 must be reported as drift in the live Feature Map');
+      assert.strictEqual(f041.state, 'tested');
+      assert.ok(f041.pendingAcs.length > 0, 'F-041 must have pending ACs in drift entry');
+    });
+
+  it('F-042 itself does NOT appear in the live drift report (prototyped is outside drift policy)',
+    { skip: !fs.existsSync(repoFeatureMap) },
+    () => {
+      const report = detectDrift(repoRoot);
+      const f042 = report.features.find(f => f.id === 'F-042');
+      assert.strictEqual(f042, undefined,
+        'F-042 is in state=prototyped; prototyped features are not drift candidates by AC-4');
+    });
+
+  it('formatDriftReport on the live repo includes F-041 and never includes F-042',
+    { skip: !fs.existsSync(repoFeatureMap) },
+    () => {
+      const report = detectDrift(repoRoot);
+      const formatted = formatDriftReport(report);
+      assert.ok(formatted.includes('F-041'), 'F-041 must be visible in CLI output');
+      assert.ok(!formatted.includes('F-042'), 'F-042 must not appear in CLI output');
+    });
 });

@@ -1,7 +1,7 @@
 ---
 name: cap:status
 description: Show project status derived from Feature Map -- feature completion, test coverage, open risks, and next actions.
-argument-hint: "[--features NAME] [--verbose]"
+argument-hint: "[--features NAME] [--verbose] [--drift]"
 allowed-tools:
   - Read
   - Bash
@@ -12,6 +12,7 @@ allowed-tools:
 <!-- @cap-context CAP v2.0 status command -- reads FEATURE-MAP.md and .cap/SESSION.json to present a compact project status dashboard. No agent spawning, no file writes. -->
 <!-- @cap-decision Status is read-only -- it presents information but never modifies Feature Map or session state. Safe to run at any time. -->
 <!-- @cap-decision Status derives from Feature Map, session state, AND live tag scan -- gives a complete picture without requiring a separate /cap:scan first. -->
+<!-- @cap-feature(feature:F-042) /cap:status --drift surfaces feature/AC status mismatches via detectDrift. -->
 
 <objective>
 Presents a compact project status dashboard derived from FEATURE-MAP.md, SESSION.json, and a live tag count:
@@ -22,6 +23,7 @@ Presents a compact project status dashboard derived from FEATURE-MAP.md, SESSION
 **Arguments:**
 - `--features NAME` -- show status for specific features only
 - `--verbose` -- include per-AC breakdown
+- `--drift` -- show only the status drift report (features whose state is shipped/tested but with pending ACs)
 </objective>
 
 <context>
@@ -38,6 +40,24 @@ $ARGUMENTS
 Check `$ARGUMENTS` for:
 - `--features NAME` -- if present, store as `feature_filter` (comma-separated)
 - `--verbose` -- if present, set `verbose = true`
+- `--drift` -- if present, jump straight to the drift fast-path below and skip the regular dashboard
+
+## Step 0b: Drift fast-path (when --drift is present)
+
+<!-- @cap-todo(ac:F-042/AC-6) /cap:status --drift surfaces mismatched feature/AC states for the entire Feature Map. Exit code 0 if no drift, 1 if drift exists (CI-friendly). -->
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const report = fm.detectDrift(process.cwd());
+console.log(fm.formatDriftReport(report));
+process.exit(report.hasDrift ? 1 : 0);
+"
+```
+
+Display the rendered output verbatim, then **stop processing**. Do not run Steps 1-5.
+
+The exit code is meaningful for CI: `0` when the Feature Map is consistent, `1` when drift exists.
 
 ## Step 1: Read session state
 
