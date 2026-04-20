@@ -864,7 +864,7 @@
 | AC-4 | tested | The public API of cap-cluster-display shall remain unchanged — callers see no behavioral difference |
 | AC-5 | tested | A before/after complexity comparison (cyclomatic complexity per function) shall be included in the PR description |
 
-### F-051: Fix Coverage Runner — Replace c8 with Node Native [tested]
+### F-051: Fix Coverage Runner — Replace c8 with Node Native [shipped]
 
 Root cause of the "16 uncovered modules" TEST-AUDIT entry was not missing tests but a broken measurement: c8 (and Node's native reporter under default `--test` isolation) drops v8 coverage data written by per-file subprocesses on Node 22+. Actual measured coverage under `--test-isolation=none` is ~98% lines.
 
@@ -880,7 +880,7 @@ Root cause of the "16 uncovered modules" TEST-AUDIT entry was not missing tests 
 - `scripts/run-tests.cjs`
 - `package.json`
 
-### F-052: Fix Shared-State Leaks in Test Suite [tested]
+### F-052: Fix Shared-State Leaks in Test Suite [shipped]
 
 Surfaced by F-051's coverage-runner fix: 16 tests failed under `--test-isolation=none` due to latent state leaks hidden by default per-file isolation.
 
@@ -898,6 +898,24 @@ Root causes found and fixed:
 **Files:**
 - `tests/cap-cluster-io.test.cjs`
 - `tests/copilot-install.test.cjs`
+
+### F-053: Migrate cap-test-audit to Node Native Coverage [planned]
+
+**Depends on:** F-051
+
+Follow-up to F-051: `cap/bin/lib/cap-test-audit.cjs` still shells out to `npx c8 --reporter json` for coverage collection in user projects. This works but is slow on first run (downloads c8), fails offline, and uses an unpinned latest version. Migrating to Node's native `--experimental-test-coverage` aligns with F-051's direction and removes the last `npx c8` dependency from CAP.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | `cap-test-audit.cjs` shall invoke `node --test --experimental-test-coverage --test-reporter=…` instead of `npx c8` when the project supports it (Node >= 20) |
+| AC-2 | pending | Fall back to `npx c8` for legacy projects that still depend on c8's JSON reporter, with a deprecation note in the output |
+| AC-3 | pending | Parse Node's native coverage output (currently text-formatted) into the same structured shape that `parseCoverage()` returns today, so downstream scoring logic is unchanged |
+| AC-4 | pending | `/cap:test-audit` shall continue to work offline when Node native coverage is used |
+| AC-5 | pending | `cap-doctor.cjs` shall stop warning about missing c8 when the project uses Node >= 20 |
+
+**Files:**
+- `cap/bin/lib/cap-test-audit.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
 
 ## Legend
 

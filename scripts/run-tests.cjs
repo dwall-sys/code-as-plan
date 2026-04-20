@@ -26,7 +26,8 @@ if (wantsCoverage) {
   // Node >=22 defaults to process-per-file isolation. Coverage from those
   // subprocesses is dropped by both c8 and the native reporter, so force
   // single-process execution when measuring coverage. Plain `npm test` keeps
-  // the safer default isolation.
+  // the safer default isolation on purpose: it surfaces shared-state leaks
+  // (F-052 was found exactly this way), which isolation=none would hide.
   nodeArgs.push(
     '--test-isolation=none',
     '--experimental-test-coverage',

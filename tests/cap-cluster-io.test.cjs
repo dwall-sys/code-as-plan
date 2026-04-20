@@ -14,6 +14,10 @@ const io = require('../cap/bin/lib/cap-cluster-io.cjs');
 
 let tmpDir;
 let originalDebugEnv;
+// Module-scoped — not safe under concurrent test execution. Node's test
+// runner runs tests in a file sequentially by default; do NOT enable
+// `concurrency: true` in any describe in this file without refactoring
+// captured/originalConsoleWarn into local closures (see F-052).
 let originalConsoleWarn;
 let captured;
 
@@ -35,13 +39,20 @@ afterEach(() => {
 // Patch console.warn from inside the test body (not beforeEach) — Node's test
 // runner gives each test a distinct console, so assignments in beforeEach do
 // not reach the test's console when running under --test-isolation=none.
+// Defensive guard: re-entrant calls are a programmer error; null the backup on
+// unpatch so a second call in the same test surfaces rather than silently
+// restoring a stale (already-patched) identity.
 function patchWarn() {
+  if (originalConsoleWarn !== undefined) {
+    throw new Error('patchWarn: nested calls not supported — unpatch first');
+  }
   originalConsoleWarn = console.warn;
   // eslint-disable-next-line no-console
   console.warn = (msg) => { captured.push(msg); };
   return () => {
     // eslint-disable-next-line no-console
     console.warn = originalConsoleWarn;
+    originalConsoleWarn = undefined;
   };
 }
 
@@ -182,17 +193,18 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   const clusterModPath = path.resolve(__dirname, '..', 'cap', 'bin', 'lib', 'cap-cluster-detect.cjs');
 
   it('emits diagnostic when loadGraph throws (CAP_DEBUG=1)', () => {
-    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
-    const restore = patchModule(graphModPath, 'loadGraph', () => {
-      const e = new Error('synthetic graph load failure');
-      e.code = 'EGRAPHFAIL';
-      throw e;
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(graphModPath, 'loadGraph', () => {
+        const e = new Error('synthetic graph load failure');
+        e.code = 'EGRAPHFAIL';
+        throw e;
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
 
@@ -204,15 +216,16 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits diagnostic when loadIndex throws (CAP_DEBUG=1)', () => {
-    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
-    const restore = patchModule(threadModPath, 'loadIndex', () => {
-      throw new Error('synthetic index failure');
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(threadModPath, 'loadIndex', () => {
+        throw new Error('synthetic index failure');
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
 
@@ -222,7 +235,6 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits per-thread diagnostic when loadThread throws (CAP_DEBUG=1)', () => {
-    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     // Set up a real index that points to a thread, then force loadThread to throw
     const dir = path.join(tmpDir, '.cap', 'memory');
@@ -232,13 +244,15 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       JSON.stringify({ threads: [{ id: 'thr-victim', timestamp: 'x' }] }),
       'utf8'
     );
-    const restore = patchModule(threadModPath, 'loadThread', () => {
-      throw new Error('synthetic thread load failure');
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(threadModPath, 'loadThread', () => {
+        throw new Error('synthetic thread load failure');
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
 
@@ -249,15 +263,16 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits diagnostic when computeAffinityBatch throws (CAP_DEBUG=1)', () => {
-    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
-    const restore = patchModule(affinityModPath, 'computeAffinityBatch', () => {
-      throw new Error('synthetic affinity failure');
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(affinityModPath, 'computeAffinityBatch', () => {
+        throw new Error('synthetic affinity failure');
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
 
@@ -267,15 +282,16 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits diagnostic when runClusterDetection throws (CAP_DEBUG=1)', () => {
-    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
-    const restore = patchModule(clusterModPath, 'runClusterDetection', () => {
-      throw new Error('synthetic cluster failure');
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(clusterModPath, 'runClusterDetection', () => {
+        throw new Error('synthetic cluster failure');
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
 
@@ -285,30 +301,32 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('does NOT emit diagnostics when CAP_DEBUG is unset (silent recovery preserved)', () => {
-    const unpatch = patchWarn();
     delete process.env.CAP_DEBUG;
-    const restore = patchModule(graphModPath, 'loadGraph', () => {
-      throw new Error('synthetic, but should be silent');
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(graphModPath, 'loadGraph', () => {
+        throw new Error('synthetic, but should be silent');
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
     assert.strictEqual(captured.length, 0, 'no output expected when CAP_DEBUG is unset');
   });
 
   it('diagnostic payload is parseable JSON with op/errorType/recoveryAction', () => {
-    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
-    const restore = patchModule(graphModPath, 'loadGraph', () => {
-      throw new Error('synthetic');
-    });
+    let restore;
+    const unpatch = patchWarn();
     try {
+      restore = patchModule(graphModPath, 'loadGraph', () => {
+        throw new Error('synthetic');
+      });
       io._loadClusterData(tmpDir);
     } finally {
-      restore();
+      if (restore) restore();
       unpatch();
     }
 
