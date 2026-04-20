@@ -98,6 +98,9 @@ function readFeatureMap(projectRoot, appPath) {
 
 // @cap-todo(ref:AC-8) Each feature entry contains: feature ID, title, state, ACs, and file references
 // @cap-todo(ref:AC-14) Feature Map scales to 80-120 features in a single file
+// @cap-feature(feature:F-041) Fix Feature Map Parser Roundtrip Symmetry — parser is the read half of a
+// symmetric pair with serializeFeatureMap. Parser must accept every format the serializer can write,
+// without dropping ACs or transforming status case beyond what the serializer can re-emit.
 /**
  * Parse FEATURE-MAP.md content into structured data.
  * @param {string} content - Raw markdown content
@@ -112,6 +115,11 @@ function parseFeatureMapContent(content) {
   const featureHeaderRE = /^###\s+(F-\d{3}):\s+(.+?)\s*$/;
   // Match AC rows: | AC-N | status | description |
   const acRowRE = /^\|\s*(AC-\d+)\s*\|\s*(\w+)\s*\|\s*(.+?)\s*\|/;
+  // @cap-todo(ac:F-041/AC-4) Strict header detector: only match the literal table header
+  // "| AC | Status | Description |" so AC-N rows whose description contains the word "Status"
+  // (e.g. F-041/AC-6) are not misclassified as table headers, which previously truncated the
+  // table and silently dropped subsequent AC rows.
+  const acTableHeaderRE = /^\|\s*AC\s*\|\s*Status\s*\|\s*Description\s*\|/i;
   // Match AC checkboxes: - [x] description  or  - [ ] description
   const acCheckboxRE = /^[\s]*-\s+\[(x| )\]\s+(.+)/;
   // Match file refs: - `path/to/file`
@@ -168,14 +176,20 @@ function parseFeatureMapContent(content) {
     }
 
     // Status line: - **Status:** shipped
+    // @cap-todo(ac:F-041/AC-3) Preserve case of status as written so a roundtrip
+    // (parse -> serialize -> parse) does not transform the value. Canonical
+    // lifecycle values are lowercase; this only matters for non-canonical inputs.
     const statusMatch = line.match(statusLineRE);
     if (statusMatch) {
-      currentFeature.state = statusMatch[1].toLowerCase();
+      currentFeature.state = statusMatch[1];
       continue;
     }
 
-    // Detect AC table start
-    if (line.startsWith('| AC') && line.includes('Status')) {
+    // Detect AC table start using the strict header detector (see acTableHeaderRE above).
+    // @cap-todo(ac:F-041/AC-4) Use strict header regex instead of substring "Status" check
+    // so AC-N data rows whose description contains the word "Status" do not falsely trigger
+    // a "new table" reset that drops subsequent AC entries.
+    if (acTableHeaderRE.test(line)) {
       inAcTable = true;
       inAcCheckboxes = false;
       inFileRefs = false;
@@ -186,10 +200,11 @@ function parseFeatureMapContent(content) {
 
     const acMatch = line.match(acRowRE);
     if (acMatch && inAcTable) {
+      // @cap-todo(ac:F-041/AC-3) Preserve case of AC status so roundtrip is lossless.
       currentFeature.acs.push({
         id: acMatch[1],
         description: acMatch[3].trim(),
-        status: acMatch[2].toLowerCase(),
+        status: acMatch[2],
       });
       continue;
     }
@@ -258,26 +273,36 @@ function parseFeatureMapContent(content) {
   return { features, lastScan };
 }
 
-// @cap-api writeFeatureMap(projectRoot, featureMap, appPath) -- Serializes FeatureMap to FEATURE-MAP.md.
+// @cap-api writeFeatureMap(projectRoot, featureMap, appPath, options) -- Serializes FeatureMap to FEATURE-MAP.md.
 // Side effect: overwrites FEATURE-MAP.md at project root or app subdirectory.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {FeatureMap} featureMap - Structured feature map data
  * @param {string|null} [appPath=null] - Relative app path (e.g., "apps/flow"). If null, writes to projectRoot.
+ * @param {{ legacyStatusLine?: boolean }} [options] - Serialization options forwarded to serializeFeatureMap.
  */
-function writeFeatureMap(projectRoot, featureMap, appPath) {
+function writeFeatureMap(projectRoot, featureMap, appPath, options) {
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
   const filePath = path.join(baseDir, FEATURE_MAP_FILE);
-  const content = serializeFeatureMap(featureMap);
+  const content = serializeFeatureMap(featureMap, options);
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+// @cap-feature(feature:F-041) Serializer is the write half of the symmetric pair.
+// It must preserve every status value the parser accepted (AC-1) and offer a legacy
+// **Status:** line emission mode (AC-6) so the legacy non-table input format is not
+// forcibly upgraded to bracketed-header format on the first roundtrip.
 /**
  * Serialize FeatureMap to markdown string.
  * @param {FeatureMap} featureMap
+ * @param {{ legacyStatusLine?: boolean }} [options]
+ *   - legacyStatusLine: when true, emit `### F-NNN: Title` followed by `- **Status:** state`
+ *     instead of `### F-NNN: Title [state]`. Default false (canonical bracket-header form).
  * @returns {string}
  */
-function serializeFeatureMap(featureMap) {
+function serializeFeatureMap(featureMap, options = {}) {
+  // @cap-todo(ac:F-041/AC-6) Optional legacy emission keeps non-table input shape stable.
+  const legacyStatusLine = Boolean(options && options.legacyStatusLine);
   const lines = [
     '# Feature Map',
     '',
@@ -289,7 +314,15 @@ function serializeFeatureMap(featureMap) {
   ];
 
   for (const feature of featureMap.features) {
-    lines.push(`### ${feature.id}: ${feature.title} [${feature.state}]`);
+    // @cap-todo(ac:F-041/AC-1) feature.state is emitted verbatim — no case mutation,
+    // so any value the parser accepted survives the roundtrip unchanged.
+    if (legacyStatusLine) {
+      lines.push(`### ${feature.id}: ${feature.title}`);
+      lines.push('');
+      lines.push(`- **Status:** ${feature.state}`);
+    } else {
+      lines.push(`### ${feature.id}: ${feature.title} [${feature.state}]`);
+    }
     lines.push('');
 
     if (feature.dependencies.length > 0) {
@@ -301,6 +334,7 @@ function serializeFeatureMap(featureMap) {
       lines.push('| AC | Status | Description |');
       lines.push('|----|--------|-------------|');
       for (const ac of feature.acs) {
+        // @cap-todo(ac:F-041/AC-1) ac.status emitted verbatim for lossless roundtrip.
         lines.push(`| ${ac.id} | ${ac.status} | ${ac.description} |`);
       }
       lines.push('');

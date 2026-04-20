@@ -701,7 +701,7 @@
 **Files:**
 - `cap/bin/lib/cap-cluster-display.cjs`
 
-### F-041: Fix Feature Map Parser Roundtrip Symmetry [planned]
+### F-041: Fix Feature Map Parser Roundtrip Symmetry [tested]
 
 **Depends on:** F-002
 
@@ -713,6 +713,11 @@
 | AC-4 | pending | parseFeatureMapContent shall not silently drop AC entries when both checkbox and table formats coexist in the same feature block |
 | AC-5 | pending | The fix shall include a regression test loading the actual repository FEATURE-MAP.md and asserting roundtrip stability for F-019 through F-040 |
 | AC-6 | pending | serializeFeatureMap shall emit Status lines as a serialization option to support the legacy non-table input format without forcing all features to table format on first write |
+
+**Files:**
+- `.claude/cap/bin/lib/cap-feature-map.cjs`
+- `cap/bin/lib/cap-feature-map.cjs`
+- `tests/cap-feature-map.test.cjs`
 
 ### F-042: Propagate Feature State Transitions to Acceptance Criteria [planned]
 
@@ -783,7 +788,7 @@
 | AC | Status | Description |
 |----|--------|-------------|
 | AC-1 | pending | A new anchor syntax /* @cap feature:F-001 acs:[AC-1,AC-3] role:primary */ shall be parsed by cap-tag-scanner as a single unified block replacing fragmented multi-line tag clusters |
-| AC-2 | pending | The unified block shall coexist with legacy fragmented tags during a deprecation window — both formats valid, with a CLI flag --legacy-tags=warn|error controlling enforcement |
+| AC-2 | pending | The unified block shall coexist with legacy fragmented tags during a deprecation window — both formats valid, with a CLI flag --legacy-tags=warn |
 | AC-3 | pending | A migration tool cap migrate-tags shall convert existing fragmented tags to unified anchors with a dry-run mode and a per-file diff preview |
 | AC-4 | pending | The unified block shall be language-agnostic — same syntax inside /* */, # (Python/Ruby), <!-- --> (HTML), with comment delimiters varying but block content identical |
 | AC-5 | pending | Decision document shall justify the breaking change with a measurable benefit (e.g., reduced parser ambiguity, improved AI agent comprehension) before merge |
@@ -845,4 +850,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T09:18:03.609Z*
+*Last updated: 2026-04-20T09:42:11.671Z*
