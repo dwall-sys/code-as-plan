@@ -854,15 +854,15 @@
 | AC-5 | pending | A cap deps --graph command shall emit a Mermaid graph of feature dependencies for visual review |
 | AC-6 | pending | Feature is opt-in via .cap/config.json flag — projects without it see no behavior change |
 
-### F-050: Refactor cap-cluster-display.cjs and Improve Error Diagnostics [planned]
+### F-050: Refactor cap-cluster-display.cjs and Improve Error Diagnostics [tested]
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | cap-cluster-display.cjs shall be split into at least three modules: a pure formatter (no I/O), an I/O layer (file reads), and a thin orchestrator, with no single file exceeding 300 lines |
-| AC-2 | pending | The 4 silent catch-blocks in _loadClusterData() shall each log a structured diagnostic (error type, file path, recovery action taken) at debug level via the existing logger |
-| AC-3 | pending | Each refactored module shall have unit tests achieving at least 70% line coverage |
-| AC-4 | pending | The public API of cap-cluster-display shall remain unchanged — callers see no behavioral difference |
-| AC-5 | pending | A before/after complexity comparison (cyclomatic complexity per function) shall be included in the PR description |
+| AC-1 | tested | cap-cluster-display.cjs shall be split into at least three modules: a pure formatter (no I/O), an I/O layer (file reads), and a thin orchestrator, with no single file exceeding 300 lines |
+| AC-2 | tested | The 4 silent catch-blocks in _loadClusterData() shall each log a structured diagnostic (error type, file path, recovery action taken) at debug level via the existing logger |
+| AC-3 | tested | Each refactored module shall have unit tests achieving at least 70% line coverage |
+| AC-4 | tested | The public API of cap-cluster-display shall remain unchanged — callers see no behavioral difference |
+| AC-5 | tested | A before/after complexity comparison (cyclomatic complexity per function) shall be included in the PR description |
 
 ### F-051: Close Test Coverage Gap for F-036 to F-040 Modules [planned]
 
@@ -884,4 +884,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T12:33:30.398Z*
+*Last updated: 2026-04-20T13:03:18.136Z*
