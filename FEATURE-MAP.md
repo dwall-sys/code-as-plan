@@ -757,17 +757,17 @@
 | AC-5 | tested | The 4-mode architecture of cap-prototyper shall be evaluated against a single-agent-with-explicit-prompt approach; the audit shall recommend keep/collapse/refactor with evidence |
 | AC-6 | tested | All changes shall preserve the public command surface — /cap:prototype, /cap:test, etc. continue to work without user-facing breakage |
 
-### F-045: Improve AC-to-Code Traceability for Multi-File Acceptance Criteria [planned]
+### F-045: Improve AC-to-Code Traceability for Multi-File Acceptance Criteria [tested]
 
 **Depends on:** F-001, F-002
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | The tag syntax shall support a primary:true flag on @cap-feature to designate the canonical implementation file when an AC spans multiple files |
-| AC-2 | pending | cap-tag-scanner shall aggregate file references per AC and emit a structured acFileMap field showing all files contributing to each AC |
-| AC-3 | pending | When no primary:true tag exists for a multi-file AC, the scanner shall log a warning and pick the file with the highest tag density as a heuristic primary |
-| AC-4 | pending | A new /cap:trace AC-N command shall print the call graph from the primary file across referenced files for a given acceptance criterion |
-| AC-5 | pending | Documentation shall describe the multi-file tagging convention with two worked examples (one JS, one TS) |
+| AC-1 | tested | The tag syntax shall support a primary:true flag on @cap-feature to designate the canonical implementation file when an AC spans multiple files |
+| AC-2 | tested | cap-tag-scanner shall aggregate file references per AC and emit a structured acFileMap field showing all files contributing to each AC |
+| AC-3 | tested | When no primary:true tag exists for a multi-file AC, the scanner shall log a warning and pick the file with the highest tag density as a heuristic primary |
+| AC-4 | tested | A new /cap:trace AC-N command shall print the call graph from the primary file across referenced files for a given acceptance criterion |
+| AC-5 | tested | Documentation shall describe the multi-file tagging convention with two worked examples (one JS, one TS) |
 
 ### F-046: Strengthen Polylingual Comment-Token Detection in Tag Scanner [planned]
 
@@ -850,4 +850,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T11:11:45.972Z*
+*Last updated: 2026-04-20T11:42:19.259Z*

@@ -42,6 +42,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-thread-migrator.cjs',
   'cap-thread-synthesis.cjs',
   'cap-thread-tracker.cjs',
+  'cap-trace.cjs',
   'commands.cjs',
   'config.cjs',
   'convention-reader.cjs',

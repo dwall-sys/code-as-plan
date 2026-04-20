@@ -185,6 +185,141 @@ function groupByFeature(tags) {
   return groups;
 }
 
+// @cap-feature(feature:F-045) Multi-file AC traceability — aggregates per-AC file references and detects primary file per AC.
+// @cap-decision Place buildAcFileMap alongside groupByFeature in the scanner module (not in cap-trace.cjs) — it is pure tag aggregation, no IO/graph traversal, mirrors the shape of the existing groupByFeature helper. cap-trace.cjs depends on it.
+// @cap-decision The "ac" key in @cap-todo metadata accepts two formats: "F-045/AC-1" (fully qualified) and "AC-1" (relies on the surrounding @cap-feature for the feature ID). buildAcFileMap normalizes both.
+
+/**
+ * @typedef {Object} AcFileMapEntry
+ * @property {string[]} files - All files that contributed at least one tag to this AC (deduped, stable order)
+ * @property {string|null} primary - Primary implementation file (designated, inferred, or null when no files)
+ * @property {('designated'|'inferred'|null)} primarySource - How `primary` was determined
+ * @property {Object<string,number>} tagDensity - Map from file path -> tag count contributing to this AC
+ * @property {string[]} warnings - Human-readable warnings (e.g., heuristic primary picked)
+ */
+
+// @cap-api buildAcFileMap(tags) -- Aggregate tags into per-AC entries with primary file detection.
+// @cap-todo(ac:F-045/AC-1) Recognize `primary:true` flag on @cap-feature tags as the canonical-file marker.
+// @cap-todo(ac:F-045/AC-2) Emit a structured acFileMap keyed by `<feature-id>/<ac-id>` with all contributing files.
+// @cap-todo(ac:F-045/AC-3) When no `primary:true` is found and the AC spans multiple files, infer primary from highest tag density and emit a warning.
+/**
+ * Build a map of AC -> { files, primary, primarySource, tagDensity, warnings }.
+ *
+ * Key shape: "<feature-id>/<ac-id>" e.g. "F-045/AC-1".
+ * Files contribute to an AC when:
+ *   - the tag is @cap-todo with metadata.ac matching "F-XXX/AC-N" or just "AC-N" (resolved via metadata.feature)
+ *   - or the tag is @cap-feature/risk/decision with metadata.feature AND metadata.ac present (rare but supported)
+ *
+ * Primary file detection:
+ *   - If any @cap-feature tag for the matching feature has `primary:true` AND that file also has a tag for this AC -> designated
+ *   - Else if any @cap-feature tag for the matching feature has `primary:true` -> designated (file may not directly tag the AC)
+ *   - Else if multiple files contribute -> inferred via highest tag density (warning emitted)
+ *   - Else if exactly one file contributes -> that file (inferred, trivially)
+ *   - Else -> null
+ *
+ * @param {CapTag[]} tags
+ * @returns {Object<string, AcFileMapEntry>}
+ */
+function buildAcFileMap(tags) {
+  const map = {};
+
+  // First pass: collect designated-primary files per feature (from @cap-feature primary:true tags).
+  // @cap-decision primary:true is a flag on @cap-feature only — putting it on @cap-todo or @cap-risk is meaningless because those tags are AC-level not feature-level.
+  const designatedPrimaryByFeature = {}; // featureId -> file
+  for (const tag of tags) {
+    if (tag.type !== 'feature') continue;
+    if (!tag.metadata || !tag.metadata.feature) continue;
+    // Normalize "true" string flag (parser stores all values as strings) to boolean check.
+    const isPrimary = tag.metadata.primary === 'true' || tag.metadata.primary === true;
+    if (!isPrimary) continue;
+    // First wins — if multiple files claim primary for the same feature, the first encountered wins.
+    // @cap-risk Multiple primary:true claims on the same feature are silently ignored after the first; consider warning in a follow-up if this becomes a problem in practice.
+    if (!designatedPrimaryByFeature[tag.metadata.feature]) {
+      designatedPrimaryByFeature[tag.metadata.feature] = tag.file;
+    }
+  }
+
+  // Second pass: build per-AC contribution lists.
+  // We support two ways a tag references an AC:
+  //   1) metadata.ac with full form "F-NNN/AC-M"
+  //   2) metadata.ac with short form "AC-M" PLUS metadata.feature giving the feature
+  for (const tag of tags) {
+    if (!tag.metadata || !tag.metadata.ac) continue;
+    const acRaw = tag.metadata.ac;
+
+    let key;
+    if (acRaw.includes('/')) {
+      key = acRaw;
+    } else if (tag.metadata.feature) {
+      key = `${tag.metadata.feature}/${acRaw}`;
+    } else {
+      // Tag references an AC without enough context to qualify it. Skip silently — orphan detection lives elsewhere.
+      continue;
+    }
+
+    if (!map[key]) {
+      map[key] = {
+        files: [],
+        primary: null,
+        primarySource: null,
+        tagDensity: {},
+        warnings: [],
+      };
+    }
+    const entry = map[key];
+    if (!entry.files.includes(tag.file)) entry.files.push(tag.file);
+    entry.tagDensity[tag.file] = (entry.tagDensity[tag.file] || 0) + 1;
+  }
+
+  // Third pass: resolve primary for each AC entry.
+  for (const acKey of Object.keys(map)) {
+    const entry = map[acKey];
+    const featureId = acKey.split('/')[0];
+
+    // Designated primary takes precedence — only if that file actually contributes to this AC.
+    // If a feature designates a primary file but the AC isn't tagged in that file, fall back to inference.
+    // @cap-decision Designated primary requires the file to actually contain at least one tag for this AC. Otherwise primary:true on an unrelated file (e.g. a barrel index) would mislead the trace.
+    const designatedFile = designatedPrimaryByFeature[featureId];
+    if (designatedFile && entry.files.includes(designatedFile)) {
+      entry.primary = designatedFile;
+      entry.primarySource = 'designated';
+      continue;
+    }
+
+    if (entry.files.length === 0) {
+      entry.primary = null;
+      entry.primarySource = null;
+      continue;
+    }
+
+    if (entry.files.length === 1) {
+      entry.primary = entry.files[0];
+      entry.primarySource = 'inferred';
+      continue;
+    }
+
+    // Multiple files contribute and no designated primary — pick by tag density.
+    // @cap-decision Tag density (count of contributing tags per file) is the simplest defensible heuristic. Future signals could include @cap-feature presence, file size, or import graph centrality, but those add complexity for marginal gain in a heuristic-anyway choice.
+    let bestFile = null;
+    let bestCount = -1;
+    // Iterate files in stable order so ties are broken by first-appearance.
+    for (const f of entry.files) {
+      const count = entry.tagDensity[f] || 0;
+      if (count > bestCount) {
+        bestCount = count;
+        bestFile = f;
+      }
+    }
+    entry.primary = bestFile;
+    entry.primarySource = 'inferred';
+    entry.warnings.push(
+      `AC ${acKey} spans ${entry.files.length} files with no @cap-feature(...primary:true) tag — inferred primary: ${bestFile}`
+    );
+  }
+
+  return map;
+}
+
 // @cap-api detectOrphans(tags, featureIds) -- Compare tags against Feature Map entries, fuzzy-match hints for orphans.
 // Returns: Array of { tag, hint } where hint is the closest matching feature ID.
 // @cap-todo(ref:AC-15) Orphan tags flagged with fuzzy-match hint suggesting closest existing feature ID
@@ -663,6 +798,7 @@ module.exports = {
   extractTags,
   parseMetadata,
   groupByFeature,
+  buildAcFileMap,
   detectOrphans,
   editDistance,
   detectWorkspaces,

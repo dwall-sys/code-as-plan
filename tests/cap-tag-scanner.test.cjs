@@ -14,6 +14,7 @@ const {
   extractTags,
   parseMetadata,
   groupByFeature,
+  buildAcFileMap,
   detectOrphans,
   editDistance,
   detectWorkspaces,
@@ -1165,5 +1166,251 @@ describe('cap-tag-scanner export verification', () => {
     assert.strictEqual(mod.DEFAULT_EXCLUDE.length, 7);
     assert.strictEqual(typeof mod.LEGACY_TAG_RE, 'object');
     assert.ok(Object.keys(mod.LEGACY_TAG_RE).length >= 0);
+  });
+
+  it('exports buildAcFileMap', () => {
+    assert.strictEqual(typeof mod.buildAcFileMap, 'function');
+    assert.ok(mod.buildAcFileMap.name.length > 0);
+  });
+});
+
+// --- buildAcFileMap (F-045) ---
+
+// @cap-todo(ac:F-045/AC-2) Tests verify acFileMap aggregation: keys are F-NNN/AC-M, values include files, primary, primarySource, tagDensity, warnings.
+
+describe('buildAcFileMap', () => {
+  it('returns empty object for no tags', () => {
+    const result = buildAcFileMap([]);
+    assert.deepStrictEqual(result, {});
+  });
+
+  it('aggregates a single-file AC trivially as inferred primary', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'F-100/AC-1' }, file: 'src/foo.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-100/AC-1' }, file: 'src/foo.js', line: 5, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.strictEqual(Object.keys(result).length, 1);
+    const entry = result['F-100/AC-1'];
+    assert.deepStrictEqual(entry.files, ['src/foo.js']);
+    assert.strictEqual(entry.primary, 'src/foo.js');
+    assert.strictEqual(entry.primarySource, 'inferred');
+    assert.strictEqual(entry.tagDensity['src/foo.js'], 2);
+    assert.deepStrictEqual(entry.warnings, []);
+  });
+
+  it('emits warning and infers primary by tag density for multi-file AC without primary:true', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'F-200/AC-3' }, file: 'src/a.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-200/AC-3' }, file: 'src/a.js', line: 5, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-200/AC-3' }, file: 'src/a.js', line: 9, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-200/AC-3' }, file: 'src/b.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    const entry = result['F-200/AC-3'];
+    assert.strictEqual(entry.files.length, 2);
+    assert.strictEqual(entry.primary, 'src/a.js'); // higher density
+    assert.strictEqual(entry.primarySource, 'inferred');
+    assert.strictEqual(entry.warnings.length, 1);
+    assert.ok(entry.warnings[0].includes('F-200/AC-3'));
+    assert.ok(entry.warnings[0].includes('src/a.js'));
+  });
+
+  // @cap-todo(ac:F-045/AC-1) Recognize primary:true on @cap-feature
+  it('honors primary:true on @cap-feature and marks source as designated', () => {
+    const tags = [
+      { type: 'feature', metadata: { feature: 'F-300', primary: 'true' }, file: 'src/main.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-300/AC-1' }, file: 'src/main.js', line: 3, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-300/AC-1' }, file: 'src/helper.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-300/AC-1' }, file: 'src/helper.js', line: 5, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    const entry = result['F-300/AC-1'];
+    assert.strictEqual(entry.primary, 'src/main.js');
+    assert.strictEqual(entry.primarySource, 'designated');
+    assert.deepStrictEqual(entry.warnings, []); // no heuristic warning when designated
+  });
+
+  it('falls back to inference when primary:true file does not contribute to the AC', () => {
+    const tags = [
+      // primary:true on barrel file that does not tag any AC
+      { type: 'feature', metadata: { feature: 'F-301', primary: 'true' }, file: 'src/index.js', line: 1, description: '', raw: '', subtype: null },
+      // AC tagged in two other files
+      { type: 'todo', metadata: { ac: 'F-301/AC-2' }, file: 'src/a.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-301/AC-2' }, file: 'src/a.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-301/AC-2' }, file: 'src/b.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    const entry = result['F-301/AC-2'];
+    assert.strictEqual(entry.primary, 'src/a.js');
+    assert.strictEqual(entry.primarySource, 'inferred');
+    assert.strictEqual(entry.warnings.length, 1);
+  });
+
+  it('accepts short-form ac:AC-N when tag also has metadata.feature', () => {
+    const tags = [
+      { type: 'todo', metadata: { feature: 'F-400', ac: 'AC-1' }, file: 'src/foo.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.ok(result['F-400/AC-1']);
+    assert.strictEqual(result['F-400/AC-1'].primary, 'src/foo.js');
+  });
+
+  it('skips tags with ac:AC-N short form but no feature context', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'AC-1' }, file: 'src/foo.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.deepStrictEqual(result, {});
+  });
+
+  it('ignores primary:true on non-@cap-feature tags', () => {
+    const tags = [
+      // primary:true on @cap-todo — should be ignored
+      { type: 'todo', metadata: { ac: 'F-500/AC-1', primary: 'true' }, file: 'src/wrong.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-500/AC-1' }, file: 'src/wrong.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-500/AC-1' }, file: 'src/right.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-500/AC-1' }, file: 'src/right.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-500/AC-1' }, file: 'src/right.js', line: 3, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    const entry = result['F-500/AC-1'];
+    assert.strictEqual(entry.primarySource, 'inferred');
+    // src/right.js has higher density, so it wins
+    assert.strictEqual(entry.primary, 'src/right.js');
+  });
+
+  it('honors first primary:true encountered when multiple feature files claim it', () => {
+    const tags = [
+      { type: 'feature', metadata: { feature: 'F-600', primary: 'true' }, file: 'src/first.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'feature', metadata: { feature: 'F-600', primary: 'true' }, file: 'src/second.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-600/AC-1' }, file: 'src/first.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-600/AC-1' }, file: 'src/second.js', line: 2, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    const entry = result['F-600/AC-1'];
+    assert.strictEqual(entry.primary, 'src/first.js');
+    assert.strictEqual(entry.primarySource, 'designated');
+  });
+
+  it('handles primary as boolean true (not just string "true")', () => {
+    const tags = [
+      { type: 'feature', metadata: { feature: 'F-700', primary: true }, file: 'src/main.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-700/AC-1' }, file: 'src/main.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-700/AC-1' }, file: 'src/other.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.strictEqual(result['F-700/AC-1'].primarySource, 'designated');
+  });
+
+  it('produces stable file order matching first appearance', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'F-800/AC-1' }, file: 'src/c.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-800/AC-1' }, file: 'src/a.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-800/AC-1' }, file: 'src/b.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.deepStrictEqual(result['F-800/AC-1'].files, ['src/c.js', 'src/a.js', 'src/b.js']);
+  });
+
+  it('aggregates multiple ACs in one pass', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'F-900/AC-1' }, file: 'src/a.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-900/AC-2' }, file: 'src/b.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-901/AC-1' }, file: 'src/c.js', line: 1, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.strictEqual(Object.keys(result).length, 3);
+    assert.ok(result['F-900/AC-1']);
+    assert.ok(result['F-900/AC-2']);
+    assert.ok(result['F-901/AC-1']);
+  });
+
+  it('skips tags with no ac metadata', () => {
+    const tags = [
+      { type: 'feature', metadata: { feature: 'F-001' }, file: 'src/a.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: {}, file: 'src/a.js', line: 2, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.deepStrictEqual(result, {});
+  });
+
+  // --- adversarial / boundary cases (F-045 GREEN-phase verification) ---
+
+  it('treats explicit primary:false as not-primary (heuristic still applies)', () => {
+    const tags = [
+      { type: 'feature', metadata: { feature: 'F-EX', primary: 'false' }, file: 'a.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-EX/AC-1' }, file: 'a.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-EX/AC-1' }, file: 'b.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-EX/AC-1' }, file: 'b.js', line: 2, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.strictEqual(result['F-EX/AC-1'].primarySource, 'inferred');
+    // b.js wins by tag density (2 vs 1), confirming primary:false is NOT a designation.
+    assert.strictEqual(result['F-EX/AC-1'].primary, 'b.js');
+  });
+
+  it('does not parse primary:true correctly when the comma between feature: and primary: is missing', () => {
+    // Reflects the documented limitation in docs/F-045-multi-file-tagging.md:
+    // `feature:F-001 primary:true` (no comma) is NOT parsed as primary:true.
+    const line = '// @cap-feature(feature:F-MISS primary:true) Test';
+    const tags = extractTags(line, 'main.js');
+    assert.strictEqual(tags.length, 1);
+    // The whole "F-MISS primary:true" is captured as the value of `feature`.
+    assert.strictEqual(tags[0].metadata.feature, 'F-MISS primary:true');
+    assert.strictEqual(tags[0].metadata.primary, undefined);
+  });
+
+  it('accepts primary:true with no whitespace after comma (`feature:F-X,primary:true`)', () => {
+    const line = '// @cap-feature(feature:F-CMS,primary:true) Test';
+    const tags = extractTags(line, 'main.js');
+    assert.strictEqual(tags[0].metadata.feature, 'F-CMS');
+    assert.strictEqual(tags[0].metadata.primary, 'true');
+  });
+
+  it('aggregates duplicate AC tags in the same file as tagDensity++ but files stays deduped', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'F-DUP/AC-1' }, file: 'src/x.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-DUP/AC-1' }, file: 'src/x.js', line: 5, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-DUP/AC-1' }, file: 'src/x.js', line: 9, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.deepStrictEqual(result['F-DUP/AC-1'].files, ['src/x.js']);
+    assert.strictEqual(result['F-DUP/AC-1'].tagDensity['src/x.js'], 3);
+  });
+
+  it('handles 200 tags in one file in well under 50ms (perf invariant)', () => {
+    const tags = [];
+    for (let i = 0; i < 200; i++) {
+      tags.push({ type: 'todo', metadata: { ac: 'F-PERF/AC-1' }, file: 'big.js', line: i + 1, description: '', raw: '', subtype: null });
+    }
+    const start = process.hrtime.bigint();
+    const result = buildAcFileMap(tags);
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    assert.ok(ms < 50, `aggregation took ${ms}ms (expected <50ms)`);
+    assert.strictEqual(result['F-PERF/AC-1'].tagDensity['big.js'], 200);
+  });
+
+  it('aggregates multiple primary:true on independent features without cross-contamination', () => {
+    const tags = [
+      { type: 'feature', metadata: { feature: 'F-IND1', primary: 'true' }, file: 'one.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'feature', metadata: { feature: 'F-IND2', primary: 'true' }, file: 'two.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-IND1/AC-1' }, file: 'one.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-IND2/AC-1' }, file: 'two.js', line: 2, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.strictEqual(result['F-IND1/AC-1'].primary, 'one.js');
+    assert.strictEqual(result['F-IND2/AC-1'].primary, 'two.js');
+  });
+
+  it('breaks density ties deterministically by first appearance (zzz before aaa preserves zzz win)', () => {
+    const tags = [
+      { type: 'todo', metadata: { ac: 'F-TIE/AC-1' }, file: 'src/zzz.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-TIE/AC-1' }, file: 'src/zzz.js', line: 2, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-TIE/AC-1' }, file: 'src/aaa.js', line: 1, description: '', raw: '', subtype: null },
+      { type: 'todo', metadata: { ac: 'F-TIE/AC-1' }, file: 'src/aaa.js', line: 2, description: '', raw: '', subtype: null },
+    ];
+    const result = buildAcFileMap(tags);
+    assert.strictEqual(result['F-TIE/AC-1'].primary, 'src/zzz.js');
   });
 });
