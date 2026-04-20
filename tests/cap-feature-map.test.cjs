@@ -1908,25 +1908,28 @@ describe('F-042 live Feature Map drift integration', () => {
   // shipped/tested feature with pending ACs in the live map.
   const repoFeatureMap = path.join(__dirname, '..', 'FEATURE-MAP.md');
 
-  it('detects at least 14 drifting features in the live Feature Map',
+  it('live Feature Map has zero drift (post-F-043 reconciliation invariant)',
     { skip: !fs.existsSync(repoFeatureMap) },
     () => {
       const report = detectDrift(path.dirname(repoFeatureMap));
-      // Live map currently shows ~17 drifting features (F-019..F-026, F-031..F-033, F-036..F-041).
-      // The lower bound of 14 leaves slack for F-043 reconciliation reducing the count later
-      // without making this test brittle to in-flight cleanup.
-      assert.ok(report.driftCount >= 14,
-        `expected at least 14 drifting features in live map, got ${report.driftCount}`);
-      assert.strictEqual(report.hasDrift, true);
+      // Pre-F-043: this test asserted driftCount >= 14. After F-043 reconciliation
+      // (commit 2c1a5ec on main) the live map should stay at 0 drift forever — any
+      // regression here means a feature was promoted to shipped/tested without its
+      // ACs being properly propagated, which is the symptom F-042 was meant to prevent.
+      assert.strictEqual(report.driftCount, 0,
+        `expected 0 drifting features post-reconciliation, got ${report.driftCount}`);
+      assert.strictEqual(report.hasDrift, false);
     });
 
-  it('formatDriftReport on live map produces a non-empty markdown table',
+  it('formatDriftReport on a clean live map produces the no-drift message',
     { skip: !fs.existsSync(repoFeatureMap) },
     () => {
       const report = detectDrift(path.dirname(repoFeatureMap));
       const formatted = formatDriftReport(report);
-      assert.ok(formatted.includes('| Feature |'));
-      assert.ok(formatted.includes('shipped') || formatted.includes('tested'));
+      // Post-F-043: the formatter returns the no-drift sentinel for clean reports.
+      // Pre-F-043 this test asserted the markdown table was rendered.
+      assert.ok(formatted.length > 0, 'formatter must return a non-empty string even for clean reports');
+      assert.ok(!formatted.includes('| F-'), 'no F-NNN rows expected in clean drift output');
     });
 });
 
@@ -2199,31 +2202,35 @@ describe('F-042 adversarial — live repo invariants', () => {
   const repoRoot = path.join(__dirname, '..');
   const repoFeatureMap = path.join(repoRoot, 'FEATURE-MAP.md');
 
-  it('F-041 appears in the live drift report (state=tested, ACs pending)',
+  it('F-041 has zero drift in the live map (post-F-043 reconciliation invariant)',
     { skip: !fs.existsSync(repoFeatureMap) },
     () => {
       const report = detectDrift(repoRoot);
       const f041 = report.features.find(f => f.id === 'F-041');
-      assert.ok(f041, 'F-041 must be reported as drift in the live Feature Map');
-      assert.strictEqual(f041.state, 'tested');
-      assert.ok(f041.pendingAcs.length > 0, 'F-041 must have pending ACs in drift entry');
+      // Pre-F-043: F-041 was state=tested with all ACs still pending (drift candidate).
+      // Post-F-043: ACs were promoted to tested by reconciliation. F-041 must NOT
+      // appear in drift any longer — regression here means propagation broke.
+      assert.strictEqual(f041, undefined,
+        'F-041 must not appear in drift after F-043 reconciliation promoted its ACs');
     });
 
-  it('F-042 itself does NOT appear in the live drift report (prototyped is outside drift policy)',
+  it('F-042 itself does NOT appear in the live drift report (post-reconcile invariant)',
     { skip: !fs.existsSync(repoFeatureMap) },
     () => {
       const report = detectDrift(repoRoot);
       const f042 = report.features.find(f => f.id === 'F-042');
       assert.strictEqual(f042, undefined,
-        'F-042 is in state=prototyped; prototyped features are not drift candidates by AC-4');
+        'F-042 must not appear in drift — its self-promotion path correctly propagated all ACs');
     });
 
-  it('formatDriftReport on the live repo includes F-041 and never includes F-042',
+  it('formatDriftReport on the post-reconcile live repo lists no features',
     { skip: !fs.existsSync(repoFeatureMap) },
     () => {
       const report = detectDrift(repoRoot);
       const formatted = formatDriftReport(report);
-      assert.ok(formatted.includes('F-041'), 'F-041 must be visible in CLI output');
-      assert.ok(!formatted.includes('F-042'), 'F-042 must not appear in CLI output');
+      // Pre-F-043 this asserted F-041 visible in output. Post-F-043 the live map is
+      // clean so neither F-041 nor any other F-NNN row should appear.
+      assert.ok(!formatted.includes('| F-041'), 'F-041 must not appear in CLI output post-reconcile');
+      assert.ok(!formatted.includes('| F-042'), 'F-042 must not appear in CLI output');
     });
 });

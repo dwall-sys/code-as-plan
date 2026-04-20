@@ -1,7 +1,7 @@
 ---
 name: cap:prototype
 description: Feature Map-driven prototype pipeline -- reads FEATURE-MAP.md, confirms ACs with user, spawns cap-prototyper to build annotated code scaffold. Supports --architecture and --annotate modes.
-argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch]"
+argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch] [--research]"
 allowed-tools:
   - Read
   - Write
@@ -33,6 +33,7 @@ On completion, automatically runs `/cap:scan` to update Feature Map status.
 - `--interactive` -- pause after each iteration
 - `--non-interactive` -- skip AC confirmation gate (for CI)
 - `--no-branch` -- stay on current branch (skip auto feature-branch creation)
+- `--research` -- explicitly enable F-024 pitfall research (opt-in as of F-044). Default is research SKIPPED — Opus 4.7 already knows most major libraries, so up-front Context7 fetches are redundant in the common case. Use `--research` when prototyping against an unfamiliar SDK or a known-pitfall service (Supabase RLS, Stripe webhooks, OAuth callbacks, etc.).
 </objective>
 
 <context>
@@ -52,7 +53,7 @@ Check `$ARGUMENTS` for:
 - `--annotate` -- if present, set `mode = "ANNOTATE"`
 - `--interactive` -- if present, set `interactive_mode = true`
 - `--non-interactive` -- if present, set `non_interactive = true`
-- `--skip-research` -- if present, set `skip_research = true`
+- `--research` -- if present, set `research_mode = true`. Otherwise `research_mode = false` (opt-in as of F-044).
 - `--no-branch` -- if present, set `skip_branch = true`
 - `path` -- target directory (defaults to `.`)
 
@@ -145,14 +146,20 @@ Use AskUserQuestion:
 - If `yes`: proceed to Step 3
 - If corrections: incorporate and re-display
 
-## Step 2b: Pitfall Research (unless --skip-research)
+## Step 2b: Pitfall Research (only when --research is set)
 
 <!-- @cap-feature(feature:F-024) Pre-Work Pitfall Research -->
+<!-- @cap-feature(feature:F-044) Audit and Right-Size Agent Behaviors for Opus 4.7 -->
 <!-- @cap-todo(ac:F-024/AC-1) Detect technologies/services from package.json, ACs, code context -->
 <!-- @cap-todo(ac:F-024/AC-2) Research known pitfalls via Context7 and web search -->
-<!-- @cap-todo(ac:F-024/AC-7) User can skip with --skip-research -->
+<!-- @cap-todo(ac:F-044/AC-2) Pitfall research is now opt-in via --research instead of always-on -->
+<!-- @cap-decision(F-044/AC-2) Flipped from always-on (--skip-research opt-out) to opt-in (--research). -->
+<!--   Opus 4.7 already knows most major libraries; up-front Context7 fetches were redundant in the common case. -->
+<!--   The `research_mode` flag from Step 0 gates this entire step. -->
 
-**Skip this step if `--skip-research` is in the arguments or `mode == "ANNOTATE"`.**
+**Skip this step if `research_mode` is false (default) or `mode == "ANNOTATE"`.**
+
+**Only run this block when `research_mode` is true (set by --research flag).**
 
 **Detect technologies involved:**
 

@@ -6,6 +6,12 @@
 'use strict';
 
 // @cap-feature(feature:F-013) Convention & Skeleton Generation — project convention discovery
+// @cap-feature(feature:F-044) Audit and Right-Size Agent Behaviors for Opus 4.7 — minimal two-anchor probe
+// @cap-decision(F-044/AC-3) Two-anchor probe replaces 6-7 file reads. CLAUDE.md + package.json are the
+//   highest-signal inputs for project context. Everything else (eslint config, tsconfig, naming
+//   convention, test pattern, build tool) can be inferred by Opus 4.7 from those two anchors plus a
+//   small handful of sample source files chosen on demand. The legacy readProjectConventions() is
+//   preserved for backwards compatibility -- see probeProjectAnchors() below for the right-sized API.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -179,4 +185,74 @@ function detectNamingConvention(dirs) {
   return 'unknown';
 }
 
-module.exports = { readProjectConventions, discoverDirectories, detectNamingConvention };
+// @cap-feature(feature:F-044) Two-anchor probe -- right-sized convention discovery for Opus 4.7
+// @cap-todo(ac:F-044/AC-3) Replace 6-7 file reads with a single high-signal probe (CLAUDE.md + package.json)
+// @cap-risk(F-044) Edge case: projects without CLAUDE.md or with non-JSON package.json get null fields.
+//   Mitigation: caller must handle null-valued anchors by either falling back to readProjectConventions()
+//   for the legacy multi-file probe or letting the agent infer conventions from sample source files.
+
+/**
+ * @typedef {Object} ProjectAnchors
+ * @property {string|null} rawClaudeMd - raw contents of CLAUDE.md, or null if absent
+ * @property {string|null} rawPackageJson - raw contents of package.json (string, NOT parsed), or null if absent
+ * @property {Object|null} parsedPackageJson - parsed JSON of package.json, or null if absent or invalid
+ * @property {string} projectRoot - the absolute path probed
+ * @property {string[]} filesProbed - the relative paths actually read (for token-cost auditability)
+ */
+
+/**
+ * Reads the two highest-signal anchor files for project context: CLAUDE.md and package.json.
+ *
+ * This replaces readProjectConventions() in the right-sized Opus 4.7 workflow. The agent
+ * infers the rest (linter, naming convention, test pattern, build tool) from these two
+ * anchors plus a small number of sample source files chosen on demand at the call site,
+ * rather than eagerly probing 6-7 config files up front.
+ *
+ * @param {string} projectRoot - absolute path to project root
+ * @returns {ProjectAnchors}
+ */
+function probeProjectAnchors(projectRoot) {
+  // @cap-todo(ac:F-044/AC-3) Implementation of the two-anchor probe -- exactly two file reads
+  const result = {
+    rawClaudeMd: null,
+    rawPackageJson: null,
+    parsedPackageJson: null,
+    projectRoot,
+    filesProbed: [],
+  };
+
+  // @cap-decision(F-044) Anchor 1: CLAUDE.md is the project's intent document. When present it
+  //   captures conventions, tech stack, and constraints in one place -- higher signal than parsing
+  //   .eslintrc + .prettierrc + tsconfig + biome.json individually.
+  const claudePath = path.join(projectRoot, 'CLAUDE.md');
+  if (fs.existsSync(claudePath)) {
+    try {
+      result.rawClaudeMd = fs.readFileSync(claudePath, 'utf8');
+      result.filesProbed.push('CLAUDE.md');
+    } catch (_e) {
+      // @cap-risk(F-044) Permission errors silently ignored -- caller treats null rawClaudeMd as "no project intent doc"
+    }
+  }
+
+  // @cap-decision(F-044) Anchor 2: package.json is the deterministic structural anchor (module type,
+  //   scripts, dependencies). We expose BOTH the raw string (for audit/log purposes) and the parsed
+  //   object (for programmatic use) so consumers don't need to re-parse.
+  const pkgPath = path.join(projectRoot, 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    try {
+      result.rawPackageJson = fs.readFileSync(pkgPath, 'utf8');
+      result.filesProbed.push('package.json');
+      try {
+        result.parsedPackageJson = JSON.parse(result.rawPackageJson);
+      } catch (_parseErr) {
+        // @cap-risk(F-044) Malformed package.json -- raw is preserved, parsed stays null. Caller must check.
+      }
+    } catch (_e) {
+      // Permission errors silently ignored
+    }
+  }
+
+  return result;
+}
+
+module.exports = { readProjectConventions, discoverDirectories, detectNamingConvention, probeProjectAnchors };

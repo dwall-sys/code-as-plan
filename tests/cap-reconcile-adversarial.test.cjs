@@ -422,20 +422,13 @@ describe('live-repo invariants (read-only)', () => {
   const repoRoot = process.cwd();
   const liveFixtureAvailable = fs.existsSync(path.join(repoRoot, 'FEATURE-MAP.md'));
 
-  it('planReconciliation against the live repo lists Phase 1 features that include F-019..F-026 and F-036..F-040', { skip: !liveFixtureAvailable ? 'no live FEATURE-MAP.md found' : false }, () => {
+  it('planReconciliation against the post-reconcile live repo produces an empty Phase 1', { skip: !liveFixtureAvailable ? 'no live FEATURE-MAP.md found' : false }, () => {
     const plan = reconcile.planReconciliation(repoRoot);
-    const ids = new Set(plan.phase1.map(e => e.featureId));
-
-    // F-019..F-026 (8 features) -- introduced before F-041 parser fix.
-    for (let n = 19; n <= 26; n++) {
-      const id = 'F-0' + String(n);
-      assert.ok(ids.has(id), `Phase 1 must include ${id}`);
-    }
-    // F-036..F-040 (5 features) -- pre-F-042 propagation gap.
-    for (let n = 36; n <= 40; n++) {
-      const id = 'F-0' + String(n);
-      assert.ok(ids.has(id), `Phase 1 must include ${id}`);
-    }
+    // Pre-F-043: this test asserted Phase 1 contained F-019..F-026 and F-036..F-040.
+    // Post-F-043 (commit 2c1a5ec): the live map is clean and Phase 1 must be empty.
+    // A regression here means new drift was introduced — F-042's shipped-gate failed.
+    assert.strictEqual(plan.phase1.length, 0,
+      `expected Phase 1 to be empty post-reconcile, got ${plan.phase1.length} drifting features: ${plan.phase1.map(e => e.featureId).join(', ')}`);
   });
 
   it('planReconciliation against the live repo does NOT include F-041, F-042, or F-043 in Phase 2', { skip: !liveFixtureAvailable ? 'no live FEATURE-MAP.md found' : false }, () => {
@@ -446,10 +439,14 @@ describe('live-repo invariants (read-only)', () => {
     assert.ok(!phase2Ids.has('F-043'), 'F-043 (this feature) must self-exclude from Phase 2');
   });
 
-  it('planReconciliation against the live repo proposes >20 total changes (sanity check)', { skip: !liveFixtureAvailable ? 'no live FEATURE-MAP.md found' : false }, () => {
+  it('planReconciliation against the post-reconcile live repo proposes minimal changes', { skip: !liveFixtureAvailable ? 'no live FEATURE-MAP.md found' : false }, () => {
     const plan = reconcile.planReconciliation(repoRoot);
     const total = plan.phase1.length + plan.phase2.length;
-    assert.ok(total > 20, `expected >20 total entries across both phases, got ${total}`);
+    // Pre-F-043: this asserted >20 total changes. Post-F-043: only F-030 should
+    // remain in Phase 2 (impl exists, no test) — total <= 2 expected. >2 entries
+    // means new drift accumulated, which is the post-reconcile regression signal.
+    assert.ok(total <= 2,
+      `expected <=2 total entries post-reconcile, got ${total}: ${[...plan.phase1, ...plan.phase2].map(e => e.featureId).join(', ')}`);
   });
 
   it('does NOT mutate live FEATURE-MAP.md as a side effect of planning (read-only contract)', { skip: !liveFixtureAvailable ? 'no live FEATURE-MAP.md found' : false }, () => {

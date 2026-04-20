@@ -744,18 +744,18 @@
 | AC-4 | tested | The reconciliation shall preserve historical accuracy by emitting a .cap/memory/reconciliation-2026-04.md audit log of every state change |
 | AC-5 | tested | A regression test shall assert that running the parser on the reconciled file produces zero drift warnings |
 
-### F-044: Audit and Right-Size Agent Behaviors for Opus 4.7 [planned]
+### F-044: Audit and Right-Size Agent Behaviors for Opus 4.7 [tested]
 
 **Depends on:** F-024
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | An audit document shall enumerate every Context7 fetch and convention-detection step performed by cap-prototyper, cap-tester, cap-reviewer, cap-debugger, and cap-brainstormer with rationale for keeping or removing each |
-| AC-2 | pending | Pitfall research (F-024) shall become opt-in via an explicit --research flag rather than always-on, removing redundant Context7 calls for libraries the model already knows well |
-| AC-3 | pending | Convention detection shall be replaced with a single high-signal probe (read CLAUDE.md + package.json) instead of 6 to 7 file reads, with the agent inferring the rest |
-| AC-4 | pending | A measurable benchmark shall compare token usage and output quality before and after right-sizing across 5 representative tasks (prototype, iterate, test, review, debug) |
-| AC-5 | pending | The 4-mode architecture of cap-prototyper shall be evaluated against a single-agent-with-explicit-prompt approach; the audit shall recommend keep/collapse/refactor with evidence |
-| AC-6 | pending | All changes shall preserve the public command surface — /cap:prototype, /cap:test, etc. continue to work without user-facing breakage |
+| AC-1 | tested | An audit document shall enumerate every Context7 fetch and convention-detection step performed by cap-prototyper, cap-tester, cap-reviewer, cap-debugger, and cap-brainstormer with rationale for keeping or removing each |
+| AC-2 | tested | Pitfall research (F-024) shall become opt-in via an explicit --research flag rather than always-on, removing redundant Context7 calls for libraries the model already knows well |
+| AC-3 | tested | Convention detection shall be replaced with a single high-signal probe (read CLAUDE.md + package.json) instead of 6 to 7 file reads, with the agent inferring the rest |
+| AC-4 | tested | A measurable benchmark shall compare token usage and output quality before and after right-sizing across 5 representative tasks (prototype, iterate, test, review, debug) |
+| AC-5 | tested | The 4-mode architecture of cap-prototyper shall be evaluated against a single-agent-with-explicit-prompt approach; the audit shall recommend keep/collapse/refactor with evidence |
+| AC-6 | tested | All changes shall preserve the public command surface — /cap:prototype, /cap:test, etc. continue to work without user-facing breakage |
 
 ### F-045: Improve AC-to-Code Traceability for Multi-File Acceptance Criteria [planned]
 
@@ -850,4 +850,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T10:28:04.456Z*
+*Last updated: 2026-04-20T11:11:45.972Z*

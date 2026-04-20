@@ -1,7 +1,7 @@
 ---
 name: cap:debug
 description: Systematic debugging with persistent state across context resets. Spawns cap-debugger agent using scientific method. Deploy-aware workflow minimizes deploy cycles.
-argument-hint: "[issue description]"
+argument-hint: "[issue description] [--research]"
 allowed-tools:
   - Read
   - Write
@@ -217,12 +217,19 @@ session.updateSession(process.cwd(), {
 "
 ```
 
-## Step 2c: Pitfall Research for Debug Context
+## Step 2c: Pitfall Research for Debug Context (only when --research is set)
 
 <!-- @cap-feature(feature:F-024) Pre-Work Pitfall Research -->
+<!-- @cap-feature(feature:F-044) Audit and Right-Size Agent Behaviors for Opus 4.7 -->
 <!-- @cap-todo(ac:F-024/AC-8) /cap:debug triggers pitfall research for technologies involved in the bug -->
 <!-- @cap-todo(ac:F-024/AC-1) Detect technologies from symptoms, package.json, and code context -->
 <!-- @cap-todo(ac:F-024/AC-2) Research known pitfalls via Context7 -->
+<!-- @cap-todo(ac:F-044/AC-2) Pitfall research is now opt-in via --research instead of always-on -->
+<!-- @cap-decision(F-044/AC-2) /cap:debug pitfall research is opt-in via --research as of F-044. -->
+<!--   When debugging a known-pitfall stack (Supabase RLS, OAuth callbacks, etc.) the user opts in. -->
+<!--   Otherwise the debugger relies on Opus 4.7's training knowledge of common libraries. -->
+
+**Skip this step if `--research` is NOT in `$ARGUMENTS` (research is opt-in as of F-044).**
 
 **Detect technologies from symptoms and project:**
 
