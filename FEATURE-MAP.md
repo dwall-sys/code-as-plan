@@ -864,15 +864,32 @@
 | AC-4 | tested | The public API of cap-cluster-display shall remain unchanged — callers see no behavioral difference |
 | AC-5 | tested | A before/after complexity comparison (cyclomatic complexity per function) shall be included in the PR description |
 
-### F-051: Close Test Coverage Gap for F-036 to F-040 Modules [planned]
+### F-051: Fix Coverage Runner — Replace c8 with Node Native [tested]
+
+Root cause of the "16 uncovered modules" TEST-AUDIT entry was not missing tests but a broken measurement: c8 (and Node's native reporter under default `--test` isolation) drops v8 coverage data written by per-file subprocesses on Node 22+. Actual measured coverage under `--test-isolation=none` is ~98% lines.
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | All 16 critical modules currently flagged by TEST-AUDIT as 0% coverage shall reach at least 70% line coverage as enforced by c8 |
-| AC-2 | pending | Coverage shall be reported per module in a new tests/COVERAGE-AUDIT.md updated by npm run test:coverage |
-| AC-3 | pending | Skipped Windows-incompatible tests shall be replaced with explicit describe.skipIf(process.platform === win32, ...) markers carrying a @cap-risk windows-compat annotation |
-| AC-4 | pending | A CI matrix entry for Windows shall run all non-skipped tests and report which modules have platform-specific gaps |
-| AC-5 | pending | No new module shall be merged without accompanying tests — enforced via a pre-merge check counting test files vs source files in changed paths |
+| AC-1 | tested | `npm run test:coverage` uses Node's built-in `--experimental-test-coverage` with `--test-isolation=none` so subprocess coverage is not lost — total measured line coverage must be ≥95% (currently 98.07%) |
+| AC-2 | tested | c8 is removed from devDependencies; no external coverage tool remains |
+| AC-3 | tested | `npm test` (without `--coverage`) continues to run with default test isolation and stays 4524/4524 green |
+| AC-4 | deferred | Windows-incompatible skip markers — blocked by F-052 (16 shared-state leaks surface only in isolation=none) |
+| AC-5 | deferred | Pre-merge "new module requires tests" check — independent scope, re-plan later |
+
+**Files:**
+- `scripts/run-tests.cjs`
+- `package.json`
+
+### F-052: Fix Shared-State Leaks in Test Suite [planned]
+
+Surfaced by F-051's coverage-runner fix: 16 tests fail under `--test-isolation=none` due to latent state leaks that the default per-file isolation hides. These are pre-existing bugs in the tests themselves, not regressions.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | 6 diagnostic tests in tests/cap-cluster-io.test.cjs shall restore `process.env.CAP_DEBUG` in `afterEach` and not rely on `delete` before/after — verified by running the file together with any adjacent test-file that writes CAP_DEBUG |
+| AC-2 | pending | 10 E2E tests in tests/copilot-install.test.cjs shall pass when run after tests/codex-config.test.cjs — root cause is `process.chdir()` leaking from codex-config into install.js side effects; fix by restoring cwd or by isolating install.js per-call |
+| AC-3 | pending | `npm run test:coverage` shall exit 0 (all 4543+ tests green) with `--test-isolation=none` enabled |
+| AC-4 | pending | A regression test shall exist that runs both candidate test-file pairs in-process to catch future leak regressions |
 
 ## Legend
 
