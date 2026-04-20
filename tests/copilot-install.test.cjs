@@ -1036,6 +1036,7 @@ const EXPECTED_AGENTS = fs.readdirSync(path.join(__dirname, '..', 'agents'))
 function runCopilotInstall(cwd) {
   const env = { ...process.env };
   delete env.GSD_TEST_MODE;
+  delete env.CAP_TEST_MODE;
   return execFileSync(process.execPath, [INSTALL_PATH, '--copilot', '--local'], {
     cwd,
     encoding: 'utf-8',
@@ -1047,6 +1048,7 @@ function runCopilotInstall(cwd) {
 function runCopilotUninstall(cwd) {
   const env = { ...process.env };
   delete env.GSD_TEST_MODE;
+  delete env.CAP_TEST_MODE;
   return execFileSync(process.execPath, [INSTALL_PATH, '--copilot', '--local', '--uninstall'], {
     cwd,
     encoding: 'utf-8',

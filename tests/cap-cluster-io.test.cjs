@@ -20,10 +20,7 @@ let captured;
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-cluster-io-'));
   originalDebugEnv = process.env.CAP_DEBUG;
-  originalConsoleWarn = console.warn;
   captured = [];
-  // eslint-disable-next-line no-console
-  console.warn = (msg) => { captured.push(msg); };
 });
 
 afterEach(() => {
@@ -33,9 +30,20 @@ afterEach(() => {
   } else {
     process.env.CAP_DEBUG = originalDebugEnv;
   }
-  // eslint-disable-next-line no-console
-  console.warn = originalConsoleWarn;
 });
+
+// Patch console.warn from inside the test body (not beforeEach) — Node's test
+// runner gives each test a distinct console, so assignments in beforeEach do
+// not reach the test's console when running under --test-isolation=none.
+function patchWarn() {
+  originalConsoleWarn = console.warn;
+  // eslint-disable-next-line no-console
+  console.warn = (msg) => { captured.push(msg); };
+  return () => {
+    // eslint-disable-next-line no-console
+    console.warn = originalConsoleWarn;
+  };
+}
 
 // Helper: write a valid graph JSON to a project's .cap/memory directory
 function writeGraph(root, data) {
@@ -174,6 +182,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   const clusterModPath = path.resolve(__dirname, '..', 'cap', 'bin', 'lib', 'cap-cluster-detect.cjs');
 
   it('emits diagnostic when loadGraph throws (CAP_DEBUG=1)', () => {
+    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     const restore = patchModule(graphModPath, 'loadGraph', () => {
       const e = new Error('synthetic graph load failure');
@@ -184,6 +193,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
 
     const diag = captured.find(c => c.includes('loadClusterData.loadGraph'));
@@ -194,6 +204,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits diagnostic when loadIndex throws (CAP_DEBUG=1)', () => {
+    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     const restore = patchModule(threadModPath, 'loadIndex', () => {
       throw new Error('synthetic index failure');
@@ -202,6 +213,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
 
     const diag = captured.find(c => c.includes('loadClusterData.loadIndex'));
@@ -210,6 +222,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits per-thread diagnostic when loadThread throws (CAP_DEBUG=1)', () => {
+    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     // Set up a real index that points to a thread, then force loadThread to throw
     const dir = path.join(tmpDir, '.cap', 'memory');
@@ -226,6 +239,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
 
     const diag = captured.find(c => c.includes('loadClusterData.loadThread'));
@@ -235,6 +249,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits diagnostic when computeAffinityBatch throws (CAP_DEBUG=1)', () => {
+    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     const restore = patchModule(affinityModPath, 'computeAffinityBatch', () => {
       throw new Error('synthetic affinity failure');
@@ -243,6 +258,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
 
     const diag = captured.find(c => c.includes('loadClusterData.computeAffinity'));
@@ -251,6 +267,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('emits diagnostic when runClusterDetection throws (CAP_DEBUG=1)', () => {
+    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     const restore = patchModule(clusterModPath, 'runClusterDetection', () => {
       throw new Error('synthetic cluster failure');
@@ -259,6 +276,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
 
     const diag = captured.find(c => c.includes('loadClusterData.runClusterDetection'));
@@ -267,6 +285,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
   });
 
   it('does NOT emit diagnostics when CAP_DEBUG is unset (silent recovery preserved)', () => {
+    const unpatch = patchWarn();
     delete process.env.CAP_DEBUG;
     const restore = patchModule(graphModPath, 'loadGraph', () => {
       throw new Error('synthetic, but should be silent');
@@ -275,11 +294,13 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
     assert.strictEqual(captured.length, 0, 'no output expected when CAP_DEBUG is unset');
   });
 
   it('diagnostic payload is parseable JSON with op/errorType/recoveryAction', () => {
+    const unpatch = patchWarn();
     process.env.CAP_DEBUG = '1';
     const restore = patchModule(graphModPath, 'loadGraph', () => {
       throw new Error('synthetic');
@@ -288,6 +309,7 @@ describe('F-050 AC-2: structured diagnostics on catch blocks', () => {
       io._loadClusterData(tmpDir);
     } finally {
       restore();
+      unpatch();
     }
 
     const line = captured.find(c => c.startsWith('[cap:debug]'));
