@@ -732,17 +732,17 @@
 | AC-5 | tested | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
 | AC-6 | tested | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
 
-### F-043: Reconcile Status Drift in Existing Feature Map [planned]
+### F-043: Reconcile Status Drift in Existing Feature Map [tested]
 
 **Depends on:** F-041, F-042
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | A one-shot reconciliation script shall scan FEATURE-MAP.md and propose AC status updates for features F-019 through F-026 and F-036 through F-040 |
-| AC-2 | pending | The script shall output a dry-run diff first, requiring explicit confirmation before writing changes |
-| AC-3 | pending | F-027, F-028, F-029, F-034 shall have their feature state reconciled from planned to the correct lifecycle state based on actual code presence, verified via tag scanner |
-| AC-4 | pending | The reconciliation shall preserve historical accuracy by emitting a .cap/memory/reconciliation-2026-04.md audit log of every state change |
-| AC-5 | pending | A regression test shall assert that running the parser on the reconciled file produces zero drift warnings |
+| AC-1 | tested | A one-shot reconciliation script shall scan FEATURE-MAP.md and propose AC status updates for features F-019 through F-026 and F-036 through F-040 |
+| AC-2 | tested | The script shall output a dry-run diff first, requiring explicit confirmation before writing changes |
+| AC-3 | tested | F-027, F-028, F-029, F-034 shall have their feature state reconciled from planned to the correct lifecycle state based on actual code presence, verified via tag scanner |
+| AC-4 | tested | The reconciliation shall preserve historical accuracy by emitting a .cap/memory/reconciliation-2026-04.md audit log of every state change |
+| AC-5 | tested | A regression test shall assert that running the parser on the reconciled file produces zero drift warnings |
 
 ### F-044: Audit and Right-Size Agent Behaviors for Opus 4.7 [planned]
 
@@ -850,4 +850,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T10:01:30.832Z*
+*Last updated: 2026-04-20T10:22:26.843Z*

@@ -32,6 +32,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-memory-graph.cjs',
   'cap-migrate.cjs',
   'cap-realtime-affinity.cjs',
+  'cap-reconcile.cjs',
   'cap-semantic-pipeline.cjs',
   'cap-session-extract.cjs',
   'cap-session.cjs',
