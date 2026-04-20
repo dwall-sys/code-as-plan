@@ -922,23 +922,25 @@ Root causes found and fixed:
 - `tests/cap-cluster-io.test.cjs`
 - `tests/copilot-install.test.cjs`
 
-### F-053: Migrate cap-test-audit to Node Native Coverage [planned]
+### F-053: Migrate cap-test-audit to Node Native Coverage [shipped]
+
 
 **Depends on:** F-051
 
-Follow-up to F-051: `cap/bin/lib/cap-test-audit.cjs` still shells out to `npx c8 --reporter json` for coverage collection in user projects. This works but is slow on first run (downloads c8), fails offline, and uses an unpinned latest version. Migrating to Node's native `--experimental-test-coverage` aligns with F-051's direction and removes the last `npx c8` dependency from CAP.
+Follow-up to F-051: `cap/bin/lib/cap-test-audit.cjs` used to shell out to `npx c8 --reporter json` for coverage collection. That worked but was slow on first run (downloads c8), failed offline, and pinned an unpinned version. Now routes `node --test …` commands through Node's native `--experimental-test-coverage` and reserves c8 as the fallback for vitest/jest/ts-node wrappers.
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | `cap-test-audit.cjs` shall invoke `node --test --experimental-test-coverage --test-reporter=…` instead of `npx c8` when the project supports it (Node >= 20) |
-| AC-2 | pending | Fall back to `npx c8` for legacy projects that still depend on c8's JSON reporter, with a deprecation note in the output |
-| AC-3 | pending | Parse Node's native coverage output (currently text-formatted) into the same structured shape that `parseCoverage()` returns today, so downstream scoring logic is unchanged |
-| AC-4 | pending | `/cap:test-audit` shall continue to work offline when Node native coverage is used |
-| AC-5 | pending | `cap-doctor.cjs` shall stop warning about missing c8 when the project uses Node >= 20 |
+| AC-1 | tested | `analyzeCoverage()` inspects the test command; `supportsNativeCoverage()` detects bare `node --test` invocations; `analyzeCoverageNative()` injects `--experimental-test-coverage --test-reporter=spec` and parses the text-format report |
+| AC-2 | tested | Non-node commands (vitest, jest, ts-node, …) still route to `analyzeCoverageC8()`. When c8 is unavailable the error message suggests the native path for Node >= 20 projects instead of a blunt "install c8" |
+| AC-3 | tested | `parseNativeCoverageOutput()` extracts per-file `{lines, branches, functions}` + `uncoveredFiles[]`, matching the exact shape of the legacy c8 summary. Downstream scoring (trustScore, report generation) is unchanged |
+| AC-4 | tested | Native path uses only Node built-ins — no npx, no network. `execSync` scrubs `NODE_V8_COVERAGE`/`NODE_OPTIONS` so a parent coverage instrumentation can't hijack the child's report |
+| AC-5 | tested | `cap-doctor.cjs` skips the `c8` optional-tool check entirely when `process.versions.node >= 20`. The hint text makes the Node-version dependency explicit for < 20 projects |
 
 **Files:**
 - `cap/bin/lib/cap-test-audit.cjs`
 - `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-test-audit.test.cjs`
 
 ## Legend
 

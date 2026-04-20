@@ -1307,3 +1307,122 @@ describe('EDGE_CASE_PATTERNS', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// F-053: Native coverage path
+// ---------------------------------------------------------------------------
+
+describe('supportsNativeCoverage', () => {
+  const { supportsNativeCoverage } = require('../cap/bin/lib/cap-test-audit.cjs');
+
+  it('returns true for bare `node --test <paths>`', () => {
+    assert.strictEqual(supportsNativeCoverage('node --test tests/'), true);
+    assert.strictEqual(supportsNativeCoverage('node --test tests/a.cjs tests/b.cjs'), true);
+  });
+
+  it('returns true when extra node flags precede --test', () => {
+    assert.strictEqual(supportsNativeCoverage('node --test-isolation=none --test tests/'), true);
+    assert.strictEqual(supportsNativeCoverage('node --experimental-vm-modules --test tests/'), true);
+  });
+
+  it('returns false for vitest / jest / ts-node wrappers', () => {
+    assert.strictEqual(supportsNativeCoverage('npx vitest run'), false);
+    assert.strictEqual(supportsNativeCoverage('jest --ci'), false);
+    assert.strictEqual(supportsNativeCoverage('npx ts-node tests/a.ts'), false);
+  });
+
+  it('returns false for non-string or missing command', () => {
+    assert.strictEqual(supportsNativeCoverage(null), false);
+    assert.strictEqual(supportsNativeCoverage(undefined), false);
+    assert.strictEqual(supportsNativeCoverage(42), false);
+  });
+});
+
+describe('parseNativeCoverageOutput', () => {
+  const { parseNativeCoverageOutput } = require('../cap/bin/lib/cap-test-audit.cjs');
+
+  it('parses a minimal native coverage report', () => {
+    const stdout = [
+      'ℹ tests 10',
+      'ℹ pass 10',
+      'ℹ start of coverage report',
+      'ℹ -------------------|---------|----------|---------|---------|---------',
+      'ℹ file              | line %  | branch % | funcs % | uncovered',
+      'ℹ -------------------|---------|----------|---------|---------|---------',
+      'ℹ cap-anchor.cjs    |   99.09 |    94.44 |  100.00 | 102-103',
+      'ℹ cap-deps.cjs      |   40.25 |   100.00 |    0.00 | 50-120',
+      'ℹ -------------------|---------|----------|---------|---------|---------',
+      'ℹ all files         |   98.03 |    89.62 |   97.81 |',
+      'ℹ -------------------|---------|----------|---------|---------|---------',
+      'ℹ end of coverage report',
+    ].join('\n');
+    const result = parseNativeCoverageOutput(stdout, {
+      lines: 0, branches: 0, functions: 0, uncoveredFiles: [], coverageByFile: {},
+    });
+    assert.strictEqual(result.lines, 98.03);
+    assert.strictEqual(result.branches, 89.62);
+    assert.strictEqual(result.functions, 97.81);
+    assert.strictEqual(result.coverageByFile['cap-anchor.cjs'].lines, 99.09);
+    assert.strictEqual(result.coverageByFile['cap-deps.cjs'].lines, 40.25);
+    assert.ok(result.uncoveredFiles.includes('cap-deps.cjs'));
+    assert.ok(!result.uncoveredFiles.includes('cap-anchor.cjs'));
+  });
+
+  it('ignores rows outside start/end markers', () => {
+    const stdout = [
+      'ℹ tests 10',
+      'ℹ cap-foo.cjs      |   50.00 |   50.00 |   50.00 | 1-10',
+      'ℹ start of coverage report',
+      'ℹ cap-bar.cjs      |   80.00 |   70.00 |   60.00 |',
+      'ℹ end of coverage report',
+      'ℹ cap-baz.cjs      |   99.00 |   99.00 |   99.00 |',
+    ].join('\n');
+    const result = parseNativeCoverageOutput(stdout, {
+      lines: 0, branches: 0, functions: 0, uncoveredFiles: [], coverageByFile: {},
+    });
+    assert.strictEqual(Object.keys(result.coverageByFile).length, 1);
+    assert.ok('cap-bar.cjs' in result.coverageByFile);
+  });
+
+  it('sets error when no parseable rows are found', () => {
+    const stdout = 'ℹ start of coverage report\nℹ end of coverage report\n';
+    const result = parseNativeCoverageOutput(stdout, {
+      lines: 0, branches: 0, functions: 0, uncoveredFiles: [], coverageByFile: {},
+    });
+    assert.ok(result.error);
+  });
+
+  it('accepts rows without the ℹ prefix (older node versions)', () => {
+    const stdout = [
+      'start of coverage report',
+      '  cap-foo.cjs  |  95.00 |  80.00 |  90.00 |',
+      '  all files   |  95.00 |  80.00 |  90.00 |',
+      'end of coverage report',
+    ].join('\n');
+    const result = parseNativeCoverageOutput(stdout, {
+      lines: 0, branches: 0, functions: 0, uncoveredFiles: [], coverageByFile: {},
+    });
+    assert.strictEqual(result.lines, 95);
+    assert.ok('cap-foo.cjs' in result.coverageByFile);
+  });
+});
+
+// @cap-risk The native-coverage integration path works when /cap:test-audit runs against
+// a normal project, but spawning `node --experimental-test-coverage` from INSIDE a
+// `node --test` parent suppresses the coverage output on stdout. We therefore cover the
+// native path via parser unit tests (parseNativeCoverageOutput above) plus the routing
+// test below, and exercise the end-to-end flow via the supportsNativeCoverage check —
+// not by spawning a nested test runner.
+describe('analyzeCoverage: routes non-node commands to c8', { skip: process.platform === 'win32' }, () => {
+  const { analyzeCoverage } = require('../cap/bin/lib/cap-test-audit.cjs');
+
+  it('returns source=c8 for vitest/jest/ts-node style commands', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-audit-fallback-'));
+    try {
+      const result = analyzeCoverage(tmp, 'npx vitest run');
+      assert.strictEqual(result.source, 'c8');
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

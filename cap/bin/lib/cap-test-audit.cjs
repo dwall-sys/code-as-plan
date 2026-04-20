@@ -173,13 +173,150 @@ function analyzeAssertions(projectRoot, options = {}) {
 }
 
 /**
- * Run coverage analysis via c8 and parse results.
+ * Run coverage analysis. Prefers Node's native `--experimental-test-coverage`
+ * (offline, zero-dep, available on Node >= 20). Falls back to `npx c8` when
+ * the test command isn't a `node --test` invocation or native coverage fails.
  *
  * @param {string} projectRoot
  * @param {string} testCommand - e.g., 'node --test tests/' or 'npx vitest run'
- * @returns {{ lines: number, branches: number, functions: number, uncoveredFiles: string[], coverageByFile: Object }}
+ * @param {{ preferC8?: boolean }} [options] - preferC8 forces the legacy path (tests only)
+ * @returns {{ lines: number, branches: number, functions: number, uncoveredFiles: string[], coverageByFile: Object, source?: ('native'|'c8') }}
  */
-function analyzeCoverage(projectRoot, testCommand) {
+// @cap-todo(ac:F-053/AC-1) Prefer Node native --experimental-test-coverage when the test command is `node --test`.
+// @cap-todo(ac:F-053/AC-2) Fall back to `npx c8` when native is unavailable or the test command uses vitest/etc.
+function analyzeCoverage(projectRoot, testCommand, options) {
+  const opts = options || {};
+  const useC8 = opts.preferC8 === true || !supportsNativeCoverage(testCommand);
+  if (!useC8) {
+    const native = analyzeCoverageNative(projectRoot, testCommand);
+    if (!native.error) {
+      native.source = 'native';
+      return native;
+    }
+    // Native failed — fall through to c8 with a deprecation-safe error note preserved
+  }
+  const legacy = analyzeCoverageC8(projectRoot, testCommand);
+  legacy.source = 'c8';
+  return legacy;
+}
+
+// @cap-decision A test command qualifies for native coverage when it starts with
+// `node --test` or `node --test-only …` and references files/paths directly. Commands
+// that wrap tests in another runner (vitest, jest, ts-node) cannot be injected with
+// `--experimental-test-coverage` — c8 remains the right tool for those.
+function supportsNativeCoverage(testCommand) {
+  if (typeof testCommand !== 'string') return false;
+  const trimmed = testCommand.trim();
+  return /^node\s+(?:--[\w-]+(?:=\S+)?\s+)*--test(\s|$)/.test(trimmed);
+}
+
+/**
+ * Coverage via Node's built-in `--experimental-test-coverage`. Parses the
+ * text-format report emitted to stdout. Runs offline, no external deps.
+ *
+ * @param {string} projectRoot
+ * @param {string} testCommand - must start with `node --test …`
+ * @returns {{ lines:number, branches:number, functions:number, uncoveredFiles:string[], coverageByFile:Object, error?:string }}
+ */
+// @cap-todo(ac:F-053/AC-3) Parse Node's native coverage text into the same shape parseCoverage() returns.
+// @cap-todo(ac:F-053/AC-4) Native path must work offline — no npx, no network.
+function analyzeCoverageNative(projectRoot, testCommand) {
+  const result = {
+    lines: 0,
+    branches: 0,
+    functions: 0,
+    uncoveredFiles: [],
+    coverageByFile: {},
+  };
+
+  // Inject native coverage flags into the `node --test` invocation. Keep whatever
+  // flags the caller already passed (e.g. --test-isolation=none from run-tests.cjs).
+  const injected = testCommand.replace(
+    /^node(\s+)/,
+    `node$1--experimental-test-coverage --test-reporter=spec `
+  );
+
+  // Scrub env vars that would hijack the child's coverage channel — when /cap:test-audit
+  // is itself invoked under c8 or `node --experimental-test-coverage`, NODE_V8_COVERAGE
+  // and friends leak in and route the child's raw v8 profile into the parent's dir,
+  // leaving stdout without the expected text report.
+  const env = { ...process.env };
+  delete env.NODE_V8_COVERAGE;
+  delete env.NODE_OPTIONS;
+
+  let stdout;
+  try {
+    stdout = execSync(injected, {
+      cwd: projectRoot,
+      env,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 180000,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (e) {
+    // Tests may fail but still produce coverage output on stdout
+    stdout = (e.stdout && e.stdout.toString()) || '';
+    if (!stdout.includes('start of coverage report')) {
+      result.error = 'Native coverage run failed: ' + (e.message || 'unknown error');
+      return result;
+    }
+  }
+
+  return parseNativeCoverageOutput(stdout, result);
+}
+
+/**
+ * Parse the text-format coverage report Node emits between
+ * `ℹ start of coverage report` and `ℹ end of coverage report`. Extracts per-file
+ * percentages and the "all files" summary row. Accepts buffers without the ℹ prefix
+ * (the node --test reporter emits it but older versions may omit it).
+ *
+ * @param {string} stdout
+ * @param {Object} result - Result object to mutate in place
+ * @returns {Object}
+ */
+function parseNativeCoverageOutput(stdout, result) {
+  const lines = stdout.split('\n');
+  let inReport = false;
+  const FILE_ROW_RE = /^(?:ℹ\s*)?\s*([A-Za-z0-9._\-/]+\.(?:cjs|js|mjs|tsx?|jsx?))\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*(.*)$/;
+  const ALL_FILES_RE = /^(?:ℹ\s*)?\s*all files\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|/i;
+
+  for (const raw of lines) {
+    if (raw.includes('start of coverage report')) { inReport = true; continue; }
+    if (raw.includes('end of coverage report')) { inReport = false; continue; }
+    if (!inReport) continue;
+
+    const all = raw.match(ALL_FILES_RE);
+    if (all) {
+      result.lines = Number(all[1]);
+      result.branches = Number(all[2]);
+      result.functions = Number(all[3]);
+      continue;
+    }
+    const m = raw.match(FILE_ROW_RE);
+    if (!m) continue;
+    const file = m[1];
+    const linePct = Number(m[2]);
+    const branchPct = Number(m[3]);
+    const funcPct = Number(m[4]);
+    result.coverageByFile[file] = { lines: linePct, branches: branchPct, functions: funcPct };
+    if (linePct < 50) result.uncoveredFiles.push(file);
+  }
+
+  if (Object.keys(result.coverageByFile).length === 0 && result.lines === 0) {
+    result.error = 'Native coverage produced no parseable rows';
+  }
+  return result;
+}
+
+/**
+ * Legacy c8 path. Kept as fallback for projects that use vitest/jest/etc.
+ * @param {string} projectRoot
+ * @param {string} testCommand
+ * @returns {{ lines:number, branches:number, functions:number, uncoveredFiles:string[], coverageByFile:Object, error?:string }}
+ */
+function analyzeCoverageC8(projectRoot, testCommand) {
   const result = {
     lines: 0,
     branches: 0,
@@ -192,7 +329,7 @@ function analyzeCoverage(projectRoot, testCommand) {
   try {
     execSync('npx c8 --version', { cwd: projectRoot, stdio: 'pipe', timeout: 10000 });
   } catch (_e) {
-    result.error = 'c8 not available. Install with: npm install -D c8';
+    result.error = 'c8 not available. For node --test projects use native coverage (Node >= 20); otherwise install c8 via `npm install -D c8`.';
     return result;
   }
 
@@ -1276,6 +1413,10 @@ function generateImprovementSuggestions(report) {
 module.exports = {
   analyzeAssertions,
   analyzeCoverage,
+  analyzeCoverageNative,
+  analyzeCoverageC8,
+  parseNativeCoverageOutput,
+  supportsNativeCoverage,
   analyzeTestDiversity,
   analyzeCriticalPathCoverage,
   runMutationTests,

@@ -19,25 +19,25 @@ const os = require('node:os');
 const CAP_MODULE_MANIFEST = [
   'arc-scanner.cjs',
   'cap-affinity-engine.cjs',
+  'cap-anchor.cjs',
   'cap-annotation-writer.cjs',
   'cap-cluster-detect.cjs',
   'cap-cluster-display.cjs',
   'cap-cluster-format.cjs',
   'cap-cluster-helpers.cjs',
   'cap-cluster-io.cjs',
-  'cap-divergence-detector.cjs',
-  'cap-doctor.cjs',
-  'cap-anchor.cjs',
   'cap-completeness.cjs',
   'cap-deps.cjs',
+  'cap-divergence-detector.cjs',
+  'cap-doctor.cjs',
   'cap-feature-map.cjs',
   'cap-impact-analysis.cjs',
   'cap-loader.cjs',
   'cap-logger.cjs',
   'cap-memory-dir.cjs',
   'cap-memory-engine.cjs',
-  'cap-memory-pin.cjs',
   'cap-memory-graph.cjs',
+  'cap-memory-pin.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',
   'cap-realtime-affinity.cjs',
@@ -309,14 +309,18 @@ function runDoctor(projectRoot) {
     installHint: 'npm install -g ctx7   (or CAP uses npx ctx7@latest on demand)',
   });
 
-  const c8 = checkTool('npx c8 --version');
-  tools.push({
-    name: 'c8',
-    ...c8,
-    required: false,
-    purpose: 'Code coverage for /cap:test-audit',
-    installHint: 'npm install -D c8',
-  });
+  // @cap-todo(ac:F-053/AC-5) Skip c8 check on Node >= 20 — native --experimental-test-coverage covers /cap:test-audit's needs.
+  const nodeMajor = parseInt((process.versions.node || '0').split('.')[0], 10) || 0;
+  if (nodeMajor < 20) {
+    const c8 = checkTool('npx c8 --version');
+    tools.push({
+      name: 'c8',
+      ...c8,
+      required: false,
+      purpose: 'Code coverage for /cap:test-audit (Node < 20; Node 20+ uses native coverage)',
+      installHint: 'npm install -D c8',
+    });
+  }
 
   // Project-specific checks (only if projectRoot provided)
   if (projectRoot) {
