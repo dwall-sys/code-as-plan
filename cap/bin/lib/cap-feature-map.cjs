@@ -434,6 +434,17 @@ function updateFeatureState(projectRoot, featureId, newState, appPath) {
   if (newState === 'shipped') {
     const blocking = feature.acs.filter(a => a.status !== 'tested');
     if (blocking.length > 0) return false;
+
+    // @cap-todo(ac:F-048/AC-3) Completeness-score gate — only enforces when config is opted in.
+    // @cap-decision Silent failure (return false) preserves updateFeatureState's boolean contract.
+    // Callers wanting the reason string can use transitionWithReason() instead.
+    try {
+      const { checkShipGate } = require('./cap-completeness.cjs');
+      const gate = checkShipGate(featureId, newState, projectRoot);
+      if (!gate.allowed) return false;
+    } catch (_e) {
+      // Completeness module unavailable — allow through for backwards compat.
+    }
   }
 
   feature.state = newState;
@@ -450,6 +461,35 @@ function updateFeatureState(projectRoot, featureId, newState, appPath) {
 
   writeFeatureMap(projectRoot, featureMap, appPath);
   return true;
+}
+
+// @cap-feature(feature:F-048) Transition a feature state and return a structured reason on rejection.
+// @cap-decision Additive API. updateFeatureState's boolean contract is preserved so existing callers
+// do not break; transitionWithReason exposes the completeness-score gate's reason text for UIs that
+// want to explain why a shipped transition was blocked.
+/**
+ * Same as updateFeatureState but returns a structured result including a rejection reason.
+ * Used by /cap:completeness-report and CLI surfaces that want to surface the gate reason.
+ * @param {string} projectRoot
+ * @param {string} featureId
+ * @param {string} newState
+ * @param {string|null} [appPath=null]
+ * @returns {{ ok: boolean, reason: string|null, score: number|null }}
+ */
+function transitionWithReason(projectRoot, featureId, newState, appPath) {
+  // Pre-check the completeness gate so we can provide a reason. updateFeatureState
+  // re-checks it internally for consistency (defense in depth against stale config loads).
+  if (newState === 'shipped') {
+    try {
+      const { checkShipGate } = require('./cap-completeness.cjs');
+      const gate = checkShipGate(featureId, newState, projectRoot);
+      if (!gate.allowed) {
+        return { ok: false, reason: gate.reason, score: gate.score };
+      }
+    } catch (_e) { /* completeness module unavailable — proceed */ }
+  }
+  const ok = updateFeatureState(projectRoot, featureId, newState, appPath);
+  return { ok, reason: ok ? null : 'State transition rejected by feature-map validation (wrong source state, missing AC tested status, or invalid target).', score: null };
 }
 
 // @cap-feature(feature:F-042) setAcStatus — explicit per-AC mutation (AC-3).
@@ -922,6 +962,7 @@ module.exports = {
   serializeFeatureMap,
   addFeature,
   updateFeatureState,
+  transitionWithReason,
   setAcStatus,
   detectDrift,
   formatDriftReport,

@@ -1,7 +1,7 @@
 ---
 name: cap:status
 description: Show project status derived from Feature Map -- feature completion, test coverage, open risks, and next actions.
-argument-hint: "[--features NAME] [--verbose] [--drift]"
+argument-hint: "[--features NAME] [--verbose] [--drift] [--completeness]"
 allowed-tools:
   - Read
   - Bash
@@ -24,6 +24,7 @@ Presents a compact project status dashboard derived from FEATURE-MAP.md, SESSION
 - `--features NAME` -- show status for specific features only
 - `--verbose` -- include per-AC breakdown
 - `--drift` -- show only the status drift report (features whose state is shipped/tested but with pending ACs)
+- `--completeness` -- (F-048 opt-in) show the 4-point Completeness Score per AC for every feature. Requires `.cap/config.json → completenessScore.enabled=true`.
 </objective>
 
 <context>
@@ -41,6 +42,27 @@ Check `$ARGUMENTS` for:
 - `--features NAME` -- if present, store as `feature_filter` (comma-separated)
 - `--verbose` -- if present, set `verbose = true`
 - `--drift` -- if present, jump straight to the drift fast-path below and skip the regular dashboard
+
+## Step 0a: Completeness fast-path (when --completeness is present, F-048)
+
+<!-- @cap-todo(ac:F-048/AC-2) /cap:status --completeness shall show per-feature N/4 scores. -->
+
+```bash
+node -e "
+const comp = require('./cap/bin/lib/cap-completeness.cjs');
+const cfg = comp.loadCompletenessConfig(process.cwd());
+if (!cfg.enabled) {
+  console.error('F-048 (completeness score) is opt-in and not enabled for this project.');
+  console.error('To enable: add { \"completenessScore\": { \"enabled\": true } } to .cap/config.json');
+  process.exit(2);
+}
+const ctx = comp.buildContext(process.cwd());
+const scores = comp.scoreAllFeatures(ctx);
+console.log(comp.formatFeatureBreakdown(scores));
+"
+```
+
+Display the rendered output verbatim, then **stop processing**. Do not run Steps 1-5.
 
 ## Step 0b: Drift fast-path (when --drift is present)
 

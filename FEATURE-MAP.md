@@ -828,18 +828,25 @@
 | AC-5 | pending | Decision document shall justify the breaking change with a measurable benefit (e.g., reduced parser ambiguity, improved AI agent comprehension) before merge |
 | AC-6 | pending | Feature shall remain opt-in until at least 80% of repository code has been migrated, controlled by a config flag in .cap/config.json |
 
-### F-048: Implementation Completeness Score (CAP v3 — Optional) [planned]
+### F-048: Implementation Completeness Score (CAP v3 — Optional) [tested]
 
 **Depends on:** F-001, F-002, F-045
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | A new metric module shall compute per-AC a 4-point completeness score: (a) tag exists in code, (b) test exists referencing the AC, (c) test invokes the tagged code, (d) tagged code is reachable from the public surface |
-| AC-2 | pending | The score shall be exposed via cap status --completeness as a per-feature breakdown showing N/4 for each AC |
-| AC-3 | pending | A feature shall not be allowed to transition to shipped if its average completeness score is below a configurable threshold (default 3.5/4) |
-| AC-4 | pending | The score computation shall be deterministic and run in under 5 seconds for a 100-feature project |
-| AC-5 | pending | A markdown report cap completeness-report shall produce a printable audit suitable for code review attachment |
-| AC-6 | pending | Feature is opt-in via .cap/config.json flag — does not affect projects that have not enabled it |
+| AC-1 | tested | `cap-completeness.cjs:scoreAc()` computes 4 independent signals per AC — T (tag in source), S (tagged test file), I (test statically imports primary via `testReachesFile`), R (primary file in `publicReachable` set from `bin/install.js` + `hooks/*.js`). Sum = score 0..4 |
+| AC-2 | tested | `/cap:status --completeness` calls `formatFeatureBreakdown()` to show per-feature avg and per-AC flag string `TSIR`; routes through `status.md` Step 0a fast-path |
+| AC-3 | tested | `checkShipGate()` reads `shipThreshold` from config and returns `{allowed,reason,score}`. `updateFeatureState()` calls it silently (boolean contract); new `transitionWithReason()` exposes the reason string for UIs |
+| AC-4 | tested | Integration perf test asserts `buildContext() + scoreAllFeatures()` completes in <5s on the real 50+ feature repo. Reachability cached via `importsByFile` map to avoid duplicate import-graph walks |
+| AC-5 | tested | `/cap:completeness` command + `formatCompletenessReport()` emit a PR-ready markdown audit: summary table + per-feature AC table with ✓/· flag column per signal + inline reasons |
+| AC-6 | tested | `loadCompletenessConfig()` reads `.cap/config.json → completenessScore.enabled` (default false). Both `/cap:status --completeness` and `/cap:completeness` exit early with exit code 2 and a how-to-enable message when disabled |
+
+**Files:**
+- `cap/bin/lib/cap-completeness.cjs`
+- `cap/bin/lib/cap-feature-map.cjs` (transitionWithReason + shipped-gate hook)
+- `commands/cap/status.md` (--completeness fast-path)
+- `commands/cap/completeness.md`
+- `tests/cap-completeness.test.cjs`
 
 ### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [shipped]
 
