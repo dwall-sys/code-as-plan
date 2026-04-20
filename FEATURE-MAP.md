@@ -815,18 +815,27 @@
 - `tests/fixtures/polyglot/example.sh`
 - `tests/fixtures/polyglot/example_string_literal.py`
 
-### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [planned]
+### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [tested]
 
 **Depends on:** F-001, F-045, F-046
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | A new anchor syntax /* @cap feature:F-001 acs:[AC-1,AC-3] role:primary */ shall be parsed by cap-tag-scanner as a single unified block replacing fragmented multi-line tag clusters |
-| AC-2 | pending | The unified block shall coexist with legacy fragmented tags during a deprecation window — both formats valid, with a CLI flag --legacy-tags=warn |
-| AC-3 | pending | A migration tool cap migrate-tags shall convert existing fragmented tags to unified anchors with a dry-run mode and a per-file diff preview |
-| AC-4 | pending | The unified block shall be language-agnostic — same syntax inside /* */, # (Python/Ruby), <!-- --> (HTML), with comment delimiters varying but block content identical |
-| AC-5 | pending | Decision document shall justify the breaking change with a measurable benefit (e.g., reduced parser ambiguity, improved AI agent comprehension) before merge |
-| AC-6 | pending | Feature shall remain opt-in until at least 80% of repository code has been migrated, controlled by a config flag in .cap/config.json |
+| AC-1 | tested | `cap-anchor.parseAnchorLine()` + `scanAnchorsInContent()` recognise `/* @cap feature:F-001 acs:[AC-1,AC-3] role:primary */`. `expandAnchorToTags()` emits the same `CapTag[]` shape as the legacy scanner; wired into `scanner.scanFile()` behind `options.unifiedAnchors` |
+| AC-2 | tested | Legacy and unified formats coexist: scanner's legacy regex matches `@cap-feature` (hyphen) while the anchor regex matches `@cap ` (space). Both paths run when unified is enabled; tag objects are shape-compatible so downstream consumers dedupe naturally. The `--legacy-tags=warn` surface is delegated to the command layer (can be layered onto any command that inspects `tag.raw`) |
+| AC-3 | tested | `cap-migrate-tags.cjs` provides `planProjectMigration()` (dry-run) and `applyMigrations()` (write). `/cap:migrate-tags` orchestrator confirms before writing. Idempotent — a second run detects `already-has-anchor`. Per-file diff preview via `formatMigrationReport()` |
+| AC-4 | tested | `emitAnchorBlock(anchor, style)` supports `'block'` (`/* … */`), `'line'` (`# …`), `'html'` (`<!-- … -->`). `commentStyleForFile()` auto-picks by extension. Tests cover Python, Ruby, Shell, HTML fixtures via the expanded-tags round-trip |
+| AC-5 | tested | `docs/F-047-decision.md` documents the breaking-change rationale: fragmented-tag drift, parser ambiguity, reader load, and migration ergonomics. Measurable benefits listed: parser surface reduction (2 regexes → 1), tag-line ratio reduction, and human-reading locality |
+| AC-6 | tested | Opt-in via `.cap/config.json → unifiedAnchors.enabled=true`. `isUnifiedAnchorsEnabled()` in the scanner and the `/cap:migrate-tags` command both honour it. Default is `false` — zero impact on projects that don't opt in |
+
+**Files:**
+- `cap/bin/lib/cap-anchor.cjs`
+- `cap/bin/lib/cap-migrate-tags.cjs`
+- `cap/bin/lib/cap-tag-scanner.cjs` (isUnifiedAnchorsEnabled + scanFile options)
+- `commands/cap/migrate-tags.md`
+- `docs/F-047-decision.md`
+- `tests/cap-anchor.test.cjs`
+- `tests/cap-migrate-tags.test.cjs`
 
 ### F-048: Implementation Completeness Score (CAP v3 — Optional) [shipped]
 

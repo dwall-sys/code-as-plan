@@ -16,6 +16,20 @@ const path = require('node:path');
 // @cap-decision CAP tag types: 2 primary (feature, todo) + 2 optional (risk, decision). Simplified from GSD's 8 types.
 const CAP_TAG_TYPES = ['feature', 'todo', 'risk', 'decision'];
 
+// @cap-feature(feature:F-047) Opt-in config check for unified anchor block parsing.
+// Returns true when .cap/config.json has { unifiedAnchors: { enabled: true } }.
+// Returns false on any error or when the section is absent. Called once per scanDirectory.
+function isUnifiedAnchorsEnabled(projectRoot) {
+  try {
+    const cfgPath = path.join(projectRoot, '.cap', 'config.json');
+    const raw = fs.readFileSync(cfgPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return !!(parsed && parsed.unifiedAnchors && parsed.unifiedAnchors.enabled === true);
+  } catch (_e) {
+    return false;
+  }
+}
+
 // @cap-todo(ref:AC-25) Tag scanner uses native RegExp with dotAll flag for multiline extraction
 // @cap-pattern Tag regex anchors to comment tokens at line start -- identical approach to arc-scanner.cjs
 // @cap-decision F-046 leaves CAP_TAG_RE untouched (AC-5 backward compat). New polylingual extension uses extractTagsWithContext + getCommentStyle for richer per-language detection.
@@ -116,7 +130,9 @@ function extractTags(content, filePath) {
  * @param {string} projectRoot - Absolute path to project root (for relative path computation)
  * @returns {CapTag[]}
  */
-function scanFile(filePath, projectRoot) {
+// @cap-todo(ac:F-047/AC-1) scanFile shall also expand unified @cap anchor blocks when
+// the caller passes { unifiedAnchors: true }. Backward-compatible default (off).
+function scanFile(filePath, projectRoot, options) {
   // @cap-todo(ref:AC-25) Use native RegExp for tag extraction -- no AST parsing
   let content;
   try {
@@ -125,7 +141,13 @@ function scanFile(filePath, projectRoot) {
     return [];
   }
   const relativePath = path.relative(projectRoot, filePath);
-  return extractTags(content, relativePath);
+  const tags = extractTags(content, relativePath);
+  if (options && options.unifiedAnchors) {
+    // Lazy require keeps the module decoupled when the feature is disabled.
+    const anchor = require('./cap-anchor.cjs');
+    tags.push(...anchor.scanAnchorsInContent(content, relativePath));
+  }
+  return tags;
 }
 
 // @cap-api scanDirectory(dirPath, options) -- Recursively scans a directory for @cap-* tags.
@@ -143,6 +165,12 @@ function scanDirectory(dirPath, options = {}) {
   const extensions = options.extensions || SUPPORTED_EXTENSIONS;
   const exclude = options.exclude || DEFAULT_EXCLUDE;
   const projectRoot = options.projectRoot || dirPath;
+  // F-047: honour explicit opt-in via options OR .cap/config.json flag. Config is
+  // read once per scan so the overhead stays constant regardless of file count.
+  const unifiedAnchors =
+    options.unifiedAnchors != null
+      ? !!options.unifiedAnchors
+      : isUnifiedAnchorsEnabled(projectRoot);
   const tags = [];
 
   // @cap-constraint Uses readdirSync (not glob) per project zero-dep constraint
@@ -161,7 +189,7 @@ function scanDirectory(dirPath, options = {}) {
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name);
         if (!extensions.includes(ext)) continue;
-        const fileTags = scanFile(fullPath, projectRoot);
+        const fileTags = scanFile(fullPath, projectRoot, { unifiedAnchors });
         tags.push(...fileTags);
       }
     }
@@ -1512,6 +1540,7 @@ module.exports = {
   SUPPORTED_EXTENSIONS,
   DEFAULT_EXCLUDE,
   LEGACY_TAG_RE,
+  isUnifiedAnchorsEnabled,
   scanFile,
   scanDirectory,
   extractTags,
