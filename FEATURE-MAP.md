@@ -841,7 +841,7 @@
 | AC-5 | pending | A markdown report cap completeness-report shall produce a printable audit suitable for code review attachment |
 | AC-6 | pending | Feature is opt-in via .cap/config.json flag — does not affect projects that have not enabled it |
 
-### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [tested]
+### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [shipped]
 
 **Depends on:** F-001, F-002
 

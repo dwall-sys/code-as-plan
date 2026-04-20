@@ -21,9 +21,13 @@ const CONFIG_FILE = path.join('.cap', 'config.json');
 const CJS_REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 // @cap-todo(ac:F-049/AC-4) ESM `import ... from '...'` (default, named, namespace, and side-effect imports)
+// @cap-risk The `^\s*` anchor guards the common case but does not strip block comments that span
+// multiple lines. A `/* import x from './y' */` block inside multi-line JSDoc above real imports
+// could yield a false positive. Acceptable for a zero-dep regex parser; document limitation.
 const ESM_IMPORT_RE = /^\s*import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
 
 // @cap-todo(ac:F-049/AC-4) ESM re-exports: `export ... from '...'`
+// @cap-risk Same block-comment false-positive surface as ESM_IMPORT_RE above.
 const ESM_REEXPORT_RE = /^\s*export\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
 
 // @cap-todo(ac:F-049/AC-4) Dynamic imports: `import('...')` — static string arg only
@@ -140,6 +144,10 @@ function dirExistsSync(p) {
  * A file with multiple @cap-feature tags is assigned its first listed feature.
  * Mirror files under .claude/ are treated as aliases of their counterparts under cap/
  * (both point to the same feature).
+ *
+ * @cap-todo(ac:F-049/AC-1) First-wins ownership is convenient but drops secondary feature
+ * ownership silently. A future `@cap-feature(secondary:true)` convention could let a file
+ * belong to multiple features without ambiguity; revisit this resolver at that time.
  *
  * @param {CapTag[]} tags - Output of scanner.scanDirectory()
  * @param {string} projectRoot - Absolute path to project root (for normalising tag.file)
