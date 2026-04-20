@@ -330,10 +330,36 @@ describe('loadCompletenessConfig', () => {
     assert.strictEqual(cfg.shipThreshold, 3.5);
   });
 
-  it('ignores malformed JSON', () => {
+  it('ignores malformed JSON and warns unless suppressed', () => {
     fs.writeFileSync(path.join(tmp, '.cap', 'config.json'), 'not json');
-    const cfg = comp.loadCompletenessConfig(tmp);
-    assert.strictEqual(cfg.enabled, false);
+    // Suppress warning in tests (finding #4: distinguish missing vs malformed)
+    const prev = process.env.CAP_SILENT_CONFIG_WARNINGS;
+    process.env.CAP_SILENT_CONFIG_WARNINGS = '1';
+    try {
+      const cfg = comp.loadCompletenessConfig(tmp);
+      assert.strictEqual(cfg.enabled, false);
+    } finally {
+      if (prev === undefined) delete process.env.CAP_SILENT_CONFIG_WARNINGS;
+      else process.env.CAP_SILENT_CONFIG_WARNINGS = prev;
+    }
+  });
+
+  it('emits a warning on malformed JSON when suppressor is unset', () => {
+    fs.writeFileSync(path.join(tmp, '.cap', 'config.json'), 'not json');
+    delete process.env.CAP_SILENT_CONFIG_WARNINGS;
+    const originalWarn = console.warn;
+    let warned = false;
+    // eslint-disable-next-line no-console
+    console.warn = (msg) => {
+      if (typeof msg === 'string' && msg.includes('.cap/config.json')) warned = true;
+    };
+    try {
+      comp.loadCompletenessConfig(tmp);
+    } finally {
+      // eslint-disable-next-line no-console
+      console.warn = originalWarn;
+    }
+    assert.strictEqual(warned, true, 'expected a warning line');
   });
 });
 

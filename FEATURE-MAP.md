@@ -828,7 +828,7 @@
 | AC-5 | pending | Decision document shall justify the breaking change with a measurable benefit (e.g., reduced parser ambiguity, improved AI agent comprehension) before merge |
 | AC-6 | pending | Feature shall remain opt-in until at least 80% of repository code has been migrated, controlled by a config flag in .cap/config.json |
 
-### F-048: Implementation Completeness Score (CAP v3 — Optional) [tested]
+### F-048: Implementation Completeness Score (CAP v3 — Optional) [shipped]
 
 **Depends on:** F-001, F-002, F-045
 

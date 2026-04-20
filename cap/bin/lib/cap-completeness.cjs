@@ -20,6 +20,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const deps = require('./cap-deps.cjs');
 
 const CONFIG_FILE = path.join('.cap', 'config.json');
 
@@ -35,6 +36,8 @@ const TEST_FILE_PATTERNS = [
   /\.spec\.tsx?$/i,
   /^tests?\//, // path starts with tests/ or test/
   /\/tests?\//,
+  /^__tests__\//, // Jest convention
+  /\/__tests__\//,
 ];
 
 /**
@@ -185,7 +188,6 @@ function scoreAc(acRef, ctx) {
  */
 function testReachesFile(startFile, targetFile, ctx, maxDepth) {
   if (startFile === targetFile) return true;
-  const deps = require('./cap-deps.cjs');
   const queue = [{ file: startFile, depth: 0 }];
   const seen = new Set([startFile]);
   while (queue.length > 0) {
@@ -222,7 +224,6 @@ function testReachesFile(startFile, targetFile, ctx, maxDepth) {
  * @returns {Set<string>}
  */
 function computePublicReachable(projectRoot) {
-  const deps = require('./cap-deps.cjs');
   const roots = collectPublicSurfaceFiles(projectRoot);
   const reachable = new Set();
   const queue = [];
@@ -259,16 +260,24 @@ function computePublicReachable(projectRoot) {
  */
 function collectPublicSurfaceFiles(projectRoot) {
   const entries = [];
+  // Defense-in-depth: resolved paths must stay inside projectRoot. A malicious
+  // package.json with bin: "../../evil.js" already owns the process (require
+  // would execute it anyway), but we don't want completeness reachability to
+  // follow pointers outside the project.
+  const rootPrefix = path.resolve(projectRoot) + path.sep;
+  const pushIfInRoot = (p) => {
+    const abs = path.resolve(projectRoot, p);
+    if (abs.startsWith(rootPrefix)) entries.push(abs);
+  };
+
   // package.json bin entries
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
     const bin = pkg.bin;
     if (typeof bin === 'string') {
-      entries.push(path.resolve(projectRoot, bin));
+      pushIfInRoot(bin);
     } else if (bin && typeof bin === 'object') {
-      for (const v of Object.values(bin)) {
-        entries.push(path.resolve(projectRoot, v));
-      }
+      for (const v of Object.values(bin)) pushIfInRoot(v);
     }
   } catch (_e) { /* no package.json */ }
 
@@ -439,8 +448,15 @@ function formatCompletenessReport(scores) {
 function loadCompletenessConfig(cwd) {
   const configPath = path.join(cwd, CONFIG_FILE);
   const cfg = { ...DEFAULT_CONFIG };
+  let raw;
   try {
-    const raw = fs.readFileSync(configPath, 'utf8');
+    raw = fs.readFileSync(configPath, 'utf8');
+  } catch (err) {
+    // ENOENT is normal (no config yet) — stay silent. Other fs errors propagate silently too
+    // because completeness is opt-in and defaults are safe.
+    return cfg;
+  }
+  try {
     const parsed = JSON.parse(raw);
     const section = parsed && parsed.completenessScore;
     if (section && typeof section === 'object') {
@@ -449,8 +465,13 @@ function loadCompletenessConfig(cwd) {
         cfg.shipThreshold = section.shipThreshold;
       }
     }
-  } catch (_e) {
-    // No config or malformed — defaults
+  } catch (err) {
+    // File exists but is malformed JSON — warn once so the user sees that their
+    // opt-in settings are silently ignored. A hook env var suppresses it for CI.
+    if (!process.env.CAP_SILENT_CONFIG_WARNINGS) {
+      // eslint-disable-next-line no-console
+      console.warn(`[cap-completeness] .cap/config.json is not valid JSON (${err.message}); using defaults.`);
+    }
   }
   return cfg;
 }
