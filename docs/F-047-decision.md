@@ -69,6 +69,12 @@ works unchanged.
 - **Language-agnostic body.** The content inside the comment is always
   `@cap key:value key:value …`. Only the comment delimiters vary by language. This
   allows one parser to serve every supported language without special cases.
+- **Space discriminator.** `@cap ` (with trailing space, then a key:value pair) is the
+  unified anchor marker. `@cap-feature`, `@cap-todo`, `@cap-risk`, `@cap-decision` (with
+  hyphen) are the legacy fragmented family. The two formats **never collide** because no
+  legal tag-type name contains whitespace and no legal anchor lacks the space between
+  `@cap` and its first key. This is load-bearing: both regex families run side by side in
+  the scanner, and the space is how each regex rejects the other's input.
 
 ## Consequences
 

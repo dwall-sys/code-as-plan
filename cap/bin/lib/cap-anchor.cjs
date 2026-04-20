@@ -23,7 +23,16 @@
 // Limitations:
 //   - values with `[`, `]`, `,`, or whitespace must not appear unquoted (documented)
 //   - no support for multi-line anchor bodies (block must be single line inside its comment)
+//   - scanAnchorsInContent() reads raw file content, so a string literal containing
+//     `@cap feature:F-XXX` in source (e.g. inside a test fixture) can produce a false
+//     match. Callers needing strict string-literal awareness should wire in F-046's
+//     polyglot string-stripping upstream. KV_TOKEN_RE rejects most accidental text.
 // These are intentional for v1 to keep parsing unambiguous.
+
+// @cap-decision Space discriminator is load-bearing: `@cap ` (with trailing space) is the
+// unified anchor marker, `@cap-` (with hyphen) is the legacy tag family. The two formats
+// never collide because no legal tag name contains whitespace, and no legal anchor lacks
+// the space between `@cap` and the first key. Documented in docs/F-047-decision.md.
 
 // Matches `@cap <rest>` — called on an already-decommented line or the inner content of a
 // block comment. Captures `rest` which is then tokenised into key:value pairs.

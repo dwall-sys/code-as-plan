@@ -815,7 +815,7 @@
 - `tests/fixtures/polyglot/example.sh`
 - `tests/fixtures/polyglot/example_string_literal.py`
 
-### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [tested]
+### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [shipped]
 
 **Depends on:** F-001, F-045, F-046
 

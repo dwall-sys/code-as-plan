@@ -40,7 +40,10 @@ function commentStyleForFile(filePath) {
   if (ext === '.html' || ext === '.htm' || ext === '.xml' || ext === '.vue' || ext === '.md') {
     return 'html';
   }
-  if (ext === '.py' || ext === '.rb' || ext === '.sh' || ext === '.bash' || ext === '.zsh') {
+  if (
+    ext === '.py' || ext === '.rb' || ext === '.sh' || ext === '.bash' || ext === '.zsh' ||
+    ext === '.yml' || ext === '.yaml' || ext === '.toml'
+  ) {
     return 'line';
   }
   // Default: block comment works in JS/TS/Go/Rust/C/C++/Java/SQL/CSS.
@@ -63,8 +66,9 @@ function consolidateGroup(featureId, tags) {
     if (t.type === 'feature') {
       if (t.metadata && t.metadata.primary === true) role = 'primary';
     } else if (t.type === 'todo' && t.metadata && typeof t.metadata.ac === 'string') {
-      // ac format: 'F-XXX/AC-N' or 'AC-N' (resolved against feature)
-      const m = t.metadata.ac.match(/(?:F-\d{3,}\/)?(AC-\d+)/);
+      // ac format: 'F-XXX/AC-N' or 'AC-N' (resolved against feature). Anchor both ends
+      // so a stray 'notAC-12-ish' cannot accidentally match.
+      const m = t.metadata.ac.match(/^(?:F-\d{3,}\/)?(AC-\d+)$/);
       if (m) acs.add(m[1]);
     }
   }
