@@ -320,12 +320,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Doctor shall verify that every required CJS module in cap/bin/lib/*.cjs exists at the expected install path |
-| AC-2 | pending | Doctor shall attempt to require() each module and report any that fail to load (syntax errors, missing dependencies) |
-| AC-3 | pending | Doctor shall report a clear PASS/FAIL summary per module with the specific error reason |
-| AC-4 | pending | Module integrity check shall run automatically as part of /cap:doctor with no additional flags |
-| AC-5 | pending | Module integrity check shall compare installed modules against a manifest of expected modules |
-| AC-6 | pending | Integrity check shall test platform-specific path resolution (Linux vs macOS $HOME expansion, symlinks) |
+| AC-1 | tested | Doctor shall verify that every required CJS module in cap/bin/lib/*.cjs exists at the expected install path |
+| AC-2 | tested | Doctor shall attempt to require() each module and report any that fail to load (syntax errors, missing dependencies) |
+| AC-3 | tested | Doctor shall report a clear PASS/FAIL summary per module with the specific error reason |
+| AC-4 | tested | Module integrity check shall run automatically as part of /cap:doctor with no additional flags |
+| AC-5 | tested | Module integrity check shall compare installed modules against a manifest of expected modules |
+| AC-6 | tested | Integrity check shall test platform-specific path resolution (Linux vs macOS $HOME expansion, symlinks) |
 
 **Files:**
 - `cap/bin/lib/cap-doctor.cjs`
@@ -338,12 +338,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | When a require() call for a CAP module fails, display a specific error naming the missing module and its expected path |
-| AC-2 | pending | Error message shall suggest running `npx code-as-plan@latest --force` as repair command |
-| AC-3 | pending | System shall never silently fall back to manual mode — a missing module must always produce a visible error |
-| AC-4 | pending | System shall offer an automatic self-repair option that re-runs the installer when a missing module is detected |
-| AC-5 | pending | If self-repair succeeds, retry the original operation without requiring the user to re-enter the command |
-| AC-6 | pending | If self-repair fails, exit with a non-zero code and a clear message directing the user to reinstall manually |
+| AC-1 | tested | When a require() call for a CAP module fails, display a specific error naming the missing module and its expected path |
+| AC-2 | tested | Error message shall suggest running `npx code-as-plan@latest --force` as repair command |
+| AC-3 | tested | System shall never silently fall back to manual mode — a missing module must always produce a visible error |
+| AC-4 | tested | System shall offer an automatic self-repair option that re-runs the installer when a missing module is detected |
+| AC-5 | tested | If self-repair succeeds, retry the original operation without requiring the user to re-enter the command |
+| AC-6 | tested | If self-repair fails, exit with a non-zero code and a clear message directing the user to reinstall manually |
 
 **Files:**
 - `cap/bin/lib/cap-loader.cjs`
@@ -356,13 +356,13 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Installer shall remove stale files from previous installs (including GSD-era filenames) before writing new files |
-| AC-2 | pending | Installer shall run a post-install integrity check verifying all expected modules are present and loadable |
-| AC-3 | pending | Installer shall support a --force flag that performs a clean reinstall (delete target directory, reinstall from scratch) |
-| AC-4 | pending | Installer shall handle path changes between versions by mapping old install locations to new ones during upgrade |
-| AC-5 | pending | Installer shall log a summary of files added, removed, and updated during the upgrade process |
-| AC-6 | pending | If post-install verification fails, installer shall exit with a non-zero code and report which modules are missing |
-| AC-7 | pending | Installer shall work cross-platform — resolve $HOME correctly on Linux and macOS, handle symlinks, no hardcoded paths |
+| AC-1 | tested | Installer shall remove stale files from previous installs (including GSD-era filenames) before writing new files |
+| AC-2 | tested | Installer shall run a post-install integrity check verifying all expected modules are present and loadable |
+| AC-3 | tested | Installer shall support a --force flag that performs a clean reinstall (delete target directory, reinstall from scratch) |
+| AC-4 | tested | Installer shall handle path changes between versions by mapping old install locations to new ones during upgrade |
+| AC-5 | tested | Installer shall log a summary of files added, removed, and updated during the upgrade process |
+| AC-6 | tested | If post-install verification fails, installer shall exit with a non-zero code and report which modules are missing |
+| AC-7 | tested | Installer shall work cross-platform — resolve $HOME correctly on Linux and macOS, handle symlinks, no hardcoded paths |
 
 **Files:**
 - `bin/install.js`
@@ -374,24 +374,24 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Every debug cycle starts with a hypothesis defining expected outcome and local verification step before code is changed |
-| AC-2 | pending | Verify-before-deploy gate must pass before any deploy — local test/check proving the fix makes sense |
-| AC-3 | pending | Every deploy is logged in a deploy logbook (.cap/debug/DEPLOY-LOG-{session}.md): hypothesis, changes, expected result, actual result |
-| AC-4 | pending | Debugger shall batch hypotheses — multiple fixes per deploy with individual log markers instead of one deploy per hypothesis |
-| AC-5 | pending | After a failed deploy cycle the agent must read the logbook and shall not re-pursue already-disproven hypotheses |
-| AC-6 | pending | Debug logs inserted into code are tracked in a separate logbook section and cleaned up at end of session |
-| AC-7 | pending | User provides actual result after each deploy (pass/fail + description) — agent waits actively instead of proceeding autonomously |
+| AC-1 | tested | Every debug cycle starts with a hypothesis defining expected outcome and local verification step before code is changed |
+| AC-2 | tested | Verify-before-deploy gate must pass before any deploy — local test/check proving the fix makes sense |
+| AC-3 | tested | Every deploy is logged in a deploy logbook (.cap/debug/DEPLOY-LOG-{session}.md): hypothesis, changes, expected result, actual result |
+| AC-4 | tested | Debugger shall batch hypotheses — multiple fixes per deploy with individual log markers instead of one deploy per hypothesis |
+| AC-5 | tested | After a failed deploy cycle the agent must read the logbook and shall not re-pursue already-disproven hypotheses |
+| AC-6 | tested | Debug logs inserted into code are tracked in a separate logbook section and cleaned up at end of session |
+| AC-7 | tested | User provides actual result after each deploy (pass/fail + description) — agent waits actively instead of proceeding autonomously |
 
 ### F-023: Emoji-Enhanced AC Status and Human Verification Checklist [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | After /cap:prototype, display AC table with emoji status indicators: ✅ tested, 🔨 prototyped, 📋 pending, ⚠️ partial |
-| AC-2 | pending | After /cap:test, display AC table with emoji status indicators |
-| AC-3 | pending | After /cap:test, auto-generate a Human Verification Checklist with emoji categories (🔍 Manual check, 🌐 Browser test, 🔐 Permissions, ⚡ Performance) |
-| AC-4 | pending | Verification checklist items derived from ACs — each AC not fully automatable becomes a checklist item |
-| AC-5 | pending | Checklist formatted as markdown checkboxes (- [ ]) so user can check off items directly |
-| AC-6 | pending | Emoji formatting appears in terminal command output only — FEATURE-MAP.md and other stored files remain emoji-free |
+| AC-1 | tested | After /cap:prototype, display AC table with emoji status indicators: ✅ tested, 🔨 prototyped, 📋 pending, ⚠️ partial |
+| AC-2 | tested | After /cap:test, display AC table with emoji status indicators |
+| AC-3 | tested | After /cap:test, auto-generate a Human Verification Checklist with emoji categories (🔍 Manual check, 🌐 Browser test, 🔐 Permissions, ⚡ Performance) |
+| AC-4 | tested | Verification checklist items derived from ACs — each AC not fully automatable becomes a checklist item |
+| AC-5 | tested | Checklist formatted as markdown checkboxes (- [ ]) so user can check off items directly |
+| AC-6 | tested | Emoji formatting appears in terminal command output only — FEATURE-MAP.md and other stored files remain emoji-free |
 
 ### F-024: Pre-Work Pitfall Research [shipped]
 
@@ -399,14 +399,14 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Before /cap:prototype, detect which technologies/services are involved (from package.json, ACs, code context) |
-| AC-2 | pending | For detected technologies, automatically research known pitfalls via Context7 docs and web search |
-| AC-3 | pending | Present research as a Pitfall Briefing to the user — known problems, common mistakes, workarounds |
-| AC-4 | pending | Briefing shall be prioritized: critical pitfalls (causing hours of debugging) at top, nice-to-know at bottom |
-| AC-5 | pending | Prototyper/debugger agent receives the briefing as context so it avoids known pitfalls when writing code |
-| AC-6 | pending | Pitfall briefing persisted in .cap/pitfalls/{feature-id}.md for later reference |
-| AC-7 | pending | User can skip research with --skip-research flag when they already know the technology well |
-| AC-8 | pending | /cap:debug shall also trigger pitfall research for the technologies involved in the bug, surfacing known issues before investigation begins |
+| AC-1 | tested | Before /cap:prototype, detect which technologies/services are involved (from package.json, ACs, code context) |
+| AC-2 | tested | For detected technologies, automatically research known pitfalls via Context7 docs and web search |
+| AC-3 | tested | Present research as a Pitfall Briefing to the user — known problems, common mistakes, workarounds |
+| AC-4 | tested | Briefing shall be prioritized: critical pitfalls (causing hours of debugging) at top, nice-to-know at bottom |
+| AC-5 | tested | Prototyper/debugger agent receives the briefing as context so it avoids known pitfalls when writing code |
+| AC-6 | tested | Pitfall briefing persisted in .cap/pitfalls/{feature-id}.md for later reference |
+| AC-7 | tested | User can skip research with --skip-research flag when they already know the technology well |
+| AC-8 | tested | /cap:debug shall also trigger pitfall research for the technologies involved in the bug, surfacing known issues before investigation begins |
 
 ### F-025: Implement Session Extract CLI [shipped]
 
@@ -414,14 +414,14 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Provide a `cap extract list` subcommand that displays all Claude sessions with date, file size, turn count, and a short preview of the first user message |
-| AC-2 | pending | Provide a `cap extract stats <session#>` subcommand that outputs token counts (input/output), tool usage distribution by tool name, session duration, and total turn count as structured Markdown |
-| AC-3 | pending | Provide a `cap extract <session#> conversation` subcommand that outputs user/assistant dialogue turns as Markdown, excluding tool calls and system messages |
-| AC-4 | pending | Provide a `cap extract <session#> code` subcommand that extracts all file writes and edits grouped by file path with operation type |
-| AC-5 | pending | Provide a `cap extract <session#> summary` subcommand that outputs a structured Markdown summary containing decisions, files changed, features touched, and key outcomes |
-| AC-6 | pending | Implement core extraction logic in `cap/bin/lib/cap-session-extract.cjs` by migrating existing `.claude/hooks/session-extract.js` to CJS with zero external dependencies |
-| AC-7 | pending | Register `extract` as a subcommand of `npx code-as-plan` with standard help text and error handling |
-| AC-8 | pending | Support session references by both numeric index (most recent = 1) and date-based lookup |
+| AC-1 | tested | Provide a `cap extract list` subcommand that displays all Claude sessions with date, file size, turn count, and a short preview of the first user message |
+| AC-2 | tested | Provide a `cap extract stats <session#>` subcommand that outputs token counts (input/output), tool usage distribution by tool name, session duration, and total turn count as structured Markdown |
+| AC-3 | tested | Provide a `cap extract <session#> conversation` subcommand that outputs user/assistant dialogue turns as Markdown, excluding tool calls and system messages |
+| AC-4 | tested | Provide a `cap extract <session#> code` subcommand that extracts all file writes and edits grouped by file path with operation type |
+| AC-5 | tested | Provide a `cap extract <session#> summary` subcommand that outputs a structured Markdown summary containing decisions, files changed, features touched, and key outcomes |
+| AC-6 | tested | Implement core extraction logic in `cap/bin/lib/cap-session-extract.cjs` by migrating existing `.claude/hooks/session-extract.js` to CJS with zero external dependencies |
+| AC-7 | tested | Register `extract` as a subcommand of `npx code-as-plan` with standard help text and error handling |
+| AC-8 | tested | Support session references by both numeric index (most recent = 1) and date-based lookup |
 
 **Files:**
 - `cap/bin/lib/cap-session-extract.cjs`
@@ -434,73 +434,73 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Provide a `cap extract decisions --all` subcommand that scans all sessions and outputs decisions with session date and context as structured Markdown |
-| AC-2 | pending | Provide a `cap extract hotspots` subcommand that ranks files by edit frequency across all sessions |
-| AC-3 | pending | Provide a `cap extract timeline` subcommand that outputs a chronological Markdown view of work across sessions |
-| AC-4 | pending | Provide a `cap extract cost` subcommand that aggregates token usage across sessions with configurable per-token rates |
-| AC-5 | pending | All cross-session subcommands shall support a `--since <date>` flag to filter sessions by date range |
-| AC-6 | pending | Reuse single-session parsing logic from F-025 without duplicating extraction code |
+| AC-1 | tested | Provide a `cap extract decisions --all` subcommand that scans all sessions and outputs decisions with session date and context as structured Markdown |
+| AC-2 | tested | Provide a `cap extract hotspots` subcommand that ranks files by edit frequency across all sessions |
+| AC-3 | tested | Provide a `cap extract timeline` subcommand that outputs a chronological Markdown view of work across sessions |
+| AC-4 | tested | Provide a `cap extract cost` subcommand that aggregates token usage across sessions with configurable per-token rates |
+| AC-5 | tested | All cross-session subcommands shall support a `--since <date>` flag to filter sessions by date range |
+| AC-6 | tested | Reuse single-session parsing logic from F-025 without duplicating extraction code |
 
 **Files:**
 - `cap/bin/lib/cap-session-extract.cjs`
 - `.claude/cap/bin/lib/cap-session-extract.cjs`
 
-### F-027: Build Memory Accumulation Engine [planned]
+### F-027: Build Memory Accumulation Engine [tested]
 
 **Depends on:** F-025, F-026
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Read parsed session data from F-025 (parseSession, extractTextContent, extractToolUses) and F-026 (extractDecisionsAll, extractHotspots) as sole input source |
-| AC-2 | pending | Detect four memory categories from session data: decisions, pitfalls, patterns, and hotspots |
-| AC-3 | pending | Enforce cross-session noise threshold — file must be edited in at least 2 separate sessions before qualifying as @cap-history hotspot |
-| AC-4 | pending | Only emit pitfall entries from debug sessions or from explicit @cap-decision tags containing failure/workaround context |
-| AC-5 | pending | Only emit pattern entries when the same approach has been successfully applied in at least 2 sessions |
-| AC-6 | pending | Implement relevance-based aging — annotations without associated file edits within N sessions (default 5) shall be marked stale and queued for removal |
-| AC-7 | pending | Support pinned:true attribute on @cap-pitfall entries that exempts them from aging and expiry |
-| AC-8 | pending | Output structured memory entry objects (category, file, content, metadata) consumable by F-028 and F-029 |
+| AC-1 | tested | Read parsed session data from F-025 (parseSession, extractTextContent, extractToolUses) and F-026 (extractDecisionsAll, extractHotspots) as sole input source |
+| AC-2 | tested | Detect four memory categories from session data: decisions, pitfalls, patterns, and hotspots |
+| AC-3 | tested | Enforce cross-session noise threshold — file must be edited in at least 2 separate sessions before qualifying as @cap-history hotspot |
+| AC-4 | tested | Only emit pitfall entries from debug sessions or from explicit @cap-decision tags containing failure/workaround context |
+| AC-5 | tested | Only emit pattern entries when the same approach has been successfully applied in at least 2 sessions |
+| AC-6 | tested | Implement relevance-based aging — annotations without associated file edits within N sessions (default 5) shall be marked stale and queued for removal |
+| AC-7 | tested | Support pinned:true attribute on @cap-pitfall entries that exempts them from aging and expiry |
+| AC-8 | tested | Output structured memory entry objects (category, file, content, metadata) consumable by F-028 and F-029 |
 
 **Files:**
 - `cap/bin/lib/cap-memory-engine.cjs`
 - `.claude/cap/bin/lib/cap-memory-engine.cjs`
 
-### F-028: Implement Code Annotation Writer [planned]
+### F-028: Implement Code Annotation Writer [tested]
 
 **Depends on:** F-027, F-001
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Insert @cap-history, @cap-pitfall, and @cap-pattern annotations into source files at file-top block alongside existing @cap-feature tags |
-| AC-2 | pending | Detect correct comment syntax for target file based on extension (// for JS/TS/Go/Rust, # for Python/Ruby/Shell, -- for SQL/Lua) |
-| AC-3 | pending | Update existing annotations in-place when metadata changes without creating duplicates |
-| AC-4 | pending | Remove annotations marked as stale by the aging logic in F-027 |
-| AC-5 | pending | Format annotations with parenthesized metadata matching existing tag conventions — e.g., @cap-history(sessions:3, edits:8, since:2026-03-15) |
-| AC-6 | pending | Be parseable by existing tag scanner (F-001) without modifications to scanner regex |
-| AC-7 | pending | Support dry-run mode that reports changes without writing to disk |
+| AC-1 | tested | Insert @cap-history, @cap-pitfall, and @cap-pattern annotations into source files at file-top block alongside existing @cap-feature tags |
+| AC-2 | tested | Detect correct comment syntax for target file based on extension (// for JS/TS/Go/Rust, # for Python/Ruby/Shell, -- for SQL/Lua) |
+| AC-3 | tested | Update existing annotations in-place when metadata changes without creating duplicates |
+| AC-4 | tested | Remove annotations marked as stale by the aging logic in F-027 |
+| AC-5 | tested | Format annotations with parenthesized metadata matching existing tag conventions — e.g., @cap-history(sessions:3, edits:8, since:2026-03-15) |
+| AC-6 | tested | Be parseable by existing tag scanner (F-001) without modifications to scanner regex |
+| AC-7 | tested | Support dry-run mode that reports changes without writing to disk |
 
 **Files:**
 - `cap/bin/lib/cap-annotation-writer.cjs`
 - `.claude/cap/bin/lib/cap-annotation-writer.cjs`
 
-### F-029: Manage Cross-File Memory Directory [planned]
+### F-029: Manage Cross-File Memory Directory [tested]
 
 **Depends on:** F-027
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Write aggregated memory entries to .cap/memory/ as four markdown files: decisions.md, hotspots.md, patterns.md, pitfalls.md |
-| AC-2 | pending | Auto-generate from accumulated session data — manual edits outside pinned entries are overwritten on regeneration |
-| AC-3 | pending | Each entry shall include source session date, related files, and human-readable summary |
-| AC-4 | pending | hotspots.md shall rank files by cross-session edit frequency with session count and date range |
-| AC-5 | pending | Code annotations written by F-028 shall include cross-reference link to relevant memory file section |
-| AC-6 | pending | Generate stable anchor IDs for each entry so cross-reference links remain valid across regenerations |
-| AC-7 | pending | .cap/memory/ directory shall be git-committable (not gitignored) so project memory persists across clones |
+| AC-1 | tested | Write aggregated memory entries to .cap/memory/ as four markdown files: decisions.md, hotspots.md, patterns.md, pitfalls.md |
+| AC-2 | tested | Auto-generate from accumulated session data — manual edits outside pinned entries are overwritten on regeneration |
+| AC-3 | tested | Each entry shall include source session date, related files, and human-readable summary |
+| AC-4 | tested | hotspots.md shall rank files by cross-session edit frequency with session count and date range |
+| AC-5 | tested | Code annotations written by F-028 shall include cross-reference link to relevant memory file section |
+| AC-6 | tested | Generate stable anchor IDs for each entry so cross-reference links remain valid across regenerations |
+| AC-7 | tested | .cap/memory/ directory shall be git-committable (not gitignored) so project memory persists across clones |
 
 **Files:**
 - `cap/bin/lib/cap-memory-dir.cjs`
 - `.claude/cap/bin/lib/cap-memory-dir.cjs`
 
-### F-030: Wire Memory Automation Hook and Command [planned]
+### F-030: Wire Memory Automation Hook and Command [prototyped]
 
 **Depends on:** F-027, F-028, F-029, F-009
 
@@ -526,13 +526,13 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Persist each brainstorm session as a named thread in .cap/memory/threads/ with unique thread ID, timestamp, and parent thread reference (if branched) |
-| AC-2 | pending | Capture full discovery context per thread: problem statement, solution shape, boundary decisions, and resulting Feature Map entries (by F-ID) |
-| AC-3 | pending | Detect when a brainstorm session revisits a topic covered by an existing thread by comparing problem-space keywords and referenced feature IDs |
-| AC-4 | pending | Support thread branching — when a brainstorm diverges from an earlier thread, reference parent thread ID and divergence point |
-| AC-5 | pending | Store thread metadata in .cap/memory/thread-index.json mapping thread IDs to feature IDs, timestamps, and branch relationships |
-| AC-6 | pending | Thread data shall be git-committable (not gitignored) so conversation history persists across clones and team members |
-| AC-7 | pending | cap-brainstormer agent shall automatically check thread index at session start and surface relevant prior threads before beginning discovery |
+| AC-1 | tested | Persist each brainstorm session as a named thread in .cap/memory/threads/ with unique thread ID, timestamp, and parent thread reference (if branched) |
+| AC-2 | tested | Capture full discovery context per thread: problem statement, solution shape, boundary decisions, and resulting Feature Map entries (by F-ID) |
+| AC-3 | tested | Detect when a brainstorm session revisits a topic covered by an existing thread by comparing problem-space keywords and referenced feature IDs |
+| AC-4 | tested | Support thread branching — when a brainstorm diverges from an earlier thread, reference parent thread ID and divergence point |
+| AC-5 | tested | Store thread metadata in .cap/memory/thread-index.json mapping thread IDs to feature IDs, timestamps, and branch relationships |
+| AC-6 | tested | Thread data shall be git-committable (not gitignored) so conversation history persists across clones and team members |
+| AC-7 | tested | cap-brainstormer agent shall automatically check thread index at session start and surface relevant prior threads before beginning discovery |
 
 **Files:**
 - `cap/bin/lib/cap-thread-tracker.cjs`
@@ -545,13 +545,13 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Present side-by-side comparison of previous thread conclusions versus new session direction when returning thread detected |
-| AC-2 | pending | Propose one of four reconnection strategies: merge (combine threads), supersede (new replaces old), branch (both coexist), or resume (continue where left off) |
-| AC-3 | pending | User shall explicitly approve or reject each reconnection proposal before any Feature Map changes are made |
-| AC-4 | pending | When merge approved, produce unified AC set combining non-conflicting criteria and flagging conflicts for manual resolution |
-| AC-5 | pending | When supersede approved, mark old thread as archived and update Feature Map entries that referenced old thread ACs |
-| AC-6 | pending | Detect AC-level conflicts between threads — contradictory acceptance criteria from different brainstorm sessions |
-| AC-7 | pending | Log synthesis results in .cap/memory/threads/ with resolution record documenting what was merged, split, or discarded and why |
+| AC-1 | tested | Present side-by-side comparison of previous thread conclusions versus new session direction when returning thread detected |
+| AC-2 | tested | Propose one of four reconnection strategies: merge (combine threads), supersede (new replaces old), branch (both coexist), or resume (continue where left off) |
+| AC-3 | tested | User shall explicitly approve or reject each reconnection proposal before any Feature Map changes are made |
+| AC-4 | tested | When merge approved, produce unified AC set combining non-conflicting criteria and flagging conflicts for manual resolution |
+| AC-5 | tested | When supersede approved, mark old thread as archived and update Feature Map entries that referenced old thread ACs |
+| AC-6 | tested | Detect AC-level conflicts between threads — contradictory acceptance criteria from different brainstorm sessions |
+| AC-7 | tested | Log synthesis results in .cap/memory/threads/ with resolution record documenting what was merged, split, or discarded and why |
 
 **Files:**
 - `cap/bin/lib/cap-thread-synthesis.cjs`
@@ -563,51 +563,51 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Detect overlap between proposed feature and existing Feature Map entries by comparing AC descriptions, dependency chains, and referenced file paths |
-| AC-2 | pending | Run overlap detection automatically during /cap:brainstorm before new Feature Map entries are proposed to user |
-| AC-3 | pending | Present structured impact report: overlapping ACs with similarity reasoning, affected dependency chains, implementation file conflicts |
-| AC-4 | pending | Trace full dependency chains — if A depends on B depends on C, changing B ACs shall surface impact on both A and C |
-| AC-5 | pending | Propose concrete resolutions: merge ACs into existing feature, split into separate features, adjust dependency ordering, or flag as intentional duplication |
-| AC-6 | pending | All proposals shall be advisory only — no Feature Map modifications, dependency reordering, or AC adjustments without explicit user approval |
-| AC-7 | pending | Persist impact analysis results in .cap/memory/impact/{feature-id}.md for audit trail and future reference |
-| AC-8 | pending | Detect circular dependency risks when new features are proposed and warn before Feature Map entries are written |
+| AC-1 | tested | Detect overlap between proposed feature and existing Feature Map entries by comparing AC descriptions, dependency chains, and referenced file paths |
+| AC-2 | tested | Run overlap detection automatically during /cap:brainstorm before new Feature Map entries are proposed to user |
+| AC-3 | tested | Present structured impact report: overlapping ACs with similarity reasoning, affected dependency chains, implementation file conflicts |
+| AC-4 | tested | Trace full dependency chains — if A depends on B depends on C, changing B ACs shall surface impact on both A and C |
+| AC-5 | tested | Propose concrete resolutions: merge ACs into existing feature, split into separate features, adjust dependency ordering, or flag as intentional duplication |
+| AC-6 | tested | All proposals shall be advisory only — no Feature Map modifications, dependency reordering, or AC adjustments without explicit user approval |
+| AC-7 | tested | Persist impact analysis results in .cap/memory/impact/{feature-id}.md for audit trail and future reference |
+| AC-8 | tested | Detect circular dependency risks when new features are proposed and warn before Feature Map entries are written |
 
 **Files:**
 - `cap/bin/lib/cap-impact-analysis.cjs`
 - `.claude/cap/bin/lib/cap-impact-analysis.cjs`
 
-### F-034: Upgrade Memory to Connected Graph Structure [planned]
+### F-034: Upgrade Memory to Connected Graph Structure [tested]
 
 **Depends on:** F-027, F-031, F-033
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Maintain memory graph in .cap/memory/graph.json connecting features, threads, decisions, pitfalls, and patterns as typed nodes with labeled edges |
-| AC-2 | pending | Support edge types: depends_on, supersedes, conflicts_with, branched_from, informed_by, relates_to |
-| AC-3 | pending | Graph queryable by node type and traversal depth — e.g. show all decisions that informed F-005 within 2 hops |
-| AC-4 | pending | Existing flat memory files from F-029 (decisions.md, hotspots.md, patterns.md, pitfalls.md) remain as human-readable views generated from graph |
-| AC-5 | pending | Support temporal queries — what changed between session X and session Y via timestamps on all nodes and edges |
-| AC-6 | pending | When node marked stale by F-027 aging logic, preserve edges as inactive so historical context is not lost |
-| AC-7 | pending | Graph incrementally updatable — adding new session shall not require full graph reconstruction |
-| AC-8 | pending | Graph data git-committable and merge-friendly — sorted keys, one-entry-per-line JSON to minimize merge conflicts |
+| AC-1 | tested | Maintain memory graph in .cap/memory/graph.json connecting features, threads, decisions, pitfalls, and patterns as typed nodes with labeled edges |
+| AC-2 | tested | Support edge types: depends_on, supersedes, conflicts_with, branched_from, informed_by, relates_to |
+| AC-3 | tested | Graph queryable by node type and traversal depth — e.g. show all decisions that informed F-005 within 2 hops |
+| AC-4 | tested | Existing flat memory files from F-029 (decisions.md, hotspots.md, patterns.md, pitfalls.md) remain as human-readable views generated from graph |
+| AC-5 | tested | Support temporal queries — what changed between session X and session Y via timestamps on all nodes and edges |
+| AC-6 | tested | When node marked stale by F-027 aging logic, preserve edges as inactive so historical context is not lost |
+| AC-7 | tested | Graph incrementally updatable — adding new session shall not require full graph reconstruction |
+| AC-8 | tested | Graph data git-committable and merge-friendly — sorted keys, one-entry-per-line JSON to minimize merge conflicts |
 
 **Files:**
 - `.claude/cap/bin/lib/cap-memory-graph.cjs`
 - `cap/bin/lib/cap-memory-graph.cjs`
 
-### F-035: Detect In-Session Topic Divergence During Brainstorm [planned]
+### F-035: Detect In-Session Topic Divergence During Brainstorm [tested]
 
 **Depends on:** F-031, F-032
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | During an active brainstorm, compare each new user message against the current thread keywords and detect when topic similarity drops below a configurable threshold (default: 0.15 overlap ratio) |
-| AC-2 | pending | When divergence detected, proactively ask the user: create a branch thread for the new topic, stay on the current topic, or replace the current thread direction |
-| AC-3 | pending | If branch chosen, automatically call branchThread() with the divergence point set to the last message before the topic shift |
-| AC-4 | pending | Track topic evolution within a session by maintaining a running keyword set that updates with each user message — detect gradual drift not just sudden jumps |
-| AC-5 | pending | After branch creation, continue the brainstorm on the new branch thread while preserving the parent thread state as-is |
-| AC-6 | pending | At brainstorm end, persist all threads (parent + branches) and update the thread index with branch relationships |
-| AC-7 | pending | Divergence detection shall not interrupt the conversation flow — present as a brief inline suggestion, not a blocking modal |
+| AC-1 | tested | During an active brainstorm, compare each new user message against the current thread keywords and detect when topic similarity drops below a configurable threshold (default: 0.15 overlap ratio) |
+| AC-2 | tested | When divergence detected, proactively ask the user: create a branch thread for the new topic, stay on the current topic, or replace the current thread direction |
+| AC-3 | tested | If branch chosen, automatically call branchThread() with the divergence point set to the last message before the topic shift |
+| AC-4 | tested | Track topic evolution within a session by maintaining a running keyword set that updates with each user message — detect gradual drift not just sudden jumps |
+| AC-5 | tested | After branch creation, continue the brainstorm on the new branch thread while preserving the parent thread state as-is |
+| AC-6 | tested | At brainstorm end, persist all threads (parent + branches) and update the thread index with branch relationships |
+| AC-7 | tested | Divergence detection shall not interrupt the conversation flow — present as a brief inline suggestion, not a blocking modal |
 
 **Files:**
 - `.claude/cap/bin/lib/cap-divergence-detector.cjs`
@@ -619,14 +619,14 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | The module cap-affinity-engine.cjs shall compute a composite affinity score (0.0-1.0) between any two thread nodes in the memory graph by combining up to 8 weighted signal scores |
-| AC-2 | pending | The engine shall support 8 named signals: feature-id-overlap, shared-files, temporal-proximity, causal-chains (realtime); concept-overlap, problem-space-similarity, shared-decisions-deep, transitive-connections (post-session) |
-| AC-3 | pending | Each signal shall return an independent score (0.0-1.0) and a human-readable reason string explaining what drove the score |
-| AC-4 | pending | Signal weights shall be configurable via .cap/config.json under the key affinityWeights with sensible defaults summing to 1.0 |
-| AC-5 | pending | The engine shall classify composite scores into four bands: urgent (>=0.90), notify (0.75-0.89), silent (0.40-0.74), discard (<0.40) — band thresholds configurable via .cap/config.json |
-| AC-6 | pending | Scores in the discard band (<0.40) shall not be persisted to graph.json — all other bands shall be stored as weighted edges with type affinity |
-| AC-7 | pending | The engine shall be a pure logic module with no direct I/O — affinity computation functions take graph data as input and return structured results |
-| AC-8 | pending | The full 8-signal scoring for a single thread pair shall complete within 200ms on a project with up to 100 thread nodes |
+| AC-1 | tested | The module cap-affinity-engine.cjs shall compute a composite affinity score (0.0-1.0) between any two thread nodes in the memory graph by combining up to 8 weighted signal scores |
+| AC-2 | tested | The engine shall support 8 named signals: feature-id-overlap, shared-files, temporal-proximity, causal-chains (realtime); concept-overlap, problem-space-similarity, shared-decisions-deep, transitive-connections (post-session) |
+| AC-3 | tested | Each signal shall return an independent score (0.0-1.0) and a human-readable reason string explaining what drove the score |
+| AC-4 | tested | Signal weights shall be configurable via .cap/config.json under the key affinityWeights with sensible defaults summing to 1.0 |
+| AC-5 | tested | The engine shall classify composite scores into four bands: urgent (>=0.90), notify (0.75-0.89), silent (0.40-0.74), discard (<0.40) — band thresholds configurable via .cap/config.json |
+| AC-6 | tested | Scores in the discard band (<0.40) shall not be persisted to graph.json — all other bands shall be stored as weighted edges with type affinity |
+| AC-7 | tested | The engine shall be a pure logic module with no direct I/O — affinity computation functions take graph data as input and return structured results |
+| AC-8 | tested | The full 8-signal scoring for a single thread pair shall complete within 200ms on a project with up to 100 thread nodes |
 
 **Files:**
 - `cap/bin/lib/cap-affinity-engine.cjs`
@@ -637,14 +637,14 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Stage 1 shall compute TF-IDF cosine similarity (weight 0.5) between thread description texts using term-frequency vectors built from thread keywords and AC descriptions |
-| AC-2 | pending | Stage 1 shall compute character N-Gram overlap (weight 0.2) using trigrams to catch partial word matches and typo-resilient similarity |
-| AC-3 | pending | Stage 1 shall compute Jaccard keyword similarity (weight 0.1) over extracted keyword sets from thread metadata |
-| AC-4 | pending | Stage 2 shall maintain an embedded seed taxonomy of 20-30 universal software concepts (e.g., authentication, caching, persistence, validation, routing) as a static array in the module — no external config file |
-| AC-5 | pending | Stage 2 shall build a co-occurrence matrix that auto-learns concept associations from observed thread data and overrides seed weights when sufficient data exists (>=5 co-occurrences) |
-| AC-6 | pending | Stage 2 shall compute concept vector similarity (weight 0.2) by projecting threads into the concept space and measuring cosine distance |
-| AC-7 | pending | Stage 3 shall propagate affinity scores through the memory graph using iterative relaxation (3-5 iterations, damping factor 0.7) to discover transitive connections |
-| AC-8 | pending | The pipeline shall be implemented as cap-semantic-pipeline.cjs, a pure logic module with no I/O — all functions take text/graph data as input and return numeric scores |
+| AC-1 | tested | Stage 1 shall compute TF-IDF cosine similarity (weight 0.5) between thread description texts using term-frequency vectors built from thread keywords and AC descriptions |
+| AC-2 | tested | Stage 1 shall compute character N-Gram overlap (weight 0.2) using trigrams to catch partial word matches and typo-resilient similarity |
+| AC-3 | tested | Stage 1 shall compute Jaccard keyword similarity (weight 0.1) over extracted keyword sets from thread metadata |
+| AC-4 | tested | Stage 2 shall maintain an embedded seed taxonomy of 20-30 universal software concepts (e.g., authentication, caching, persistence, validation, routing) as a static array in the module — no external config file |
+| AC-5 | tested | Stage 2 shall build a co-occurrence matrix that auto-learns concept associations from observed thread data and overrides seed weights when sufficient data exists (>=5 co-occurrences) |
+| AC-6 | tested | Stage 2 shall compute concept vector similarity (weight 0.2) by projecting threads into the concept space and measuring cosine distance |
+| AC-7 | tested | Stage 3 shall propagate affinity scores through the memory graph using iterative relaxation (3-5 iterations, damping factor 0.7) to discover transitive connections |
+| AC-8 | tested | The pipeline shall be implemented as cap-semantic-pipeline.cjs, a pure logic module with no I/O — all functions take text/graph data as input and return numeric scores |
 
 **Files:**
 - `cap/bin/lib/cap-semantic-pipeline.cjs`
@@ -655,14 +655,14 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | The module cap-cluster-detect.cjs shall perform single-linkage clustering over thread nodes using affinity scores from F-036 as the distance metric, with a configurable linkage threshold (default: 0.40) |
-| AC-2 | pending | Each detected cluster shall receive an auto-generated dynamic label composed of the top 2-3 weighted concepts from the cluster members — labels are ephemeral and recalculated on each run |
-| AC-3 | pending | Divergence-based decay shall be computed post-session using three drift metrics: file-drift (changed files no longer overlap), keyword-drift (thread keywords diverged), and cluster-drift (member affinity scores dropped) |
-| AC-4 | pending | Decay shall reduce affinity edge weights in graph.json but never delete nodes — dormant nodes (all edges below silent threshold) shall remain in the graph with a dormant:true flag |
-| AC-5 | pending | Dormant nodes shall automatically reactivate when a new session produces an affinity score above the silent threshold (>=0.40) with the dormant node |
-| AC-6 | pending | There shall be no time-based decay — only measured divergence (file-drift, keyword-drift, cluster-drift) reduces affinity scores |
-| AC-7 | pending | Cluster membership shall be stored as a computed property on thread nodes in graph.json with cluster ID and membership timestamp |
-| AC-8 | pending | Clustering shall complete within 500ms for a graph with up to 200 nodes and 1000 edges |
+| AC-1 | tested | The module cap-cluster-detect.cjs shall perform single-linkage clustering over thread nodes using affinity scores from F-036 as the distance metric, with a configurable linkage threshold (default: 0.40) |
+| AC-2 | tested | Each detected cluster shall receive an auto-generated dynamic label composed of the top 2-3 weighted concepts from the cluster members — labels are ephemeral and recalculated on each run |
+| AC-3 | tested | Divergence-based decay shall be computed post-session using three drift metrics: file-drift (changed files no longer overlap), keyword-drift (thread keywords diverged), and cluster-drift (member affinity scores dropped) |
+| AC-4 | tested | Decay shall reduce affinity edge weights in graph.json but never delete nodes — dormant nodes (all edges below silent threshold) shall remain in the graph with a dormant:true flag |
+| AC-5 | tested | Dormant nodes shall automatically reactivate when a new session produces an affinity score above the silent threshold (>=0.40) with the dormant node |
+| AC-6 | tested | There shall be no time-based decay — only measured divergence (file-drift, keyword-drift, cluster-drift) reduces affinity scores |
+| AC-7 | tested | Cluster membership shall be stored as a computed property on thread nodes in graph.json with cluster ID and membership timestamp |
+| AC-8 | tested | Clustering shall complete within 500ms for a graph with up to 200 nodes and 1000 edges |
 
 **Files:**
 - `cap/bin/lib/cap-cluster-detect.cjs`
@@ -673,13 +673,13 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | During an active session, the 4 realtime signals (feature-id-overlap, shared-files, temporal-proximity, causal-chains) shall be evaluated against all existing threads whenever the active thread context changes |
-| AC-2 | pending | Realtime evaluation of all 4 signals against the full thread index shall complete within 200ms to avoid perceptible session lag |
-| AC-3 | pending | Threads scoring in the urgent band (>=0.90) shall be surfaced as a full context block containing thread name, strongest signal with reasoning, and a load-context offer |
-| AC-4 | pending | Threads scoring in the notify band (0.75-0.89) shall be surfaced as a compact single-line notification with thread name and the single strongest signal |
-| AC-5 | pending | Threads scoring in the silent band (0.40-0.74) shall not produce any visible output — they are only queryable via /cap:status or explicit command |
-| AC-6 | pending | The realtime detector shall integrate with cap-brainstormer at session start and with cap-thread-tracker when thread context is updated mid-session |
-| AC-7 | pending | Realtime affinity results shall be cached in SESSION.json under the key realtimeAffinity so they persist across agent hand-offs within the same session |
+| AC-1 | tested | During an active session, the 4 realtime signals (feature-id-overlap, shared-files, temporal-proximity, causal-chains) shall be evaluated against all existing threads whenever the active thread context changes |
+| AC-2 | tested | Realtime evaluation of all 4 signals against the full thread index shall complete within 200ms to avoid perceptible session lag |
+| AC-3 | tested | Threads scoring in the urgent band (>=0.90) shall be surfaced as a full context block containing thread name, strongest signal with reasoning, and a load-context offer |
+| AC-4 | tested | Threads scoring in the notify band (0.75-0.89) shall be surfaced as a compact single-line notification with thread name and the single strongest signal |
+| AC-5 | tested | Threads scoring in the silent band (0.40-0.74) shall not produce any visible output — they are only queryable via /cap:status or explicit command |
+| AC-6 | tested | The realtime detector shall integrate with cap-brainstormer at session start and with cap-thread-tracker when thread context is updated mid-session |
+| AC-7 | tested | Realtime affinity results shall be cached in SESSION.json under the key realtimeAffinity so they persist across agent hand-offs within the same session |
 
 **Files:**
 - `cap/bin/lib/cap-realtime-affinity.cjs`
@@ -690,13 +690,13 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | /cap:cluster command shall display all detected clusters with their auto-generated labels, member thread names, and intra-cluster affinity scores |
-| AC-2 | pending | /cap:cluster {cluster-label} shall display detailed view of a single cluster: all member threads, their pairwise affinity scores, shared concepts, and drift status |
-| AC-3 | pending | /cap:status shall be extended with a Neural Memory section showing: active cluster count, dormant node count, highest-affinity thread pair, and last clustering timestamp |
-| AC-4 | pending | /cap:start shall passively check realtime affinity and surface urgent/notify threads relevant to the selected feature before session work begins |
-| AC-5 | pending | /cap:brainstorm shall passively check thread affinity at session start and present relevant prior threads (notify band and above) before beginning discovery questions |
-| AC-6 | pending | The /cap:cluster command markdown shall be added to commands/cap/ following existing command file conventions (YAML frontmatter, structured sections) |
-| AC-7 | pending | All cluster display output shall use the existing CAP status formatting conventions (markdown tables, consistent headers) for visual consistency |
+| AC-1 | tested | /cap:cluster command shall display all detected clusters with their auto-generated labels, member thread names, and intra-cluster affinity scores |
+| AC-2 | tested | /cap:cluster {cluster-label} shall display detailed view of a single cluster: all member threads, their pairwise affinity scores, shared concepts, and drift status |
+| AC-3 | tested | /cap:status shall be extended with a Neural Memory section showing: active cluster count, dormant node count, highest-affinity thread pair, and last clustering timestamp |
+| AC-4 | tested | /cap:start shall passively check realtime affinity and surface urgent/notify threads relevant to the selected feature before session work begins |
+| AC-5 | tested | /cap:brainstorm shall passively check thread affinity at session start and present relevant prior threads (notify band and above) before beginning discovery questions |
+| AC-6 | tested | The /cap:cluster command markdown shall be added to commands/cap/ following existing command file conventions (YAML frontmatter, structured sections) |
+| AC-7 | tested | All cluster display output shall use the existing CAP status formatting conventions (markdown tables, consistent headers) for visual consistency |
 
 **Files:**
 - `cap/bin/lib/cap-cluster-display.cjs`
@@ -707,12 +707,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | serializeFeatureMap shall preserve all AC status values that parseFeatureMapContent accepted, including those parsed from checkbox format `- [x]` / `- [ ]` |
-| AC-2 | pending | A roundtrip test (parse → serialize → parse) shall produce structurally equivalent FeatureMap objects with identical AC counts, IDs, descriptions, and statuses |
-| AC-3 | pending | serializeFeatureMap shall write status values that match the canonical lifecycle (pending, prototyped, tested, shipped) without lowercasing transformation losses |
-| AC-4 | pending | parseFeatureMapContent shall not silently drop AC entries when both checkbox and table formats coexist in the same feature block |
-| AC-5 | pending | The fix shall include a regression test loading the actual repository FEATURE-MAP.md and asserting roundtrip stability for F-019 through F-040 |
-| AC-6 | pending | serializeFeatureMap shall emit Status lines as a serialization option to support the legacy non-table input format without forcing all features to table format on first write |
+| AC-1 | tested | serializeFeatureMap shall preserve all AC status values that parseFeatureMapContent accepted, including those parsed from checkbox format `- [x]` / `- [ ]` |
+| AC-2 | tested | A roundtrip test (parse → serialize → parse) shall produce structurally equivalent FeatureMap objects with identical AC counts, IDs, descriptions, and statuses |
+| AC-3 | tested | serializeFeatureMap shall write status values that match the canonical lifecycle (pending, prototyped, tested, shipped) without lowercasing transformation losses |
+| AC-4 | tested | parseFeatureMapContent shall not silently drop AC entries when both checkbox and table formats coexist in the same feature block |
+| AC-5 | tested | The fix shall include a regression test loading the actual repository FEATURE-MAP.md and asserting roundtrip stability for F-019 through F-040 |
+| AC-6 | tested | serializeFeatureMap shall emit Status lines as a serialization option to support the legacy non-table input format without forcing all features to table format on first write |
 
 **Files:**
 - `.claude/cap/bin/lib/cap-feature-map.cjs`
@@ -850,4 +850,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T10:22:26.843Z*
+*Last updated: 2026-04-20T10:28:04.456Z*
