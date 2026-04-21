@@ -45,4 +45,18 @@ jobs:
 
       - name: Run tests with coverage
         shell: bash
-        run: npm run test:coverage
+        run: |
+          set +e
+          npm run test:coverage 2>&1 | tee test-output.txt
+          exitcode=${PIPESTATUS[0]}
+          echo "=== FAILURES ==="
+          grep -E "^not ok|AssertionError|# fail|FAIL" test-output.txt || true
+          exit $exitcode
+
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.os }}-node${{ matrix.node-version }}
+          path: test-output.txt
+          retention-days: 7
