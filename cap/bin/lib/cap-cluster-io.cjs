@@ -165,7 +165,12 @@ function _loadClusterData(cwd) {
   try {
     const config = affinityMod.loadConfig(cwd);
     const context = { graph, allThreads: threads, threadIndex: threads };
-    affinityResults = affinityMod.computeAffinityBatch(threads, config, context);
+    // Signature is computeAffinityBatch(threads, context, config) — swapped here
+    // meant `context` landed in `config`, `config.weights` was undefined, and the
+    // whole affinity pipeline silently returned empty results. User-visible
+    // symptom: /cap:cluster kept reporting "No clusters detected" even on
+    // projects with 20+ threads and curated cluster entries in thread-index.json.
+    affinityResults = affinityMod.computeAffinityBatch(threads, context, config);
     affinityResults = affinityMod.filterPersistable(affinityResults);
   } catch (err) {
     logger.debug(logger.fromError('loadClusterData.computeAffinity', err, {

@@ -163,6 +163,44 @@ describe('_loadClusterData', () => {
     assert.ok(Array.isArray(data.affinityResults));
     assert.ok(Array.isArray(data.clusters));
   });
+
+  it('passes (threads, context, config) to computeAffinityBatch in the right order', () => {
+    // Regression guard for the 2026-04-21 bug where _loadClusterData called
+    // computeAffinityBatch(threads, config, context) — swapped args. The
+    // affinity pipeline swallowed the resulting TypeError and silently returned
+    // [], so /cap:cluster reported "No clusters detected" on projects that
+    // had dozens of threads.
+    const affinityMod = require(path.resolve(__dirname, '..', 'cap', 'bin', 'lib', 'cap-affinity-engine.cjs'));
+    const seen = { args: null };
+    const original = affinityMod.computeAffinityBatch;
+    affinityMod.computeAffinityBatch = function (threads, context, config) {
+      seen.args = { threads, context, config };
+      return original.apply(this, arguments);
+    };
+    try {
+      writeGraph(tmpDir, {
+        version: '1.0', lastUpdated: '2026-04-01T00:00:00Z',
+        nodes: {
+          'node-thr-001': { type: 'thread', metadata: { threadId: 'thr-001' } },
+          'node-thr-002': { type: 'thread', metadata: { threadId: 'thr-002' } },
+        },
+        edges: [],
+      });
+      writeThreads(tmpDir, [
+        { id: 'thr-001', name: 'A', timestamp: '2026-04-01T00:00:00Z', keywords: ['x'], problemStatement: 'p', solutionShape: 's', featureIds: [], boundaryDecisions: [] },
+        { id: 'thr-002', name: 'B', timestamp: '2026-04-02T00:00:00Z', keywords: ['y'], problemStatement: 'p', solutionShape: 's', featureIds: [], boundaryDecisions: [] },
+      ]);
+      io._loadClusterData(tmpDir);
+      assert.ok(seen.args, 'computeAffinityBatch must have been called');
+      // Shape check: context carries graph + thread arrays; config carries weights/bands.
+      assert.ok(seen.args.context && (seen.args.context.graph || Array.isArray(seen.args.context.allThreads)),
+        'second argument must be the AffinityContext (graph + thread arrays)');
+      assert.ok(seen.args.config && typeof seen.args.config === 'object' && seen.args.config.weights,
+        'third argument must be the AffinityConfig (weights + bands)');
+    } finally {
+      affinityMod.computeAffinityBatch = original;
+    }
+  });
 });
 
 // =========================================================================
