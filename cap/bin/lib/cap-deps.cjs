@@ -520,6 +520,47 @@ function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// @cap-feature(feature:F-063) Design-ID impact analysis — `/cap:deps --design DT-NNN`.
+// @cap-todo(ac:F-063/AC-6) Given a DT-NNN or DC-NNN, list every feature that references it via usesDesign.
+// @cap-decision Reuses the Feature Map as the single source of truth rather than re-scanning tags —
+//   /cap:scan is the canonical path that populates usesDesign, so dependency inference stays cheap.
+/**
+ * @param {{features: Array<{id:string,title?:string,usesDesign?:string[]}>}} featureMap
+ * @param {string} designId - e.g. "DT-001" or "DC-001"
+ * @returns {Array<{id:string,title:string|null}>} features that reference the ID, in Feature-ID order
+ */
+function findFeaturesUsingDesignId(featureMap, designId) {
+  const out = [];
+  if (!featureMap || !Array.isArray(featureMap.features) || !designId) return out;
+  if (!/^(DT-\d{3,}|DC-\d{3,})$/.test(designId)) return out;
+  for (const f of featureMap.features) {
+    const uses = Array.isArray(f.usesDesign) ? f.usesDesign : [];
+    if (uses.includes(designId)) out.push({ id: f.id, title: f.title || null });
+  }
+  out.sort((a, b) => a.id.localeCompare(b.id));
+  return out;
+}
+
+// @cap-api formatDesignImpactReport(designId, featuresUsing) -- Human-readable /cap:deps --design output.
+/**
+ * @param {string} designId
+ * @param {Array<{id:string,title:string|null}>} featuresUsing
+ * @returns {string}
+ */
+function formatDesignImpactReport(designId, featuresUsing) {
+  if (!featuresUsing || featuresUsing.length === 0) {
+    return `No features reference ${designId}.`;
+  }
+  const lines = [];
+  lines.push(`Features referencing ${designId}: ${featuresUsing.length}`);
+  lines.push('');
+  for (const f of featuresUsing) {
+    const title = f.title ? ` — ${f.title}` : '';
+    lines.push(`  ${f.id}${title}`);
+  }
+  return lines.join('\n');
+}
+
 module.exports = {
   // pure helpers (exported for tests)
   parseImports,
@@ -533,6 +574,9 @@ module.exports = {
   renderMermaidGraph,
   loadDepsConfig,
   applyInferredDeps,
+  // F-063 design-ID impact analysis
+  findFeaturesUsingDesignId,
+  formatDesignImpactReport,
   // constants (for tests / consumers)
   DEFAULT_CONFIG,
   IMPORT_EXTENSIONS,

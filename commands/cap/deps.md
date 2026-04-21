@@ -1,7 +1,7 @@
 ---
 name: cap:deps
-description: "Infer feature dependencies from source imports, diff against FEATURE-MAP DEPENDS_ON, optionally apply or render a Mermaid graph."
-argument-hint: "[--auto-fix] [--graph] [--remove-extraneous] [--json]"
+description: "Infer feature dependencies from source imports, diff against FEATURE-MAP DEPENDS_ON, optionally apply or render a Mermaid graph. --design DT-NNN shows feature impact for a design token (F-063)."
+argument-hint: "[--auto-fix] [--graph] [--remove-extraneous] [--json] [--design DT-NNN|DC-NNN]"
 allowed-tools:
   - Read
   - Write
@@ -32,6 +32,30 @@ $ARGUMENTS
 </context>
 
 <process>
+
+## Step 0a: Design-ID impact fast-path (F-063 --design DT-NNN / DC-NNN)
+
+<!-- @cap-todo(ac:F-063/AC-6) /cap:deps --design DT-NNN prints every feature whose usesDesign includes the ID. -->
+<!-- @cap-decision Fast-path bypasses the F-049 opt-in gate — design impact is read-only, reads FEATURE-MAP.md only, no tag scanning. -->
+
+If `$ARGUMENTS` contains `--design <ID>`, short-circuit the rest of the command:
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const deps = require('./cap/bin/lib/cap-deps.cjs');
+const designId = process.argv[1];
+if (!/^(DT-\\d{3,}|DC-\\d{3,})$/.test(designId)) {
+  console.error('Invalid --design ID. Expected DT-NNN or DC-NNN.');
+  process.exit(2);
+}
+const map = fm.readFeatureMap(process.cwd());
+const using = deps.findFeaturesUsingDesignId(map, designId);
+console.log(deps.formatDesignImpactReport(designId, using));
+" '<DESIGN_ID>'
+```
+
+Display the output verbatim, then stop.
 
 ## Step 0: Check opt-in config
 

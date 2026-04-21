@@ -35,6 +35,17 @@ function isUnifiedAnchorsEnabled(projectRoot) {
 // @cap-decision F-046 leaves CAP_TAG_RE untouched (AC-5 backward compat). New polylingual extension uses extractTagsWithContext + getCommentStyle for richer per-language detection.
 const CAP_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@cap-(feature|todo|risk|decision)(?:\(([^)]*)\))?[ \t]*(.*)/;
 
+// @cap-feature(feature:F-063) Design-Tag recognition in the tag scanner.
+// @cap-todo(ac:F-063/AC-2) Recognise @cap-design-token(id:DT-NNN) and @cap-design-component(id:DC-NNN) in source comments.
+// @cap-decision Keep the core CAP_TAG_RE / CAP_TAG_TYPES untouched — adding design types there would break F-001's
+//   regression tests (CAP_TAG_TYPES.length === 4 is pinned). Design tags get a sibling regex and are merged into
+//   extractTags output with type values 'design-token' | 'design-component'. Consumers that filter by tag.type
+//   against {'feature','todo','risk','decision'} are unaffected.
+const CAP_DESIGN_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@cap-(design-token|design-component)(?:\(([^)]*)\))?[ \t]*(.*)/;
+
+// @cap-api CAP_DESIGN_TAG_TYPES -- exported for /cap:deps --design and /cap:trace design-usage.
+const CAP_DESIGN_TAG_TYPES = ['design-token', 'design-component'];
+
 // @cap-todo(ref:AC-26) Tag scanner is language-agnostic, operating on comment syntax patterns across JS, TS, Python, Ruby, Shell
 // @cap-decision F-046 leaves SUPPORTED_EXTENSIONS untouched to preserve AC-5 backward compatibility (existing test asserts list length === 18). The new polylingual scanner uses Object.keys(COMMENT_STYLES) as its default extension list, which DOES include HTML/CSS/SCSS/Markdown/YAML/TOML/Shell-zsh.
 const SUPPORTED_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.py', '.rb', '.sh', '.bash', '.sql', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp'];
@@ -94,31 +105,51 @@ function extractTags(content, filePath) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const match = line.match(CAP_TAG_RE);
-    if (!match) continue;
+    if (match) {
+      const type = match[1];
+      const metadataStr = match[2] || '';
+      const description = (match[3] || '').trim();
+      const metadata = parseMetadata(metadataStr);
 
-    const type = match[1];
-    const metadataStr = match[2] || '';
-    const description = (match[3] || '').trim();
-    const metadata = parseMetadata(metadataStr);
-
-    // @cap-todo(ref:AC-22) Detect subtypes in @cap-todo description (risk:..., decision:...)
-    let subtype = null;
-    if (type === 'todo') {
-      const subtypeMatch = description.match(SUBTYPE_RE);
-      if (subtypeMatch) {
-        subtype = subtypeMatch[1];
+      // @cap-todo(ref:AC-22) Detect subtypes in @cap-todo description (risk:..., decision:...)
+      let subtype = null;
+      if (type === 'todo') {
+        const subtypeMatch = description.match(SUBTYPE_RE);
+        if (subtypeMatch) {
+          subtype = subtypeMatch[1];
+        }
       }
+
+      tags.push({
+        type,
+        file: filePath,
+        line: i + 1,
+        metadata,
+        description,
+        raw: line,
+        subtype,
+      });
+      continue;
     }
 
-    tags.push({
-      type,
-      file: filePath,
-      line: i + 1,
-      metadata,
-      description,
-      raw: line,
-      subtype,
-    });
+    // @cap-todo(ac:F-063/AC-2) Fall through to design-tag recognition. Two separate regexes keep the
+    // core tag-type set (feature/todo/risk/decision) stable and pinned by F-001's regression tests.
+    const designMatch = line.match(CAP_DESIGN_TAG_RE);
+    if (designMatch) {
+      const type = designMatch[1]; // 'design-token' | 'design-component'
+      const metadataStr = designMatch[2] || '';
+      const description = (designMatch[3] || '').trim();
+      const metadata = parseMetadata(metadataStr);
+      tags.push({
+        type,
+        file: filePath,
+        line: i + 1,
+        metadata,
+        description,
+        raw: line,
+        subtype: null,
+      });
+    }
   }
   return tags;
 }
@@ -1537,6 +1568,9 @@ function detectLegacyTags(projectRoot, options = {}) {
 module.exports = {
   CAP_TAG_TYPES,
   CAP_TAG_RE,
+  // F-063 design tag recognition — additive, separate from CAP_TAG_TYPES to preserve F-001 regression tests.
+  CAP_DESIGN_TAG_TYPES,
+  CAP_DESIGN_TAG_RE,
   SUPPORTED_EXTENSIONS,
   DEFAULT_EXCLUDE,
   LEGACY_TAG_RE,
