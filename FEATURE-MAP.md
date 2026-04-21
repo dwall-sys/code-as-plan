@@ -720,6 +720,7 @@
 | AC-3 | tested | serializeFeatureMap shall write status values that match the canonical lifecycle (pending, prototyped, tested, shipped) without lowercasing transformation losses |
 | AC-4 | tested | parseFeatureMapContent shall not silently drop AC entries when both checkbox and table formats coexist in the same feature block |
 | AC-5 | tested | The fix shall include a regression test loading the actual repository FEATURE-MAP.md and asserting roundtrip stability for F-019 through F-040 |
+| AC-6 | tested | serializeFeatureMap shall emit Status lines as a serialization option to support the legacy non-table input format without forcing all features to table format on first write |
 
 **Files:**
 - `.claude/cap/bin/lib/cap-feature-map.cjs`
@@ -734,6 +735,8 @@
 |----|--------|-------------|
 | AC-1 | tested | updateFeatureState shall update child AC statuses according to a defined propagation rule when a feature transitions to tested or shipped |
 | AC-2 | tested | The propagation rule shall be documented as: state prototyped does not change AC status; state tested promotes ACs from pending/prototyped to tested; state shipped requires all ACs already at tested and rejects the transition otherwise |
+| AC-3 | tested | A new function setAcStatus(projectRoot, featureId, acId, newState, appPath) shall provide explicit per-AC state mutation for finer-grained control |
+| AC-4 | tested | Status drift detection shall flag features where feature state is shipped/tested but one or more ACs are still pending, returning a structured drift report |
 | AC-5 | tested | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
 | AC-6 | tested | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
 
@@ -962,13 +965,13 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | PostToolUse-Hook feuert bei Edit, Write, MultiEdit, NotebookEdit. |
-| AC-2 | pending | Hook berechnet Tag-Diff (added/removed @cap-feature, @cap-todo) zwischen Before/After-Datei. |
-| AC-3 | pending | Hook appendiert JSONL-Zeile an .cap/memory/raw/tag-events-{YYYY-MM-DD}.jsonl mit {timestamp, tool, file, added:[], removed:[]}. |
-| AC-4 | pending | Kein Tag-Diff → kein Write (keine Leerzeilen, kein Noise). |
-| AC-5 | pending | Hook-Laufzeit <100 ms für Dateien bis 10 000 Zeilen (in Tests erzwungen). |
-| AC-6 | pending | Hook-Fehler werden in .cap/memory/raw/errors.log protokolliert und blockieren das Edit-Tool nie. |
-| AC-7 | pending | Datei-Rotation pro Kalendertag; Cleanup von >30 Tage alten Logs erfolgt über F-056. |
+| AC-1 | tested | PostToolUse-Hook feuert bei Edit, Write, MultiEdit, NotebookEdit. |
+| AC-2 | tested | Hook berechnet Tag-Diff (added/removed @cap-feature, @cap-todo) zwischen Before/After-Datei. |
+| AC-3 | tested | Hook appendiert JSONL-Zeile an .cap/memory/raw/tag-events-{YYYY-MM-DD}.jsonl mit {timestamp, tool, file, added:[], removed:[]}. |
+| AC-4 | tested | Kein Tag-Diff → kein Write (keine Leerzeilen, kein Noise). |
+| AC-5 | tested | Hook-Laufzeit <100 ms für Dateien bis 10 000 Zeilen (in Tests erzwungen). |
+| AC-6 | tested | Hook-Fehler werden in .cap/memory/raw/errors.log protokolliert und blockieren das Edit-Tool nie. |
+| AC-7 | tested | Datei-Rotation pro Kalendertag; Cleanup von >30 Tage alten Logs erfolgt über F-056. |
 
 **Files:**
 - `cap/bin/lib/cap-tag-observer.cjs`
@@ -979,12 +982,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | prototyped | Schema-Erweiterung für decisions.md, pitfalls.md, patterns.md: jede Entry-Frontmatter enthält confidence:float(0.0–1.0) und evidence_count:int≥1. |
-| AC-2 | prototyped | Neu erzeugte Einträge aus der cap-memory-Pipeline starten mit confidence:0.5, evidence_count:1. |
-| AC-3 | prototyped | Bestehende Einträge ohne diese Felder werden beim ersten Lesen additiv auf confidence:0.5, evidence_count:1 migriert (stumm, ohne User-Interaktion). |
-| AC-4 | prototyped | Re-Observation derselben Pattern-Beschreibung (Text-Similarity ≥0.8) erhöht evidence_count um 1 und confidence um 0.1 (Cap bei 0.95). |
-| AC-5 | prototyped | Widerspruch (konträrer Eintrag mit überlappendem File-Scope) senkt confidence um 0.2 (Floor 0.0), erhöht NICHT evidence_count. |
-| AC-6 | prototyped | Einträge mit confidence<0.3 werden im Markdown-Output gedimmt gerendert (z. B. Präfix '> *(low confidence)*'). |
+| AC-1 | tested | Schema-Erweiterung für decisions.md, pitfalls.md, patterns.md: jede Entry-Frontmatter enthält confidence:float(0.0–1.0) und evidence_count:int≥1. |
+| AC-2 | tested | Neu erzeugte Einträge aus der cap-memory-Pipeline starten mit confidence:0.5, evidence_count:1. |
+| AC-3 | tested | Bestehende Einträge ohne diese Felder werden beim ersten Lesen additiv auf confidence:0.5, evidence_count:1 migriert (stumm, ohne User-Interaktion). |
+| AC-4 | tested | Re-Observation derselben Pattern-Beschreibung (Text-Similarity ≥0.8) erhöht evidence_count um 1 und confidence um 0.1 (Cap bei 0.95). |
+| AC-5 | tested | Widerspruch (konträrer Eintrag mit überlappendem File-Scope) senkt confidence um 0.2 (Floor 0.0), erhöht NICHT evidence_count. |
+| AC-6 | tested | Einträge mit confidence<0.3 werden im Markdown-Output gedimmt gerendert (z. B. Präfix '> *(low confidence)*'). |
 
 **Files:**
 - `cap/bin/lib/cap-memory-confidence.cjs`
@@ -999,12 +1002,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | prototyped | /cap:memory prune ist als Subcommand von /cap:memory aufrufbar. |
-| AC-2 | prototyped | Default ist Dry-Run; --apply ist explizit erforderlich, um Dateien zu ändern. |
-| AC-3 | prototyped | Einträge mit last_seen >90 Tage verlieren -0.05 confidence pro weitere 30 Tage Inaktivität. |
-| AC-4 | prototyped | Einträge mit confidence<0.2 UND last_seen>180 Tage werden nach .cap/memory/archive/{YYYY-MM}.md verschoben (nicht gelöscht). |
-| AC-5 | prototyped | Raw-Event-Logs aus F-054 älter als 30 Tage werden hart gelöscht. |
-| AC-6 | prototyped | Prune-Run gibt Report aus (decayed, archived, purged) und appendiert .cap/memory/prune-log.jsonl mit {timestamp, decayed, archived, purged}. |
+| AC-1 | tested | /cap:memory prune ist als Subcommand von /cap:memory aufrufbar. |
+| AC-2 | tested | Default ist Dry-Run; --apply ist explizit erforderlich, um Dateien zu ändern. |
+| AC-3 | tested | Einträge mit last_seen >90 Tage verlieren -0.05 confidence pro weitere 30 Tage Inaktivität. |
+| AC-4 | tested | Einträge mit confidence<0.2 UND last_seen>180 Tage werden nach .cap/memory/archive/{YYYY-MM}.md verschoben (nicht gelöscht). |
+| AC-5 | tested | Raw-Event-Logs aus F-054 älter als 30 Tage werden hart gelöscht. |
+| AC-6 | tested | Prune-Run gibt Report aus (decayed, archived, purged) und appendiert .cap/memory/prune-log.jsonl mit {timestamp, decayed, archived, purged}. |
 
 **Files:**
 - `cap/bin/lib/cap-memory-prune.cjs`
@@ -1017,12 +1020,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | /cap:checkpoint ist aufrufbar. |
-| AC-2 | pending | Command prueft SESSION.json und FEATURE-MAP-Diff seit letzter Checkpoint-Zeit auf logische Breakpoints. |
-| AC-3 | pending | Bei erkanntem Breakpoint gibt Command Empfehlung aus: 'Jetzt /compact, weil {konkreter Grund}' (z. B. 'F-054 auf state=tested'). |
-| AC-4 | pending | Command ruft /cap:save --label checkpoint-{feature_id} implizit auf, bevor die Empfehlung ausgegeben wird. |
-| AC-5 | pending | Kein Breakpoint erkannt → Message 'Kein natürlicher Kontextbruch erkannt', keine weitere Action. |
-| AC-6 | pending | Command ist rein advisory — kein Auto-/compact, kein Force-Flag. |
+| AC-1 | tested | /cap:checkpoint ist aufrufbar. |
+| AC-2 | tested | Command prueft SESSION.json und FEATURE-MAP-Diff seit letzter Checkpoint-Zeit auf logische Breakpoints. |
+| AC-3 | tested | Bei erkanntem Breakpoint gibt Command Empfehlung aus: 'Jetzt /compact, weil {konkreter Grund}' (z. B. 'F-054 auf state=tested'). |
+| AC-4 | tested | Command ruft /cap:save --label checkpoint-{feature_id} implizit auf, bevor die Empfehlung ausgegeben wird. |
+| AC-5 | tested | Kein Breakpoint erkannt → Message 'Kein natürlicher Kontextbruch erkannt', keine weitere Action. |
+| AC-6 | tested | Command ist rein advisory — kein Auto-/compact, kein Force-Flag. |
 
 **Files:**
 - `cap/bin/lib/cap-checkpoint.cjs`
@@ -1035,12 +1038,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | .claude-plugin/plugin.json in npm package enthält Metadaten (name, version, description, commands, agents, hooks). |
-| AC-2 | pending | .claude-plugin/marketplace.json enthält Marketplace-Metadaten für /plugin install code-as-plan. |
-| AC-3 | pending | Plugin-Manifest listet KEIN 'hooks'-Feld (Claude Code v2.1+ lädt Plugin-Hooks automatisch). |
-| AC-4 | pending | Npx-Install-Pfad bleibt funktional und primärer Install-Weg; er wird nicht deprecated. |
-| AC-5 | pending | cap-doctor erkennt beide Install-Modi (npx vs. Plugin) und zeigt den aktiven Modus in der Ausgabe. |
-| AC-6 | pending | Coexistence-Test: wenn beide Modi aktiv sind, werden Commands/Agents nicht doppelt registriert. |
+| AC-1 | tested | .claude-plugin/plugin.json in npm package enthält Metadaten (name, version, description, commands, agents, hooks). |
+| AC-2 | tested | .claude-plugin/marketplace.json enthält Marketplace-Metadaten für /plugin install code-as-plan. |
+| AC-3 | tested | Plugin-Manifest listet KEIN 'hooks'-Feld (Claude Code v2.1+ lädt Plugin-Hooks automatisch). |
+| AC-4 | tested | Npx-Install-Pfad bleibt funktional und primärer Install-Weg; er wird nicht deprecated. |
+| AC-5 | tested | cap-doctor erkennt beide Install-Modi (npx vs. Plugin) und zeigt den aktiven Modus in der Ausgabe. |
+| AC-6 | tested | Coexistence-Test: wenn beide Modi aktiv sind, werden Commands/Agents nicht doppelt registriert. |
 
 **Files:**
 - `cap/bin/lib/cap-doctor.cjs`
@@ -1052,12 +1055,12 @@
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | prototyped | /cap:prototype parst Feature-ACs nach Library-Nennungen (Regex gegen package.json-Namen und Doc-Referenzen). |
-| AC-2 | prototyped | Für jede referenzierte Library wird geprüft, ob .cap/stack-docs/{library}.md existiert und mtime <30 Tage ist. |
-| AC-3 | prototyped | Fehlen Docs: Warning mit Liste der Libraries, Empfehlung '/cap:refresh-docs {libs}' und Prompt 'trotzdem fortfahren? [y/N]'. |
-| AC-4 | prototyped | Mit --skip-docs-Flag wird der Check übersprungen (für reine Scaffolding-Features ohne externe Libs). |
-| AC-5 | prototyped | Check blockiert NIE hart ohne User-Input — Default ist Warning + Prompt, kein Error-Exit. |
-| AC-6 | prototyped | Anzahl geprüfter Libs und Anzahl fehlender Docs wird im Session-Log (.cap/session-log.jsonl) protokolliert. |
+| AC-1 | tested | /cap:prototype parst Feature-ACs nach Library-Nennungen (Regex gegen package.json-Namen und Doc-Referenzen). |
+| AC-2 | tested | Für jede referenzierte Library wird geprüft, ob .cap/stack-docs/{library}.md existiert und mtime <30 Tage ist. |
+| AC-3 | tested | Fehlen Docs: Warning mit Liste der Libraries, Empfehlung '/cap:refresh-docs {libs}' und Prompt 'trotzdem fortfahren? [y/N]'. |
+| AC-4 | tested | Mit --skip-docs-Flag wird der Check übersprungen (für reine Scaffolding-Features ohne externe Libs). |
+| AC-5 | tested | Check blockiert NIE hart ohne User-Input — Default ist Warning + Prompt, kein Error-Exit. |
+| AC-6 | tested | Anzahl geprüfter Libs und Anzahl fehlender Docs wird im Session-Log (.cap/session-log.jsonl) protokolliert. |
 
 **Files:**
 - `cap/bin/lib/cap-research-gate.cjs`
@@ -1075,4 +1078,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T09:05:50.742Z*
+*Last updated: 2026-04-21T10:47:40.068Z*

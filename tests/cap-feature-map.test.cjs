@@ -964,6 +964,53 @@ describe('F-041 parser-serializer roundtrip symmetry', () => {
       // which is the correct conservative behaviour.
       assert.strictEqual(result.features[0].acs.length, 0);
     });
+
+    it('preserves AC descriptions that contain literal pipe characters (F-040 parser bug)', () => {
+      // Repro of the bug that dropped F-041/AC-6 and F-042/AC-3/AC-4 during the
+      // 2026-04-21 ECC feature batch: a pipe inside a description truncated the
+      // field at the first internal pipe. Fix: end-anchor the AC row regex so
+      // the non-greedy description group expands to the trailing pipe of the row.
+      const content = `# Feature Map
+
+## Features
+
+### F-903: PipeInDescription [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | normal description |
+| AC-2 | pending | CLI flag --legacy-tags=warn|error controlling enforcement |
+| AC-3 | pending | has | multiple | pipes | in the middle |
+| AC-4 | pending | ends normally |
+`;
+      const result = parseFeatureMapContent(content);
+      assert.strictEqual(result.features.length, 1);
+      const acs = result.features[0].acs;
+      assert.strictEqual(acs.length, 4, 'all four ACs must survive parsing');
+      assert.strictEqual(acs[1].description, 'CLI flag --legacy-tags=warn|error controlling enforcement');
+      assert.strictEqual(acs[2].description, 'has | multiple | pipes | in the middle');
+      assert.strictEqual(acs[3].description, 'ends normally');
+    });
+
+    it('rejects a row missing the trailing pipe (strict table discipline)', () => {
+      // If authors drop the closing pipe, we now silently skip the row rather
+      // than accepting a malformed record. The next legitimate row still parses.
+      const content = `# Feature Map
+
+## Features
+
+### F-904: MissingPipe [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | this row is missing its closing pipe
+| AC-2 | pending | this row is well-formed |
+`;
+      const result = parseFeatureMapContent(content);
+      assert.strictEqual(result.features.length, 1);
+      assert.strictEqual(result.features[0].acs.length, 1);
+      assert.strictEqual(result.features[0].acs[0].id, 'AC-2');
+    });
   });
 
   describe('AC-1 + AC-2: parse -> serialize -> parse roundtrip is structurally equivalent', () => {
