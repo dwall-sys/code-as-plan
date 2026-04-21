@@ -129,21 +129,28 @@ describe('[adversarial] dampOnContradiction — numeric boundaries', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('[adversarial] isLowConfidence boundaries', () => {
-  it('confidence = 0.2999... (classic float-drift) is dim', () => {
-    const floaty = 0.1 + 0.1 + 0.1 - 0.000000000001; // strictly < 0.3
+  it('confidence = 0.2999... (classic float-drift) is normalised by round2 in ensureFields → NOT dim', () => {
+    // After the review follow-up, ensureFields applies round2 so float-drift
+    // around the threshold collapses to 0.30 and no longer flips the dim state.
+    const floaty = 0.1 + 0.1 + 0.1 - 0.000000000001; // raw value strictly < 0.3
     assert.ok(floaty < DIM_THRESHOLD);
-    assert.equal(isLowConfidence({ confidence: floaty }), true);
+    assert.equal(isLowConfidence({ confidence: floaty }), false);
   });
 
-  it('confidence = 0.30000000000000004 (0.1+0.1+0.1 raw) is NOT dim by JS semantics', () => {
-    // Document behaviour: raw float 0.1+0.1+0.1 ≈ 0.30000000000000004 > 0.3
+  it('confidence = 0.30000000000000004 (0.1+0.1+0.1 raw) rounds to 0.30 → NOT dim', () => {
     const jsFlaky = 0.1 + 0.1 + 0.1;
     assert.ok(jsFlaky > DIM_THRESHOLD);
     assert.equal(isLowConfidence({ confidence: jsFlaky }), false);
   });
 
-  it('confidence just below 0.3 (0.2999) is dim', () => {
-    assert.equal(isLowConfidence({ confidence: 0.2999 }), true);
+  it('confidence just below 0.3 (0.2999) rounds to 0.30 → NOT dim', () => {
+    // Hand-edited 0.2999 renders as 0.30 after round2 — matches display.
+    assert.equal(isLowConfidence({ confidence: 0.2999 }), false);
+  });
+
+  it('confidence = 0.29 is preserved by round2 → still dim', () => {
+    // Values clearly below threshold survive round2 unchanged.
+    assert.equal(isLowConfidence({ confidence: 0.29 }), true);
   });
 
   it('confidence just above 0.3 (0.3001) is NOT dim', () => {
@@ -154,19 +161,18 @@ describe('[adversarial] isLowConfidence boundaries', () => {
     assert.equal(isLowConfidence({ confidence: null }), false);
   });
 
-  it('confidence > 1.0 is NOT clamped by ensureFields — pinned behaviour', () => {
-    // ensureFields does NOT enforce an upper bound on confidence — only NaN/non-number coercion.
-    // Pin this so a regression towards silent clamping is caught.
+  it('confidence > 1.0 is clamped by ensureFields to 1.0', () => {
+    // Post-review: ensureFields clamps out-of-range numeric values to [0, 1].
+    // 1.5 is a legacy/hand-edit artefact; clamping keeps renders sane.
     const out = ensureFields({ confidence: 1.5 });
-    assert.equal(out.confidence, 1.5);
+    assert.equal(out.confidence, 1);
     assert.equal(isLowConfidence({ confidence: 1.5 }), false);
   });
 
-  it('confidence < 0 is NOT clamped by ensureFields — pinned behaviour', () => {
-    // Same pinning: ensureFields passes negative numbers through (only NaN is coerced).
+  it('confidence < 0 is clamped by ensureFields to 0.0 (and renders dim)', () => {
+    // Same clamp: negative values collapse to the floor and flag as low confidence.
     const out = ensureFields({ confidence: -0.5 });
-    assert.equal(out.confidence, -0.5);
-    // And isLowConfidence triggers (−0.5 < 0.3).
+    assert.equal(out.confidence, 0);
     assert.equal(isLowConfidence({ confidence: -0.5 }), true);
   });
 });
@@ -548,8 +554,14 @@ describe('[adversarial] generateCategoryMarkdown rendering robustness', () => {
     assert.ok(md.includes('- **Confidence:** 0.30'));
   });
 
-  it('confidence = 0.2999 renders dimmed', () => {
+  it('confidence = 0.2999 rounds to 0.30 and renders NOT dimmed (round2 in ensureFields)', () => {
     const md = dir.generateCategoryMarkdown('decision', [mkE({ metadata: { confidence: 0.2999, evidence_count: 1 } })]);
+    assert.ok(!md.includes('*(low confidence)*'));
+    assert.ok(md.includes('- **Confidence:** 0.30'));
+  });
+
+  it('confidence = 0.29 renders dimmed (below threshold, round2 preserves)', () => {
+    const md = dir.generateCategoryMarkdown('decision', [mkE({ metadata: { confidence: 0.29, evidence_count: 1 } })]);
     assert.ok(md.includes('*(low confidence)*'));
   });
 

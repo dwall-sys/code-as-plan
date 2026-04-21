@@ -124,9 +124,18 @@ function generateHotspotsMarkdown(out, entries) {
   out.push('| Rank | File | Sessions | Edits | Since |');
   out.push('|------|------|----------|-------|-------|');
 
+  // Newlines or stray pipes in entry.file / metadata.since would fracture the
+  // markdown table into invalid rows. Parallel to the list-writer in
+  // generateCategoryMarkdown that collapses \r\n in entry.content.
+  const cellSanitize = (v) => String(v ?? '?').replace(/[\r\n]+/g, ' ').replace(/\|/g, '\\|');
+
   sorted.forEach((entry, i) => {
     const anchor = generateAnchorId(entry.content + entry.file);
-    out.push(`| <a id="${anchor}"></a>${i + 1} | \`${entry.file}\` | ${entry.metadata.sessions || '?'} | ${entry.metadata.edits || '?'} | ${entry.metadata.since || '?'} |`);
+    const file = cellSanitize(entry.file);
+    const sessions = cellSanitize(entry.metadata.sessions || '?');
+    const edits = cellSanitize(entry.metadata.edits || '?');
+    const since = cellSanitize(entry.metadata.since || '?');
+    out.push(`| <a id="${anchor}"></a>${i + 1} | \`${file}\` | ${sessions} | ${edits} | ${since} |`);
   });
 
   out.push('');

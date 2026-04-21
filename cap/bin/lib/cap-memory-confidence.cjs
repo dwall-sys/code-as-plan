@@ -131,7 +131,10 @@ function filesOverlap(a, b) {
   return false;
 }
 
-// @cap-risk Contradiction detection is a best-effort heuristic. It intentionally under-detects rather than over-detects, but false-positives remain possible when one entry uses negation stylistically (e.g. "don't just ..., do ..."). Unit tests cover synthetic pairs; real-world misclassification is bounded by the file-scope + category + negation-asymmetry gate.
+// @cap-risk Contradiction detection is a best-effort heuristic. Two failure modes:
+//   1. False-positives when one entry uses negation stylistically ("don't just ..., do ...") while the counter-entry reads as a positive claim.
+//   2. False-negatives when a contradiction is phrased without any NEGATION_MARKER token — e.g. "prefer X over Y" / "prefer Y over X" both lack explicit negation and slip through the asymmetry gate.
+// We intentionally under-detect rather than over-detect. Unit tests cover synthetic pairs; real-world misclassification is bounded by the file-scope + category + negation-asymmetry gate.
 /**
  * Heuristically detect whether two entries contradict each other.
  * Requires all of:
@@ -223,6 +226,12 @@ function dampOnContradiction(fields) {
  * defaulted if missing. Does not mutate the input.
  * Used for AC-3 lazy migration — reading an old file without the fields
  * yields entries that look fully-formed downstream.
+ *
+ * Also clamps `confidence` to [0, 1] and applies round2 so hand-edited or
+ * legacy out-of-range values (e.g. `confidence: 1.5` or `-0.3`) render cleanly.
+ * We clamp to [0, 1] rather than [FLOOR, CAP] because 1.00 is a valid
+ * hand-edited value; CAP is only the bump-on-reobservation ceiling.
+ *
  * @param {Object} metadata
  * @returns {Object}
  */
@@ -231,6 +240,8 @@ function ensureFields(metadata) {
   const out = { ...src };
   if (typeof out.confidence !== 'number' || Number.isNaN(out.confidence)) {
     out.confidence = DEFAULT_CONFIDENCE;
+  } else {
+    out.confidence = round2(Math.min(1, Math.max(0, out.confidence)));
   }
   if (typeof out.evidence_count !== 'number' || !Number.isFinite(out.evidence_count) || out.evidence_count < 1) {
     out.evidence_count = DEFAULT_EVIDENCE;

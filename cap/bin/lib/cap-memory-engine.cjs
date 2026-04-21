@@ -564,6 +564,12 @@ function accumulateFromCode(tags, options = {}) {
   }));
 
   const result = [];
+  // Track existing-entry indices that have been damped so multiple new entries
+  // contradicting the same existing one don't emit duplicate damped records.
+  // The final damp state already lives in existing[i] (applyLearningSignals
+  // reads the mutated existing array on each iteration), so we emit each
+  // touched index exactly once at the end.
+  const dampedIndices = new Set();
   for (const newEntry of entries) {
     const { mergedEntry, action } = confidence.applyLearningSignals(newEntry, existing);
 
@@ -575,16 +581,17 @@ function accumulateFromCode(tags, options = {}) {
       const updateRec = mergedEntry._contradictedExistingUpdate;
       if (updateRec && existing[updateRec.index]) {
         existing[updateRec.index] = { ...existing[updateRec.index], metadata: updateRec.updatedMetadata };
+        dampedIndices.add(updateRec.index);
       }
       const clean = { ...mergedEntry };
       delete clean._contradictedExistingUpdate;
       result.push(clean);
-      // Also emit the damped existing entry so the caller writes it back with updated confidence.
-      result.push(existing[updateRec.index]);
     } else {
       result.push(mergedEntry);
     }
   }
+
+  for (const idx of dampedIndices) result.push(existing[idx]);
 
   return result;
 }
