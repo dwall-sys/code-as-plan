@@ -12,6 +12,8 @@ Works with Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, 
   FEATURE-MAP    @cap-tags    scan+fix    green=done  ship
 ```
 
+> **Daily workflow guide**: [`docs/USAGE-GUIDE.md`](docs/USAGE-GUIDE.md) — what's new in v4.1, how to get maximum leverage, what to watch out for.
+
 ---
 
 ## The Problem
@@ -48,9 +50,19 @@ CAP eliminates accidental complexity by making code the single source of truth.
 
 ## Installation
 
+**Via npx (primary):**
+
 ```bash
 npx code-as-plan@latest
 ```
+
+**Via Claude Code plugin marketplace (v4.1+):**
+
+```
+/plugin install code-as-plan
+```
+
+Both paths coexist. `cap:doctor` warns (but does not fail) if both install modes are active, so you can migrate without breaking state. The plugin name is `cap` (slash commands stay `/cap:*`); the marketplace / npm slug is `code-as-plan`.
 
 ### Runtime flags
 
@@ -188,8 +200,14 @@ Green tests mean verified. No separate verification document.
 | `/cap:doctor` | Health check for all required and optional dependencies |
 | `/cap:save` | Save current session context to snapshot file for cross-session continuity |
 | `/cap:continue` | Restore a saved context snapshot |
-| `/cap:memory` | Project memory management -- `init`, `status`, `pin`, `unpin` subcommands |
+| `/cap:memory` | Project memory management -- `init`, `status`, `pin`, `unpin`, `prune` subcommands |
 | `/cap:cluster` | Neural Memory cluster overview and detail views |
+| `/cap:checkpoint` | Advisory breakpoint detector — nudges `/compact` at natural workflow boundaries, chains `/cap:save` |
+| `/cap:reconcile` | One-shot drift reconciliation — propose AC promotions and feature-state corrections |
+| `/cap:deps` | Infer feature dependencies from source imports, diff against FEATURE-MAP DEPENDS_ON |
+| `/cap:trace` | Print the call graph for a single acceptance criterion across all contributing files |
+| `/cap:completeness` | Markdown audit of the Implementation Completeness Score (4 signals per AC) |
+| `/cap:migrate-tags` | Migrate fragmented `@cap-feature` / `@cap-todo(ac:…)` tags to unified `@cap` anchor blocks |
 
 ---
 
@@ -624,7 +642,42 @@ Both developers' decisions, hotspots, and threads are accumulated into a shared 
 /cap:memory status    # show memory summary (entries per category, last run)
 /cap:memory pin       # mark a pitfall as permanent (immune to aging)
 /cap:memory unpin     # remove permanent mark
+/cap:memory prune     # decay stale entries, archive low-confidence, purge raw logs (default dry-run)
 ```
+
+### Confidence, evidence, decay (v4.1)
+
+Every memory entry now carries two additive fields that track epistemic state over time:
+
+- **`confidence`** (0.0 – 1.0) — starts at 0.5 on first observation
+- **`evidence_count`** — starts at 1, increments on re-observation
+
+**Re-observation bump.** When the same content (Jaccard ≥ 0.8 on word tokens) appears again: `confidence += 0.1` (capped at 0.95), `evidence_count += 1`. The same decision tagged three times across three sessions lands at `confidence: 0.8, evidence: 4` — visible, auditable, and resistant to LLM noise.
+
+**Contradiction damp.** A counter-entry in the same category with overlapping files and asymmetric negation drops the prior entry's confidence by 0.2 (floored at 0.0) without incrementing evidence. Both entries stay on disk — contradicting observations are logged, not silenced.
+
+**Dimmed rendering.** Entries with `confidence < 0.3` render as blockquotes prefixed with `*(low confidence)*` so reviewers immediately see what the framework is unsure about.
+
+**Time-based decay.** Entries untouched for >90 days lose 0.05 confidence per additional 30 days. Entries that fall below `confidence: 0.2` **and** are older than 180 days are archived to `.cap/memory/archive/YYYY-MM.md` — not deleted. Pinned entries (`/cap:memory pin`) bypass both decay and archive.
+
+**Raw-log retention.** Hook-observed tag events older than 30 days are hard-deleted from `.cap/memory/raw/` on the next `prune --apply`.
+
+```bash
+/cap:memory prune              # dry-run: show what would decay, archive, purge
+/cap:memory prune --apply      # commit the changes
+```
+
+### Hook-based tag observation (v4.1)
+
+A PostToolUse hook watches every Edit/Write/MultiEdit/NotebookEdit. When the set of `@cap-feature` / `@cap-todo` tags in the edited file changes, a JSONL event is appended to `.cap/memory/raw/tag-events-YYYY-MM-DD.jsonl`:
+
+```json
+{"timestamp":"2026-04-21T10:03:15Z","tool":"Edit","file":"/abs/path/auth.ts","added":["@cap-todo(ac:F-054/AC-1)"],"removed":[]}
+```
+
+The aggregator picks these up on the next `/cap:memory` run. Net effect: your memory stays current without any deliberate capture step — a tag added in a commit is observed by the next session.
+
+The hook never blocks the editor (skip via `CAP_SKIP_TAG_OBSERVER=1`).
 
 ---
 
