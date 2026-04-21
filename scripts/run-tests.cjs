@@ -28,8 +28,15 @@ if (wantsCoverage) {
   // single-process execution when measuring coverage. Plain `npm test` keeps
   // the safer default isolation on purpose: it surfaces shared-state leaks
   // (F-052 was found exactly this way), which isolation=none would hide.
+  // Flag-name history: `--experimental-test-isolation` landed in Node v22.8.0;
+  // the non-experimental `--test-isolation=...` form was stabilised in v23.x.
+  // CI runs on Node 22 reject the stabilised name with "bad option", so we use
+  // the experimental prefix — Node 23+ still accepts it for back-compat.
+  // Discovered during the 2026-04-21 F-054..F-059 batch: every feature PR
+  // merged with red CI because this mismatch failed the runner before a single
+  // test executed.
   nodeArgs.push(
-    '--test-isolation=none',
+    '--experimental-test-isolation=none',
     '--experimental-test-coverage',
     '--test-coverage-lines=0.7',
     '--test-coverage-include=cap/bin/lib/*.cjs'
