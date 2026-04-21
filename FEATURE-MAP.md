@@ -1073,20 +1073,111 @@
 - `tests/cap-research-gate.test.cjs`
 - `tests/cap-research-gate-adversarial.test.cjs`
 
-### F-060: Terse Agent Prompts (Caveman-Inspired) [prototyped]
+### F-060: Terse Agent Prompts (Caveman-Inspired) [shipped]
 
 **Depends on:** F-044
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | The agent files cap-prototyper.md, cap-reviewer.md, cap-brainstormer.md, and cap-debugger.md shall each contain the four universal terseness rules: (a) no procedural narration before tool calls, (b) no defensive self-correcting negation (informative negation permitted), (c) end-of-turn summaries only for multi-step tasks, (d) terseness shall never override risk, decision, or compliance precision. |
-| AC-2 | pending | Each of the four agent files shall contain its agent-specific terseness rules: cap-prototyper shall forbid markdown tables under three rows and wrapper result headers; cap-reviewer shall forbid status recaps and collapse Stage-1 pass to one line when no notes exist while preserving the two-stage header; cap-brainstormer shall forbid preambles before questions while preserving conversational tone and the feature output block format; cap-debugger shall require one-line hypothesis entries in the form - H1: {text} [untested|tested|disproven] and point-list deploy rules while preserving hypothesis-test-conclude semantics. |
-| AC-3 | pending | A regression test shall verify via string-match that the universal rules block and each agent-specific rule set are present in their respective agent files, and shall fail (block CI) if any rule is removed. |
-| AC-4 | pending | After rollout, at least one session per hotspot agent (cap-prototyper, cap-reviewer, cap-debugger) shall be sampled for pattern reduction, and the qualitative findings shall be documented in .cap/memory/terse-audit-YYYY-MM-DD.md. |
-| AC-5 | pending | A code review shall explicitly verify that no terseness rule introduced by this feature contradicts the right-sizing guidance established by F-044, and the verification outcome shall be recorded in the review notes. |
+| AC-1 | tested | The agent files cap-prototyper.md, cap-reviewer.md, cap-brainstormer.md, and cap-debugger.md shall each contain the four universal terseness rules: (a) no procedural narration before tool calls, (b) no defensive self-correcting negation (informative negation permitted), (c) end-of-turn summaries only for multi-step tasks, (d) terseness shall never override risk, decision, or compliance precision. |
+| AC-2 | tested | Each of the four agent files shall contain its agent-specific terseness rules: cap-prototyper shall forbid markdown tables under three rows and wrapper result headers; cap-reviewer shall forbid status recaps and collapse Stage-1 pass to one line when no notes exist while preserving the two-stage header; cap-brainstormer shall forbid preambles before questions while preserving conversational tone and the feature output block format; cap-debugger shall require one-line hypothesis entries in the form - H1: {text} [untested|tested|disproven] and point-list deploy rules while preserving hypothesis-test-conclude semantics. |
+| AC-3 | tested | A regression test shall verify via string-match that the universal rules block and each agent-specific rule set are present in their respective agent files, and shall fail (block CI) if any rule is removed. |
+| AC-4 | tested | After rollout, at least one session per hotspot agent (cap-prototyper, cap-reviewer, cap-debugger) shall be sampled for pattern reduction, and the qualitative findings shall be documented in .cap/memory/terse-audit-YYYY-MM-DD.md. |
+| AC-5 | tested | A code review shall explicitly verify that no terseness rule introduced by this feature contradicts the right-sizing guidance established by F-044, and the verification outcome shall be recorded in the review notes. |
 
 **Files:**
 - `tests/cap-terse-rules.test.cjs`
+- `tests/cap-terse-rules-adversarial.test.cjs`
+- `tests/fixtures/f060-signatures.cjs`
+
+### F-062: cap:design Core — DESIGN.md + Aesthetic Picker [shipped]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Einführen des Commands `/cap:design --new`, das einen neuen cap-designer-Agenten für Greenfield-Design-Setup spawnt. |
+| AC-2 | tested | cap-designer Agent führt eine 3-Fragen-Wizard-Konversation (read-heavy vs. scan-heavy, user-type, courage-factor) und mappt auf eine von 9 Aesthetic Families. |
+| AC-3 | tested | Nach dem Wizard schreibt der Agent eine initiale DESIGN.md mit Struktur: Aesthetic Family, Tokens (colors, spacing, typography), Components (mindestens Button + Card), Anti-Patterns. |
+| AC-4 | tested | DESIGN.md liegt im Projekt-Root neben FEATURE-MAP.md und wird per Git versioniert. |
+| AC-5 | tested | `/cap:design --extend` erlaubt nachträgliches Hinzufügen von Tokens/Components zu existierender DESIGN.md, ohne bestehende Einträge zu überschreiben. |
+| AC-6 | tested | Anti-Slop-Regeln (generische Fonts verboten, Cliche-Gradients verboten, Cookie-Cutter-Layouts verboten) sind als Constraint-Block im Agent-Prompt und im DESIGN.md-Output hinterlegt. |
+| AC-7 | tested | DESIGN.md-Schreiber ist idempotent: wiederholter Aufruf mit gleicher Eingabe produziert identische Datei. |
+
+**Files:**
+- `cap/bin/lib/cap-design.cjs`
+- `tests/cap-design.test.cjs`
+
+### F-063: Design-Feature Traceability (IDs + Tags + --scope) [planned]
+
+**Depends on:** F-062
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | DESIGN.md-Einträge erhalten stabile IDs im Format `DT-NNN` (Design Token) und `DC-NNN` (Design Component), analog zu `F-NNN` / `AC-N`. |
+| AC-2 | pending | Tag-Scanner (F-001) wird erweitert um die Erkennung von `@cap-design-token(id:DT-NNN)` und `@cap-design-component(id:DC-NNN)` in Source-Code-Kommentaren. |
+| AC-3 | pending | Feature-Map-Parser (F-002) wird erweitert um ein optionales `uses-design:` Feld pro Feature, das DT- und DC-IDs auflistet. |
+| AC-4 | pending | `/cap:design --scope F-NNN` öffnet einen fokussierten Dialog: Agent fragt, welche Tokens/Components in F-NNN genutzt werden, aktualisiert `uses-design:` in FEATURE-MAP.md und legt bei Bedarf neue DT-/DC-Einträge in DESIGN.md an. |
+| AC-5 | pending | `cap:status` und `cap:trace` erweitert um "Design-Usage" je Feature (z.B. "F-023 nutzt: DT-001 primary-color, DC-001 Button"). |
+| AC-6 | pending | Impact-Analyse: Bei Änderung eines Tokens in DESIGN.md produziert `cap:deps --design DT-001` die Liste aller Features, die diesen Token referenzieren. |
+
+### F-064: cap:design --review — Anti-Slop-Check [planned]
+
+**Depends on:** F-062
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | `/cap:design --review` spawnt cap-designer-Agent im Review-Mode, der bestehende DESIGN.md gegen Anti-Slop-Regeln prüft. |
+| AC-2 | pending | Review-Output ist ein strukturierter Report: Violations-Liste mit Token-ID/Component-ID, Regelverletzung, Verbesserungsvorschlag. |
+| AC-3 | pending | Review ist rein read-only — keine automatischen Änderungen an DESIGN.md. |
+| AC-4 | pending | Review-Regelbasis ist konfigurierbar via `.cap/design-rules.md` (optional, Default-Regelset bei fehlender Datei). |
+| AC-5 | pending | Review ist idempotent und deterministisch (gleiche Eingabe → gleicher Report). |
+
+### F-065: CAP-UI Core — Local Server + Static Export [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Neuer Command `/cap:ui --serve` startet lokalen Node-http-Server auf konfigurierbarem Port (Default 4747), zero-deps, ausschließlich Node-builtins. |
+| AC-2 | pending | UI rendert Feature-Map + Memory + Threads als lesbare HTML-Ansicht im Browser. |
+| AC-3 | pending | File-Watcher beobachtet FEATURE-MAP.md, DESIGN.md, .cap/memory/, .cap/SESSION.json → UI aktualisiert sich in Realtime via Server-Sent-Events. |
+| AC-4 | pending | `/cap:ui --share` generiert einen standalone HTML-Snapshot (inkl. inline CSS/JS, kein externer Fetch nötig) in `.cap/ui/snapshot.html`, shareable via PR/Slack. |
+| AC-5 | pending | UI ist read-only für Feature-Map und Memory; Edit-Endpoints werden in F-068 spezifisch für DESIGN.md eingeführt. |
+| AC-6 | pending | Server logged alle Events (Server-Start, SSE-Verbindungen, File-Änderungen) auf stdout mit Zeitstempeln für Debugging. |
+
+### F-066: Tag Mind-Map Visualization [planned]
+
+**Depends on:** F-065, F-063
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | CAP-UI erhält eine Mind-Map-Ansicht, die alle `@cap-*` Tags (Features, ACs, Risks, Decisions, Design-Tokens, Design-Components) als Graph visualisiert. |
+| AC-2 | pending | Knoten: Features (F-NNN), Design-Tokens (DT-NNN), Design-Components (DC-NNN). Kanten: uses-design, depends_on, Feature-AC-Beziehungen. |
+| AC-3 | pending | Rendering via SVG + inline JS (keine externen Libraries zur Runtime; Build-Step darf D3-Bundle inlinen). |
+| AC-4 | pending | Interaktion: Zoom, Pan, Filter nach Feature-Gruppen, Hover-Details, Click-to-Focus (isoliert einen Subgraph). |
+| AC-5 | pending | Mind-Map ist Teil des `--share`-Exports und der `--serve`-UI. |
+
+### F-067: Thread + Cluster Navigator [planned]
+
+**Depends on:** F-065
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | CAP-UI erhält eine Thread-Browser-Ansicht, die `.cap/memory/threads/*.json` chronologisch listet mit Timestamp, Name, Feature-IDs, Keywords. |
+| AC-2 | pending | Click auf einen Thread zeigt Details: Problem-Statement, Solution-Shape, Boundary-Decisions, Feature-IDs, Parent-Thread-Link. |
+| AC-3 | pending | Neural Clusters (aus F-037) werden visualisiert: pro Cluster Namen, Thread-Zugehörigkeit, Pairwise-Affinity, Drift-Status. |
+| AC-4 | pending | Keyword-Overlap-View: für zwei ausgewählte Threads zeigt die UI gemeinsame Keywords. |
+| AC-5 | pending | Cluster-Drift-Warnungen werden im UI hervorgehoben (wenn ein Cluster Drift-Status hat). |
+
+### F-068: CAP-UI Visual Design Editor (DESIGN.md) [planned]
+
+**Depends on:** F-065, F-062
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | CAP-UI erhält eine Edit-Ansicht für DESIGN.md, aktivierbar via `cap:ui --serve --editable`. |
+| AC-2 | pending | Color-Picker für alle Farb-Tokens (DT-NNN mit Typ color) — Änderung im UI schreibt zurück in DESIGN.md. |
+| AC-3 | pending | Numerische Slider für Spacing-Tokens und Typography-Scales mit Live-Preview. |
+| AC-4 | pending | Komponenten-Inspector: zeigt Component-Specs (Varianten, States), erlaubt Hinzufügen/Entfernen von Varianten. |
+| AC-5 | pending | Alle Edits werden atomisch in DESIGN.md persistiert, Git-friendly (kleine Diffs, stabile Reihenfolge). |
+| AC-6 | pending | Edits sind für FEATURE-MAP.md und Memory explizit *nicht* erlaubt — Collab bleibt dort Git-basiert. |
 
 ## Legend
 
@@ -1098,4 +1189,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T17:26:59.993Z*
+*Last updated: 2026-04-21T21:16:19.824Z*

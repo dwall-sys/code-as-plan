@@ -39,6 +39,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-cluster-io.cjs',
   'cap-completeness.cjs',
   'cap-deps.cjs',
+  'cap-design.cjs',
   'cap-divergence-detector.cjs',
   'cap-doctor.cjs',
   'cap-feature-map.cjs',
