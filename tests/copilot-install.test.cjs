@@ -658,10 +658,10 @@ describe('Copilot agent conversion - real files', () => {
     assert.ok(!result.includes('~/.claude/'), 'no ~/.claude/ in body');
   });
 
-  test('all 5 CAP agents convert without error', () => {
+  test('all 6 CAP agents convert without error', () => {
     const agents = fs.readdirSync(agentsSrc)
       .filter(f => f.startsWith('cap-') && f.endsWith('.md'));
-    assert.strictEqual(agents.length, 5, `expected 5 agents, got ${agents.length}`);
+    assert.strictEqual(agents.length, 6, `expected 6 agents, got ${agents.length}`);
 
     for (const agentFile of agents) {
       const content = fs.readFileSync(path.join(agentsSrc, agentFile), 'utf8');
@@ -1103,6 +1103,7 @@ describe('E2E: Copilot full install verification', () => {
     const expected = [
       'cap-brainstormer.agent.md',
       'cap-debugger.agent.md',
+      'cap-designer.agent.md',
       'cap-prototyper.agent.md',
       'cap-reviewer.agent.md',
       'cap-tester.agent.md',
