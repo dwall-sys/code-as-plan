@@ -13,6 +13,7 @@ const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const pluginManifest = require('./cap-plugin-manifest.cjs');
 
 // @cap-todo(ac:F-019/AC-5) Module manifest — authoritative list of expected CAP modules
 // @cap-decision Manifest is a flat array of filenames maintained manually. When a new module is added to
@@ -44,6 +45,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-memory-prune.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',
+  'cap-plugin-manifest.cjs',
   'cap-realtime-affinity.cjs',
   'cap-reconcile.cjs',
   'cap-semantic-pipeline.cjs',
@@ -280,11 +282,16 @@ function checkPlatformPaths(installDir) {
  */
 
 /**
- * @cap-decision Plugin footprint detection uses two heuristics: (1) presence of a Claude plugin
- * cache entry under $HOME/.claude/plugins/cache/cap@* (loaded marketplace plugin) OR (2) presence
- * of .claude-plugin/plugin.json in cwd plus CLAUDE_PLUGIN_ROOT env hint. We do not hard-require
- * CLAUDE_PLUGIN_ROOT because that env var is only set when Claude Code spawns a hook inside
- * a plugin — a doctor invocation from the CLI never has it, so relying on it alone would false-negative.
+ * @cap-decision Plugin footprint detection uses two filesystem-only heuristics:
+ *   (1) presence of a Claude plugin cache entry under $HOME/.claude/plugins/cache/cap@*
+ *       (any plugin installed via /plugin install or marketplace), and
+ *   (2) presence of .claude-plugin/plugin.json in cwd with name === PLUGIN_NAME
+ *       (local-dev checkout). The cwd manifest's name gate prevents foreign plugins
+ *       living in the same repo from false-positive-registering as a CAP install.
+ * We do NOT read the CLAUDE_PLUGIN_ROOT env var. That variable is only set when
+ * Claude Code spawns a hook inside a plugin, never during a plain `npx cap:doctor`
+ * run from a shell, so relying on it would systematically false-negative on the
+ * CLI path where this function gets exercised most.
  * @cap-decision npx footprint is the existing detection used by detectInstallDir() — $HOME/.claude/cap/
  * written by the installer. No change to that detection.
  *
@@ -310,9 +317,9 @@ function detectInstallMode(opts) {
   if (fs.existsSync(pluginCacheDir)) {
     try {
       const entries = fs.readdirSync(pluginCacheDir);
+      const capPrefix = `${pluginManifest.PLUGIN_NAME}@`;
       for (const entry of entries) {
-        // Match "cap@..." (plugin name is "cap" per plugin.json)
-        if (entry === 'cap' || entry.startsWith('cap@')) {
+        if (entry === pluginManifest.PLUGIN_NAME || entry.startsWith(capPrefix)) {
           pluginPaths.push(path.join(pluginCacheDir, entry));
         }
       }
@@ -324,14 +331,14 @@ function detectInstallMode(opts) {
     }
   }
 
-  // Local-dev plugin footprint: .claude-plugin/plugin.json in cwd with name === "cap". Foreign
-  // manifests (a different plugin living in the same repo) must not register as a CAP install.
+  // Local-dev plugin footprint: .claude-plugin/plugin.json in cwd with name === PLUGIN_NAME.
+  // Foreign manifests (a different plugin living in the same repo) must not register as a CAP install.
   const localManifest = path.join(cwd, '.claude-plugin', 'plugin.json');
   if (fs.existsSync(localManifest)) {
     try {
       const raw = fs.readFileSync(localManifest, 'utf8');
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.name === 'cap') {
+      if (pluginManifest.isCapPluginManifest(parsed)) {
         pluginPaths.push(localManifest);
       }
     } catch (_err) {

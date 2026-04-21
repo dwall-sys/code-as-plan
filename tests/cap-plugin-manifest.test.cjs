@@ -21,18 +21,9 @@ const HOOKS_MANIFEST = path.join(ROOT, 'hooks', 'hooks.json');
 const PACKAGE_JSON = path.join(ROOT, 'package.json');
 
 // Reserved names that MUST NOT be used as marketplace name per Claude Code plugin spec.
-// @cap-decision Hard-coded here rather than imported — the list is small, rarely changing,
-// and duplicating it in the test makes the guard obvious during review.
-const RESERVED_MARKETPLACE_NAMES = [
-  'claude-code-marketplace',
-  'claude-code-plugins',
-  'claude-plugins-official',
-  'anthropic-marketplace',
-  'anthropic-plugins',
-  'agent-skills',
-  'knowledge-work-plugins',
-  'life-sciences',
-];
+// Imported from cap-plugin-manifest so the list has a single source of truth;
+// the test's role is to verify our chosen name does NOT collide with the list.
+const { RESERVED_MARKETPLACE_NAMES } = require('../cap/bin/lib/cap-plugin-manifest.cjs');
 
 // ---------------------------------------------------------------------------
 // AC-1 — .claude-plugin/plugin.json exists with full metadata
