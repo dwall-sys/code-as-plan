@@ -38,12 +38,15 @@ function tryRequire(modulePath) {
 }
 
 function resolveObserverModule() {
-  // Prefer a colocated lib (development) over the installed copy in ~/.claude.
-  // This lets the hook be unit-tested in-tree without requiring an install.
-  const candidates = [
-    path.join(__dirname, '..', 'cap', 'bin', 'lib', 'cap-tag-observer.cjs'),
-    path.join(os.homedir(), '.claude', 'cap', 'bin', 'lib', 'cap-tag-observer.cjs'),
-  ];
+  // Resolution precedence:
+  //  1. CAP_OBSERVER_LIB — explicit env override (tests, vendored forks, debug
+  //     builds). Must point at the absolute path of cap-tag-observer.cjs.
+  //  2. Colocated lib (development, in-tree unit tests).
+  //  3. Installed copy under ~/.claude (npx install).
+  const candidates = [];
+  if (process.env.CAP_OBSERVER_LIB) candidates.push(process.env.CAP_OBSERVER_LIB);
+  candidates.push(path.join(__dirname, '..', 'cap', 'bin', 'lib', 'cap-tag-observer.cjs'));
+  candidates.push(path.join(os.homedir(), '.claude', 'cap', 'bin', 'lib', 'cap-tag-observer.cjs'));
   for (const p of candidates) {
     const mod = tryRequire(p);
     if (mod) return mod;

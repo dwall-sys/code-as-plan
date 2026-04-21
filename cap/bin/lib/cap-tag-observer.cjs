@@ -90,18 +90,33 @@ function ensureDir(dir) {
 
 /**
  * Load a previously persisted tag snapshot.
+ *
+ * A missing snapshot is an expected "first observation" state — silent null.
+ * A corrupt snapshot (non-JSON, wrong shape) is an anomaly worth a breadcrumb
+ * so we can later correlate spurious `removed`-events with snapshot damage.
+ *
  * @param {string} rawDir
  * @param {string} filePath
  * @returns {{file:string, tags:string[], mtime:(number|null), updatedAt:string}|null}
  */
 function loadSnapshot(rawDir, filePath) {
   const snap = snapshotPath(rawDir, filePath);
+  let raw;
   try {
-    const raw = fs.readFileSync(snap, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.tags)) return null;
-    return parsed;
+    raw = fs.readFileSync(snap, 'utf8');
   } catch {
+    // ENOENT / EACCES / first-ever observation — no breadcrumb, caller treats as fresh.
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.tags)) {
+      logError(rawDir, new Error(`corrupt snapshot (missing tags array): ${snap}`));
+      return null;
+    }
+    return parsed;
+  } catch (err) {
+    logError(rawDir, new Error(`corrupt snapshot (${err.message}): ${snap}`));
     return null;
   }
 }
@@ -121,7 +136,10 @@ function loadSnapshot(rawDir, filePath) {
 function writeSnapshot(rawDir, filePath, data) {
   const snap = snapshotPath(rawDir, filePath);
   ensureDir(path.dirname(snap));
-  const tmp = `${snap}.${process.pid}.${Date.now()}.tmp`;
+  // 8 random bytes disambiguate two hook invocations that land in the same
+  // millisecond from the same pid (e.g. parallel Edit calls under CI) — Date.now()
+  // alone is insufficient because rename(2) on an existing tmp is a data-race.
+  const tmp = `${snap}.${process.pid}.${Date.now()}.${crypto.randomBytes(8).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data), 'utf8');
   fs.renameSync(tmp, snap);
 }
@@ -191,6 +209,94 @@ function logError(rawDir, err) {
   }
 }
 
+// @cap-decision Hard cap for readFile — any file > MAX_OBSERVE_BYTES is skipped
+// with a breadcrumb. Rationale: the hook runs synchronously on every Edit/Write
+// and must stay <100 ms (AC-5). A pathological 200 MB generated fixture would
+// not only blow the budget but also push the entire file into memory for a
+// regex scan. 5 MiB comfortably holds any hand-authored source while bounding
+// worst-case latency.
+const MAX_OBSERVE_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Read the observed file's bytes within the size cap. Returns null (and logs)
+ * on I/O failure or size-overflow; never throws.
+ *
+ * @param {string} filePath
+ * @param {string} rawDir
+ * @param {(p:string)=>string} readFile
+ * @returns {{content:string, mtime:(number|null)}|null}
+ */
+function readObservedFile(filePath, rawDir, readFile) {
+  let size = null;
+  let mtime = null;
+  try {
+    const st = fs.statSync(filePath);
+    size = st.size;
+    mtime = st.mtimeMs;
+  } catch {
+    // statSync failure is non-fatal — readFile may still succeed (e.g. injected
+    // reader in tests). Proceed without the size-guard short-circuit.
+  }
+  if (size !== null && size > MAX_OBSERVE_BYTES) {
+    logError(rawDir, new Error(`skipping oversized file (${size} bytes > ${MAX_OBSERVE_BYTES}): ${filePath}`));
+    return null;
+  }
+  try {
+    return { content: readFile(filePath), mtime };
+  } catch (err) {
+    logError(rawDir, err);
+    return null;
+  }
+}
+
+/**
+ * Compute the tag-diff between the current file content and the last snapshot.
+ * Pure function modulo the snapshot-read side-effect inside loadSnapshot.
+ *
+ * @param {string} content
+ * @param {string} rawDir
+ * @param {string} filePath
+ * @returns {{currentTags:string[], snapshot:object|null, added:string[], removed:string[]}}
+ */
+function computeDelta(content, rawDir, filePath) {
+  const currentTags = extractTags(content);
+  const snapshot = loadSnapshot(rawDir, filePath);
+  const previousTags = snapshot ? snapshot.tags : [];
+  const { added, removed } = diffTags(previousTags, currentTags);
+  return { currentTags, snapshot, added, removed };
+}
+
+/**
+ * Persist the JSONL event and update the snapshot. Event-write failure is fatal
+ * for this observation (returns eventWritten=false); snapshot-write failure is
+ * non-fatal (next run re-diffs against the stale snapshot).
+ */
+function persistObservation(rawDir, filePath, tool, now, currentTags, mtime, added, removed) {
+  try {
+    appendEvent(rawDir, {
+      timestamp: now.toISOString(),
+      tool,
+      file: path.resolve(filePath),
+      added,
+      removed,
+    });
+  } catch (err) {
+    logError(rawDir, err);
+    return { eventWritten: false };
+  }
+  try {
+    writeSnapshot(rawDir, filePath, {
+      file: path.resolve(filePath),
+      tags: currentTags,
+      mtime,
+      updatedAt: now.toISOString(),
+    });
+  } catch (err) {
+    logError(rawDir, err);
+  }
+  return { eventWritten: true };
+}
+
 /**
  * Main entry: observe a file after a tool invocation, compute tag diff against
  * the last snapshot, persist an event on change.
@@ -221,36 +327,20 @@ function observe(opts) {
 
   if (!filePath) return { eventWritten: false, added: [], removed: [] };
 
-  let content;
-  try {
-    content = readFile(filePath);
-  } catch (err) {
-    // AC-6: file disappeared / unreadable → log, but never throw.
-    logError(rawDir, err);
-    return { eventWritten: false, added: [], removed: [] };
-  }
+  const read = readObservedFile(filePath, rawDir, readFile);
+  if (!read) return { eventWritten: false, added: [], removed: [] };
 
-  let mtime = null;
-  try {
-    mtime = fs.statSync(filePath).mtimeMs;
-  } catch {
-    mtime = null;
-  }
-
-  const currentTags = extractTags(content);
-  const snapshot = loadSnapshot(rawDir, filePath);
-  const previousTags = snapshot ? snapshot.tags : [];
-  const { added, removed } = diffTags(previousTags, currentTags);
+  const { currentTags, snapshot, added, removed } = computeDelta(read.content, rawDir, filePath);
 
   if (added.length === 0 && removed.length === 0) {
-    // AC-4: nothing to report. Still refresh snapshot mtime on first-ever observation
+    // AC-4: nothing to report. Still seed a snapshot on first-ever observation
     // of a tagless file so we don't re-diff the same empty set forever.
     if (!snapshot) {
       try {
         writeSnapshot(rawDir, filePath, {
           file: path.resolve(filePath),
           tags: currentTags,
-          mtime,
+          mtime: read.mtime,
           updatedAt: now.toISOString(),
         });
       } catch (err) {
@@ -260,34 +350,10 @@ function observe(opts) {
     return { eventWritten: false, added, removed };
   }
 
-  try {
-    appendEvent(rawDir, {
-      timestamp: now.toISOString(),
-      tool,
-      file: path.resolve(filePath),
-      added,
-      removed,
-    });
-  } catch (err) {
-    logError(rawDir, err);
-    return { eventWritten: false, added, removed };
-  }
-
-  try {
-    writeSnapshot(rawDir, filePath, {
-      file: path.resolve(filePath),
-      tags: currentTags,
-      mtime,
-      updatedAt: now.toISOString(),
-    });
-  } catch (err) {
-    // Snapshot write failure is non-fatal — next run will simply re-diff against
-    // the stale snapshot. We still consider the event written because the JSONL
-    // line was persisted successfully above.
-    logError(rawDir, err);
-  }
-
-  return { eventWritten: true, added, removed };
+  const { eventWritten } = persistObservation(
+    rawDir, filePath, tool, now, currentTags, read.mtime, added, removed,
+  );
+  return { eventWritten, added, removed };
 }
 
 module.exports = {
