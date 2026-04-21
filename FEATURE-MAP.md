@@ -1046,18 +1046,24 @@
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-plugin-manifest.test.cjs`
 
-### F-059: Research-First Gate Before Prototype [planned]
+### F-059: Research-First Gate Before Prototype [shipped]
 
 **Depends on:** F-004
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | /cap:prototype parst Feature-ACs nach Library-Nennungen (Regex gegen package.json-Namen und Doc-Referenzen). |
-| AC-2 | pending | Für jede referenzierte Library wird geprüft, ob .cap/stack-docs/{library}/ existiert und mtime <30 Tage ist. |
-| AC-3 | pending | Fehlen Docs: Warning mit Liste der Libraries, Empfehlung '/cap:refresh-docs {libs}' und Prompt 'trotzdem fortfahren? [y/N]'. |
-| AC-4 | pending | Mit --skip-docs-Flag wird der Check übersprungen (für reine Scaffolding-Features ohne externe Libs). |
-| AC-5 | pending | Check blockiert NIE hart ohne User-Input — Default ist Warning + Prompt, kein Error-Exit. |
-| AC-6 | pending | Anzahl geprüfter Libs und Anzahl fehlender Docs wird im Session-Log (cap-session) protokolliert. |
+| AC-1 | prototyped | /cap:prototype parst Feature-ACs nach Library-Nennungen (Regex gegen package.json-Namen und Doc-Referenzen). |
+| AC-2 | prototyped | Für jede referenzierte Library wird geprüft, ob .cap/stack-docs/{library}.md existiert und mtime <30 Tage ist. |
+| AC-3 | prototyped | Fehlen Docs: Warning mit Liste der Libraries, Empfehlung '/cap:refresh-docs {libs}' und Prompt 'trotzdem fortfahren? [y/N]'. |
+| AC-4 | prototyped | Mit --skip-docs-Flag wird der Check übersprungen (für reine Scaffolding-Features ohne externe Libs). |
+| AC-5 | prototyped | Check blockiert NIE hart ohne User-Input — Default ist Warning + Prompt, kein Error-Exit. |
+| AC-6 | prototyped | Anzahl geprüfter Libs und Anzahl fehlender Docs wird im Session-Log (.cap/session-log.jsonl) protokolliert. |
+
+**Files:**
+- `cap/bin/lib/cap-research-gate.cjs`
+- `commands/cap/prototype.md`
+- `tests/cap-research-gate.test.cjs`
+- `tests/cap-research-gate-adversarial.test.cjs`
 
 ## Legend
 

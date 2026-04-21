@@ -48,6 +48,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-plugin-manifest.cjs',
   'cap-realtime-affinity.cjs',
   'cap-reconcile.cjs',
+  'cap-research-gate.cjs',
   'cap-semantic-pipeline.cjs',
   'cap-session-extract.cjs',
   'cap-session.cjs',
