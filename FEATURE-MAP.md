@@ -975,16 +975,22 @@
 - `hooks/cap-tag-observer.js`
 - `tests/cap-tag-observer.test.cjs`
 
-### F-055: Confidence and Evidence Fields for Memory Entries [planned]
+### F-055: Confidence and Evidence Fields for Memory Entries [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Schema-Erweiterung für decisions.md, pitfalls.md, patterns.md: jede Entry-Frontmatter enthält confidence:float(0.0–1.0) und evidence_count:int≥1. |
-| AC-2 | pending | Neu erzeugte Einträge aus der cap-memory-Pipeline starten mit confidence:0.5, evidence_count:1. |
-| AC-3 | pending | Bestehende Einträge ohne diese Felder werden beim ersten Lesen additiv auf confidence:0.5, evidence_count:1 migriert (stumm, ohne User-Interaktion). |
-| AC-4 | pending | Re-Observation derselben Pattern-Beschreibung (Text-Similarity ≥0.8) erhöht evidence_count um 1 und confidence um 0.1 (Cap bei 0.95). |
-| AC-5 | pending | Widerspruch (konträrer Eintrag mit überlappendem File-Scope) senkt confidence um 0.2 (Floor 0.0), erhöht NICHT evidence_count. |
-| AC-6 | pending | Einträge mit confidence<0.3 werden im Markdown-Output gedimmt gerendert (z. B. Präfix '> *(low confidence)*'). |
+| AC-1 | prototyped | Schema-Erweiterung für decisions.md, pitfalls.md, patterns.md: jede Entry-Frontmatter enthält confidence:float(0.0–1.0) und evidence_count:int≥1. |
+| AC-2 | prototyped | Neu erzeugte Einträge aus der cap-memory-Pipeline starten mit confidence:0.5, evidence_count:1. |
+| AC-3 | prototyped | Bestehende Einträge ohne diese Felder werden beim ersten Lesen additiv auf confidence:0.5, evidence_count:1 migriert (stumm, ohne User-Interaktion). |
+| AC-4 | prototyped | Re-Observation derselben Pattern-Beschreibung (Text-Similarity ≥0.8) erhöht evidence_count um 1 und confidence um 0.1 (Cap bei 0.95). |
+| AC-5 | prototyped | Widerspruch (konträrer Eintrag mit überlappendem File-Scope) senkt confidence um 0.2 (Floor 0.0), erhöht NICHT evidence_count. |
+| AC-6 | prototyped | Einträge mit confidence<0.3 werden im Markdown-Output gedimmt gerendert (z. B. Präfix '> *(low confidence)*'). |
+
+**Files:**
+- `cap/bin/lib/cap-memory-confidence.cjs`
+- `cap/bin/lib/cap-memory-dir.cjs`
+- `tests/cap-memory-confidence.test.cjs`
+- `tests/cap-memory-dir-confidence.test.cjs`
 
 ### F-056: Memory Prune Command (Decay + TTL) [planned]
 
@@ -1045,4 +1051,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T21:38:40.225Z*
+*Last updated: 2026-04-21T07:26:48.051Z*

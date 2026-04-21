@@ -9,6 +9,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const confidence = require('./cap-memory-confidence.cjs');
 
 // --- Constants ---
 
@@ -68,6 +69,8 @@ function generateCategoryMarkdown(category, entries) {
   // Default: list format for decisions, pitfalls, patterns
   for (const entry of entries) {
     const anchor = generateAnchorId(entry.content);
+    // Newlines or CRs in entry content would fracture into phantom entries on the next readMemoryFile pass and could smuggle a fake anchor heading. Collapse on the write path so the Markdown grammar stays one-entry-per-heading.
+    const safeContent = String(entry.content).replace(/[\r\n]+/g, ' ');
     const pinTag = entry.metadata.pinned ? ' **[pinned]**' : '';
     const date = entry.metadata.source ? entry.metadata.source.substring(0, 10) : 'unknown';
     const files = entry.metadata.relatedFiles?.length > 0
@@ -77,12 +80,22 @@ function generateCategoryMarkdown(category, entries) {
       ? ` (${entry.metadata.features.join(', ')})`
       : '';
 
-    out.push(`### <a id="${anchor}"></a>${entry.content}${pinTag}`);
-    out.push('');
-    out.push(`- **Date:** ${date}${features}`);
-    out.push(`- **Files:** ${files}`);
+    // @cap-todo(ac:F-055/AC-1) Confidence + evidence_count rendered as entry-block bullets.
+    // @cap-todo(ac:F-055/AC-3) ensureFields supplies defaults for entries that predate F-055.
+    const fields = confidence.ensureFields(entry.metadata);
+    // @cap-todo(ac:F-055/AC-6) Entries with confidence<0.3 render as a blockquote prefixed with "*(low confidence)*".
+    const dim = confidence.isLowConfidence(entry.metadata);
+    const prefix = dim ? '> ' : '';
+    const dimMarker = dim ? '*(low confidence)* ' : '';
+
+    out.push(`${prefix}### <a id="${anchor}"></a>${dimMarker}${safeContent}${pinTag}`);
+    out.push(dim ? '>' : '');
+    out.push(`${prefix}- **Date:** ${date}${features}`);
+    out.push(`${prefix}- **Files:** ${files}`);
+    out.push(`${prefix}- **Confidence:** ${fields.confidence.toFixed(2)}`);
+    out.push(`${prefix}- **Evidence:** ${fields.evidence_count}`);
     if (entry.metadata.confirmations) {
-      out.push(`- **Confirmed:** ${entry.metadata.confirmations} times`);
+      out.push(`${prefix}- **Confirmed:** ${entry.metadata.confirmations} times`);
     }
     out.push('');
   }
@@ -111,9 +124,18 @@ function generateHotspotsMarkdown(out, entries) {
   out.push('| Rank | File | Sessions | Edits | Since |');
   out.push('|------|------|----------|-------|-------|');
 
+  // Newlines or stray pipes in entry.file / metadata.since would fracture the
+  // markdown table into invalid rows. Parallel to the list-writer in
+  // generateCategoryMarkdown that collapses \r\n in entry.content.
+  const cellSanitize = (v) => String(v ?? '?').replace(/[\r\n]+/g, ' ').replace(/\|/g, '\\|');
+
   sorted.forEach((entry, i) => {
     const anchor = generateAnchorId(entry.content + entry.file);
-    out.push(`| <a id="${anchor}"></a>${i + 1} | \`${entry.file}\` | ${entry.metadata.sessions || '?'} | ${entry.metadata.edits || '?'} | ${entry.metadata.since || '?'} |`);
+    const file = cellSanitize(entry.file);
+    const sessions = cellSanitize(entry.metadata.sessions || '?');
+    const edits = cellSanitize(entry.metadata.edits || '?');
+    const since = cellSanitize(entry.metadata.since || '?');
+    out.push(`| <a id="${anchor}"></a>${i + 1} | \`${file}\` | ${sessions} | ${edits} | ${since} |`);
   });
 
   out.push('');
@@ -239,12 +261,126 @@ function getCrossReference(entry) {
   return `see .cap/memory/${filename}#${anchor}`;
 }
 
+// --- Per-file Parser (F-055) ---
+
+// @cap-feature(feature:F-055) readMemoryFile parses a single category markdown back into structured entries, applying lazy AC-3 migration for pre-F-055 files.
+// @cap-decision Lightweight line-oriented parser rather than a full markdown AST — the write-side format is fixed and deterministic, so a state machine over bullet prefixes is both sufficient and robust to ad-hoc editing (dim-prefixes, pinned tags).
+
+/**
+ * Parse a single .cap/memory/{category}.md file back into structured entries.
+ * Applies ensureFields() on every parsed entry so pre-F-055 files migrate silently (AC-3).
+ *
+ * Hotspots use a different format (ranking table) and are intentionally not parsed here —
+ * the pipeline regenerates them fully each run from session data.
+ *
+ * @param {string} filePath - Absolute path to a decisions.md / pitfalls.md / patterns.md file
+ * @returns {{entries: Array<{content:string, metadata:Object, anchor:string|null}>}}
+ */
+function readMemoryFile(filePath) {
+  if (!fs.existsSync(filePath)) return { entries: [] };
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const lines = raw.split('\n');
+
+  const entries = [];
+  let current = null;
+
+  const stripQuote = (line) => line.replace(/^>\s?/, '');
+
+  const flush = () => {
+    if (!current) return;
+    // @cap-todo(ac:F-055/AC-3) Missing confidence/evidence_count fields get defaulted silently on read.
+    current.metadata = confidence.ensureFields(current.metadata);
+    entries.push(current);
+    current = null;
+  };
+
+  for (let rawLine of lines) {
+    const quoted = rawLine.startsWith('>');
+    const line = quoted ? stripQuote(rawLine) : rawLine;
+
+    // Heading opens a new entry: "### <a id="HASH"></a>[*(low confidence)* ]Content[ **[pinned]**]"
+    const headingMatch = line.match(/^###\s+<a id="([a-f0-9]+)"><\/a>\s*(.*)$/);
+    if (headingMatch) {
+      flush();
+      let title = headingMatch[2].trim();
+      // Strip dim marker + pinned suffix from the displayed content.
+      const dim = title.startsWith('*(low confidence)*');
+      if (dim) title = title.slice('*(low confidence)*'.length).trim();
+      const pinned = / \*\*\[pinned\]\*\*\s*$/.test(title);
+      title = title.replace(/ \*\*\[pinned\]\*\*\s*$/, '').trim();
+
+      current = {
+        content: title,
+        anchor: headingMatch[1],
+        metadata: {
+          pinned,
+          relatedFiles: [],
+          features: [],
+        },
+      };
+      continue;
+    }
+
+    if (!current) continue;
+
+    // Terminator: a footer rule or the totals line ends the last entry.
+    if (/^---\s*$/.test(line) || /^\*\d+\s+\w+s total\*/.test(line)) {
+      flush();
+      continue;
+    }
+
+    // Bullets:
+    const dateMatch = line.match(/^-\s+\*\*Date:\*\*\s+(.+?)(?:\s+\((.+?)\))?\s*$/);
+    if (dateMatch) {
+      const dateStr = dateMatch[1].trim();
+      current.metadata.source = dateStr === 'unknown' ? null : dateStr;
+      if (dateMatch[2]) {
+        current.metadata.features = dateMatch[2].split(',').map((f) => f.trim()).filter(Boolean);
+      }
+      continue;
+    }
+
+    const filesMatch = line.match(/^-\s+\*\*Files:\*\*\s+(.+?)\s*$/);
+    if (filesMatch) {
+      const body = filesMatch[1].trim();
+      if (body === 'cross-cutting') {
+        current.metadata.relatedFiles = [];
+      } else {
+        current.metadata.relatedFiles = [...body.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      }
+      continue;
+    }
+
+    const confMatch = line.match(/^-\s+\*\*Confidence:\*\*\s+([0-9.]+)\s*$/);
+    if (confMatch) {
+      current.metadata.confidence = Number(confMatch[1]);
+      continue;
+    }
+
+    const eviMatch = line.match(/^-\s+\*\*Evidence:\*\*\s+(\d+)\s*$/);
+    if (eviMatch) {
+      current.metadata.evidence_count = Number(eviMatch[1]);
+      continue;
+    }
+
+    const confirmedMatch = line.match(/^-\s+\*\*Confirmed:\*\*\s+(\d+)\s+times\s*$/);
+    if (confirmedMatch) {
+      current.metadata.confirmations = Number(confirmedMatch[1]);
+      continue;
+    }
+  }
+
+  flush();
+  return { entries };
+}
+
 module.exports = {
   generateAnchorId,
   generateCategoryMarkdown,
   parseExistingAnchors,
   writeMemoryDirectory,
   readMemoryDirectory,
+  readMemoryFile,
   getCrossReference,
   MEMORY_DIR,
   CATEGORY_FILES,
