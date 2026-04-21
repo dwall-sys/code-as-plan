@@ -22,6 +22,7 @@ const HOOKS_TO_COPY = [
   'cap-memory.js',
   'cap-prompt-guard.js',
   'cap-statusline.js',
+  'cap-tag-observer.js',
   'cap-workflow-guard.js'
 ];
 
