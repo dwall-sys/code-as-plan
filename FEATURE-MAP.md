@@ -1073,17 +1073,17 @@
 - `tests/cap-research-gate.test.cjs`
 - `tests/cap-research-gate-adversarial.test.cjs`
 
-### F-060: Terse Agent Prompts (Caveman-Inspired) [prototyped]
+### F-060: Terse Agent Prompts (Caveman-Inspired) [shipped]
 
 **Depends on:** F-044
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | The agent files cap-prototyper.md, cap-reviewer.md, cap-brainstormer.md, and cap-debugger.md shall each contain the four universal terseness rules: (a) no procedural narration before tool calls, (b) no defensive self-correcting negation (informative negation permitted), (c) end-of-turn summaries only for multi-step tasks, (d) terseness shall never override risk, decision, or compliance precision. |
-| AC-2 | pending | Each of the four agent files shall contain its agent-specific terseness rules: cap-prototyper shall forbid markdown tables under three rows and wrapper result headers; cap-reviewer shall forbid status recaps and collapse Stage-1 pass to one line when no notes exist while preserving the two-stage header; cap-brainstormer shall forbid preambles before questions while preserving conversational tone and the feature output block format; cap-debugger shall require one-line hypothesis entries in the form - H1: {text} [untested|tested|disproven] and point-list deploy rules while preserving hypothesis-test-conclude semantics. |
-| AC-3 | pending | A regression test shall verify via string-match that the universal rules block and each agent-specific rule set are present in their respective agent files, and shall fail (block CI) if any rule is removed. |
-| AC-4 | pending | After rollout, at least one session per hotspot agent (cap-prototyper, cap-reviewer, cap-debugger) shall be sampled for pattern reduction, and the qualitative findings shall be documented in .cap/memory/terse-audit-YYYY-MM-DD.md. |
-| AC-5 | pending | A code review shall explicitly verify that no terseness rule introduced by this feature contradicts the right-sizing guidance established by F-044, and the verification outcome shall be recorded in the review notes. |
+| AC-1 | tested | The agent files cap-prototyper.md, cap-reviewer.md, cap-brainstormer.md, and cap-debugger.md shall each contain the four universal terseness rules: (a) no procedural narration before tool calls, (b) no defensive self-correcting negation (informative negation permitted), (c) end-of-turn summaries only for multi-step tasks, (d) terseness shall never override risk, decision, or compliance precision. |
+| AC-2 | tested | Each of the four agent files shall contain its agent-specific terseness rules: cap-prototyper shall forbid markdown tables under three rows and wrapper result headers; cap-reviewer shall forbid status recaps and collapse Stage-1 pass to one line when no notes exist while preserving the two-stage header; cap-brainstormer shall forbid preambles before questions while preserving conversational tone and the feature output block format; cap-debugger shall require one-line hypothesis entries in the form - H1: {text} [untested|tested|disproven] and point-list deploy rules while preserving hypothesis-test-conclude semantics. |
+| AC-3 | tested | A regression test shall verify via string-match that the universal rules block and each agent-specific rule set are present in their respective agent files, and shall fail (block CI) if any rule is removed. |
+| AC-4 | tested | After rollout, at least one session per hotspot agent (cap-prototyper, cap-reviewer, cap-debugger) shall be sampled for pattern reduction, and the qualitative findings shall be documented in .cap/memory/terse-audit-YYYY-MM-DD.md. |
+| AC-5 | tested | A code review shall explicitly verify that no terseness rule introduced by this feature contradicts the right-sizing guidance established by F-044, and the verification outcome shall be recorded in the review notes. |
 
 **Files:**
 - `tests/cap-terse-rules.test.cjs`
