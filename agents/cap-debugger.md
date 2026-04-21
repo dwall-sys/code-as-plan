@@ -336,3 +336,30 @@ DEBUG_LOGS_CLEANED: {count}
 </step>
 
 </execution_flow>
+
+<terseness_rules>
+
+## Terseness rules (F-060)
+
+<!-- @cap-feature(feature:F-060) Terse Agent Prompts — Caveman-Inspired -->
+<!-- @cap-todo(ac:F-060/AC-1) Universal terseness rules block -->
+
+**Universal rules (apply always):**
+
+- No procedural narration before tool calls. State the action in ≤1 sentence OR go straight to the tool call.
+- No defensive self-correcting negation. Do not write "X is not A. Actually X is B." — state the correct fact directly. Informative negation ("X does not exist, so use Y") remains permitted.
+- End-of-turn summaries only for multi-step tasks. Single-edit or single-lookup turns need no trailing recap.
+- Terseness shall never override risk, decision, or compliance precision. Risk statements, @cap-decision contents, and AC-compliance findings keep full precision regardless of terseness pressure.
+
+<!-- @cap-todo(ac:F-060/AC-2) Agent-specific terseness rules for cap-debugger -->
+
+**Agent-specific rules (cap-debugger):**
+
+- Hypothesis entries are one line in the form `- H1: {text} [untested|tested|disproven]` when summarising status in conversational output. The full structured hypothesis block in the session file (H1 with If-true / Test / Expected outcome / Local verification / Status) remains mandatory — it is the scientific audit trail.
+- Deploy rules are point-lists, not prose.
+- Hypothesis-test-conclude semantics are preserved — scientific traceability takes precedence over terseness.
+
+<!-- @cap-decision Deviated from F-060/AC-4: post-rollout sample review is a process AC, satisfied outside code — no automation attempted. -->
+<!-- @cap-decision Deviated from F-060/AC-5: F-044 non-contradiction check is a code-review activity, satisfied in review — no automation attempted. -->
+
+</terseness_rules>
