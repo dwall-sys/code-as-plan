@@ -1090,17 +1090,21 @@
 - `tests/cap-terse-rules-adversarial.test.cjs`
 - `tests/fixtures/f060-signatures.cjs`
 
-### F-062: cap:design Core — DESIGN.md + Aesthetic Picker [planned]
+### F-062: cap:design Core — DESIGN.md + Aesthetic Picker [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Einführen des Commands `/cap:design --new`, das einen neuen cap-designer-Agenten für Greenfield-Design-Setup spawnt. |
-| AC-2 | pending | cap-designer Agent führt eine 3-Fragen-Wizard-Konversation (read-heavy vs. scan-heavy, user-type, courage-factor) und mappt auf eine von 9 Aesthetic Families. |
-| AC-3 | pending | Nach dem Wizard schreibt der Agent eine initiale DESIGN.md mit Struktur: Aesthetic Family, Tokens (colors, spacing, typography), Components (mindestens Button + Card), Anti-Patterns. |
-| AC-4 | pending | DESIGN.md liegt im Projekt-Root neben FEATURE-MAP.md und wird per Git versioniert. |
-| AC-5 | pending | `/cap:design --extend` erlaubt nachträgliches Hinzufügen von Tokens/Components zu existierender DESIGN.md, ohne bestehende Einträge zu überschreiben. |
-| AC-6 | pending | Anti-Slop-Regeln (generische Fonts verboten, Cliche-Gradients verboten, Cookie-Cutter-Layouts verboten) sind als Constraint-Block im Agent-Prompt und im DESIGN.md-Output hinterlegt. |
-| AC-7 | pending | DESIGN.md-Schreiber ist idempotent: wiederholter Aufruf mit gleicher Eingabe produziert identische Datei. |
+| AC-1 | tested | Einführen des Commands `/cap:design --new`, das einen neuen cap-designer-Agenten für Greenfield-Design-Setup spawnt. |
+| AC-2 | tested | cap-designer Agent führt eine 3-Fragen-Wizard-Konversation (read-heavy vs. scan-heavy, user-type, courage-factor) und mappt auf eine von 9 Aesthetic Families. |
+| AC-3 | tested | Nach dem Wizard schreibt der Agent eine initiale DESIGN.md mit Struktur: Aesthetic Family, Tokens (colors, spacing, typography), Components (mindestens Button + Card), Anti-Patterns. |
+| AC-4 | tested | DESIGN.md liegt im Projekt-Root neben FEATURE-MAP.md und wird per Git versioniert. |
+| AC-5 | tested | `/cap:design --extend` erlaubt nachträgliches Hinzufügen von Tokens/Components zu existierender DESIGN.md, ohne bestehende Einträge zu überschreiben. |
+| AC-6 | tested | Anti-Slop-Regeln (generische Fonts verboten, Cliche-Gradients verboten, Cookie-Cutter-Layouts verboten) sind als Constraint-Block im Agent-Prompt und im DESIGN.md-Output hinterlegt. |
+| AC-7 | tested | DESIGN.md-Schreiber ist idempotent: wiederholter Aufruf mit gleicher Eingabe produziert identische Datei. |
+
+**Files:**
+- `cap/bin/lib/cap-design.cjs`
+- `tests/cap-design.test.cjs`
 
 ### F-063: Design-Feature Traceability (IDs + Tags + --scope) [planned]
 
@@ -1185,4 +1189,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T20:09:47.939Z*
+*Last updated: 2026-04-21T21:16:19.824Z*
