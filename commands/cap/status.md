@@ -231,6 +231,25 @@ For each feature in scope, display:
     ACs: {feature.acCount} total, {feature.acsImplemented} implemented, {feature.acsTested} tested
     Files: {feature.fileCount}
     Dependencies: {feature.dependencies.join(', ') or 'none'}
+    Design-Usage: {feature.usesDesign.join(', ') or '(none)'}   ← F-063: only rendered when usesDesign is non-empty
+```
+
+<!-- @cap-todo(ac:F-063/AC-5) Display the feature's `usesDesign` list inline. Renderer draws from cap-trace.formatDesignUsage
+     which optionally labels DT/DC IDs with their token keys / component names via parseDesignIds(DESIGN.md). -->
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const d = require('./cap/bin/lib/cap-design.cjs');
+const trace = require('./cap/bin/lib/cap-trace.cjs');
+const map = fm.readFeatureMap(process.cwd());
+const design = d.readDesignMd(process.cwd());
+const designIdx = design ? d.parseDesignIds(design) : { byToken: {}, byComponent: {} };
+for (const f of map.features) {
+  const line = trace.formatDesignUsage(f, designIdx);
+  if (line) console.log('  ' + line);
+}
+"
 ```
 
 ## Step 5: Suggest next action

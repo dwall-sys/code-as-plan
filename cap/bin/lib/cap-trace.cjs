@@ -359,6 +359,33 @@ function formatTraceResult(t) {
   return lines.join('\n');
 }
 
+// @cap-feature(feature:F-063) Design-Usage line for /cap:trace output.
+// @cap-todo(ac:F-063/AC-5) /cap:trace and /cap:status shall emit a "Design-Usage" summary per feature
+//   when the feature declares `usesDesign` in FEATURE-MAP.md.
+// @cap-decision Renderer is data-in / string-out. Callers pass the feature and (optionally) a DESIGN.md
+//   parse result so token/component labels (e.g. "primary-color", "Button") accompany the bare IDs.
+/**
+ * @param {{id:string,usesDesign?:string[]}} feature
+ * @param {{ byToken?: Object<string,{key:string}>, byComponent?: Object<string,{name:string}> }} [designIndex]
+ * @returns {string} - single-line summary, or '' if no design usage declared
+ */
+function formatDesignUsage(feature, designIndex) {
+  if (!feature || !Array.isArray(feature.usesDesign) || feature.usesDesign.length === 0) return '';
+  const idx = designIndex || {};
+  const parts = feature.usesDesign.map(id => {
+    if (/^DT-/.test(id)) {
+      const label = idx.byToken && idx.byToken[id] ? ` ${idx.byToken[id].key}` : '';
+      return `${id}${label}`;
+    }
+    if (/^DC-/.test(id)) {
+      const label = idx.byComponent && idx.byComponent[id] ? ` ${idx.byComponent[id].name}` : '';
+      return `${id}${label}`;
+    }
+    return id;
+  });
+  return `${feature.id} nutzt: ${parts.join(', ')}`;
+}
+
 module.exports = {
   DEFAULT_MAX_DEPTH,
   CODE_EXTENSIONS,
@@ -367,4 +394,6 @@ module.exports = {
   walkCallGraph,
   traceAc,
   formatTraceResult,
+  // F-063
+  formatDesignUsage,
 };

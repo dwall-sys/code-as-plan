@@ -1,12 +1,16 @@
 // @cap-context CAP F-062 DESIGN.md engine -- deterministic aesthetic picker + idempotent DESIGN.md writer.
+// @cap-context CAP F-063 additively attaches stable DT-NNN / DC-NNN IDs to DESIGN.md entries and exposes helpers for feature-map traceability.
 // @cap-decision DESIGN.md is a single markdown file at project root next to FEATURE-MAP.md. Zero-deps, diffable, inspectable.
-// @cap-decision v1 does NOT introduce DT-NNN / DC-NNN IDs. The DESIGN.md format is designed so F-063 can additively attach stable IDs without breaking v1 structure.
+// @cap-decision(F-063/D1) ID format is an INLINE suffix — bullet form `- key: value (id: DT-NNN)`, component form `### Name (id: DC-NNN)`. Preserves F-062's line-scan merge, stays dense, diff-friendly.
+// @cap-decision(F-063/D2) ID assignment is SEQUENTIAL per type (DT-001, DT-002...; DC-001, DC-002...). Computed from max existing ID + 1 — deterministic, human-readable, no gaps required but tolerated.
+// @cap-decision(F-063/D4) Stable-ID guarantee — once assigned, NEVER renumbered. assignDesignIds only fills entries without ids; existing IDs are preserved byte-identical. This keeps F-068 (visual editor) edits from churning diffs.
 // @cap-decision Idempotence guaranteed by pinning all tokens per aesthetic family in a lookup table and emitting NO timestamps, NO LLM-generated flavor text.
 // @cap-constraint Zero external dependencies -- Node.js built-ins only (fs, path).
 
 'use strict';
 
 // @cap-feature(feature:F-062) cap:design Core — DESIGN.md + Aesthetic Picker
+// @cap-feature(feature:F-063) Design-Feature Traceability — DT/DC IDs, tag recognition, and feature-map usesDesign helpers
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -386,13 +390,14 @@ function mapAnswersToFamily(readHeavy, userType, courageFactor) {
   return AESTHETIC_FAMILIES[familyKey];
 }
 
-// @cap-api buildDesignMd({family, extras}) -- Returns DESIGN.md content string (idempotent).
+// @cap-api buildDesignMd({family, extras, withIds}) -- Returns DESIGN.md content string (idempotent).
 // @cap-todo(ac:F-062/AC-3) Output contains: Aesthetic Family, Tokens (colors/spacing/typography), Components (Button + Card), Anti-Patterns.
 // @cap-todo(ac:F-062/AC-6) Anti-Patterns block rendered from ANTI_SLOP_RULES.
 // @cap-todo(ac:F-062/AC-7) No timestamps, no randomness -- same input -> byte-identical output.
+// @cap-todo(ac:F-063/AC-1) When `withIds` option is truthy, tokens and components are born with inline DT-NNN / DC-NNN suffixes. Default-off for backward-compatible F-062 test snapshots.
 // @cap-decision F-063 hook: tokens/components are written in a stable ordered list form so F-063 can append `id: DT-NNN` / `id: DC-NNN` inline without breaking the v1 parser.
 /**
- * @param {{ family: AestheticFamily, extras?: Object }} input
+ * @param {{ family: AestheticFamily, extras?: Object, withIds?: boolean }} input
  * @returns {string} Full DESIGN.md content.
  */
 function buildDesignMd(input) {
@@ -400,6 +405,7 @@ function buildDesignMd(input) {
     throw new Error('buildDesignMd requires { family } input');
   }
   const fam = input.family;
+  const withIds = Boolean(input.withIds);
   const lines = [];
 
   lines.push('# DESIGN.md');
@@ -423,13 +429,17 @@ function buildDesignMd(input) {
   lines.push('');
   // Stable key order -- sorted alphabetically for determinism.
   const colorKeys = Object.keys(fam.colors).sort();
+  // @cap-todo(ac:F-063/AC-1) Deterministic DT-NNN assignment: sequential in sorted key order.
+  let dtCounter = 1;
   for (const k of colorKeys) {
-    lines.push(`- ${k}: ${fam.colors[k]}`);
+    const suffix = withIds ? ` (id: ${formatDesignId('DT', dtCounter++)})` : '';
+    lines.push(`- ${k}: ${fam.colors[k]}${suffix}`);
   }
   lines.push('');
 
   lines.push('### Spacing');
   lines.push('');
+  // @cap-decision Spacing/typography scales are single-entry tokens. F-063 v1 assigns IDs only to colors (per-token) and components; scales remain unIDed until a user feature requires them. Revisit if impact-analysis demand surfaces (AC-6).
   lines.push(`- scale: [${fam.spacing.join(', ')}]`);
   lines.push('');
 
@@ -444,9 +454,12 @@ function buildDesignMd(input) {
   lines.push('## Components');
   lines.push('');
   const compKeys = Object.keys(fam.components).sort();
+  // @cap-todo(ac:F-063/AC-1) Deterministic DC-NNN assignment: sequential in sorted component name order.
+  let dcCounter = 1;
   for (const compName of compKeys) {
     const comp = fam.components[compName];
-    lines.push(`### ${compName}`);
+    const suffix = withIds ? ` (id: ${formatDesignId('DC', dcCounter++)})` : '';
+    lines.push(`### ${compName}${suffix}`);
     lines.push('');
     lines.push(`- variants: [${comp.variants.join(', ')}]`);
     lines.push(`- states: [${comp.states.join(', ')}]`);
@@ -488,20 +501,31 @@ function writeDesignMd(projectRoot, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
-// @cap-api extendDesignMd(existing, additions) -- Append-only merge for /cap:design --extend.
+// @cap-api extendDesignMd(existing, additions, options) -- Append-only merge for /cap:design --extend.
 // @cap-todo(ac:F-062/AC-5) Adds new tokens/components to existing DESIGN.md without overwriting existing entries.
+// @cap-todo(ac:F-063/AC-1) When options.withIds is truthy, newly appended entries receive the next free DT-NNN / DC-NNN ID. Existing entries keep whatever IDs they already have (stable-ID guarantee, D4).
 // @cap-decision Line-scan merge instead of markdown parsing -- keeps zero-deps and preserves author edits in unrelated sections.
+// @cap-risk extendDesignMd multi-line injection is snapshot-locked (F-062 review note). F-063 only appends an optional trailing ` (id: DT-NNN)` suffix to NEW bullet / header lines. Existing injection tests still hold — the lines we splice in retain the same base shape.
 /**
  * @param {string} existing - Current DESIGN.md content.
  * @param {{ colors?: Object<string,string>, components?: Object<string, { variants: string[], states: string[] }> }} additions
+ * @param {{ withIds?: boolean }} [options]
  * @returns {string} Updated DESIGN.md content. Existing token/component entries are preserved verbatim.
  */
-function extendDesignMd(existing, additions) {
+function extendDesignMd(existing, additions, options) {
   if (typeof existing !== 'string') {
     throw new Error('extendDesignMd requires existing content string');
   }
   const adds = additions || {};
+  const opts = options || {};
+  const withIds = Boolean(opts.withIds);
   const lines = existing.split('\n');
+
+  // Pre-scan for existing IDs so new entries get the NEXT free number.
+  // Stable-ID guarantee (D4): pre-existing IDs are never rewritten.
+  const existingIds = parseDesignIds(existing);
+  let nextDt = nextIdNumber(existingIds.tokens);
+  let nextDc = nextIdNumber(existingIds.components);
 
   // --- Merge colors (append new keys under ### Colors, skip duplicates) ---
   if (adds.colors && Object.keys(adds.colors).length > 0) {
@@ -523,7 +547,8 @@ function extendDesignMd(existing, additions) {
       const newColorKeys = Object.keys(adds.colors).sort();
       for (const k of newColorKeys) {
         if (!existingColorKeys.has(k)) {
-          newLines.push(`- ${k}: ${adds.colors[k]}`);
+          const suffix = withIds ? ` (id: ${formatDesignId('DT', nextDt++)})` : '';
+          newLines.push(`- ${k}: ${adds.colors[k]}${suffix}`);
         }
       }
       if (newLines.length > 0) {
@@ -541,7 +566,7 @@ function extendDesignMd(existing, additions) {
       while (sectionEnd < lines.length && !lines[sectionEnd].startsWith('## ')) {
         sectionEnd++;
       }
-      // Collect existing component names (### Foo)
+      // Collect existing component names (### Foo  or  ### Foo (id: DC-001))
       const existingCompNames = new Set();
       for (let i = compHdrIdx + 1; i < sectionEnd; i++) {
         const m = lines[i].match(/^###\s+(\S+)/);
@@ -553,7 +578,8 @@ function extendDesignMd(existing, additions) {
       for (const name of newCompNames) {
         if (existingCompNames.has(name)) continue;
         const comp = adds.components[name];
-        insertion.push(`### ${name}`);
+        const suffix = withIds ? ` (id: ${formatDesignId('DC', nextDc++)})` : '';
+        insertion.push(`### ${name}${suffix}`);
         insertion.push('');
         insertion.push(`- variants: [${(comp.variants || []).join(', ')}]`);
         insertion.push(`- states: [${(comp.states || []).join(', ')}]`);
@@ -566,6 +592,200 @@ function extendDesignMd(existing, additions) {
   }
 
   return lines.join('\n');
+}
+
+// @cap-feature(feature:F-063) Design-ID helpers — parser + assigner + impact-analysis.
+
+// @cap-decision(F-063/D1) Inline ID regex:
+//   - Token:    "- primary: #HEX (id: DT-001)"  — captured on bullet lines inside ### Colors
+//   - Component: "### Button (id: DC-001)"      — captured on component headers inside ## Components
+// @cap-risk The regex is intentionally permissive about surrounding whitespace/punctuation
+//           but REQUIRES the `(id: XX-NNN)` parenthesized form. Markdown-linters that collapse
+//           trailing whitespace will not break the suffix.
+const DESIGN_TOKEN_ID_RE = /\(id:\s*(DT-\d{3,})\)/;
+const DESIGN_COMPONENT_ID_RE = /\(id:\s*(DC-\d{3,})\)/;
+
+// @cap-api formatDesignId(prefix, n) -- zero-padded 3-digit ID formatter.
+/**
+ * @param {'DT'|'DC'} prefix
+ * @param {number} n - 1-based counter
+ * @returns {string}
+ */
+function formatDesignId(prefix, n) {
+  return `${prefix}-${String(n).padStart(3, '0')}`;
+}
+
+// @cap-api nextIdNumber(existingIds) -- Return the next sequential number not already used.
+// Gaps are tolerated — we always return max+1 to satisfy the stable-ID guarantee (D4).
+/**
+ * @param {string[]} existingIds - e.g. ['DT-001', 'DT-003']
+ * @returns {number} - next number to use (e.g. 4)
+ */
+function nextIdNumber(existingIds) {
+  let max = 0;
+  for (const id of existingIds || []) {
+    const m = String(id).match(/-(\d+)$/);
+    if (!m) continue;
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return max + 1;
+}
+
+// @cap-api getNextDesignId(type, existing) -- Convenience wrapper that returns a formatted ID.
+// @cap-todo(ac:F-063/AC-1) Sequential DT-NNN / DC-NNN assignment driven by max existing + 1.
+/**
+ * @param {'token'|'component'} type
+ * @param {string[]} existing - existing IDs of the same type
+ * @returns {string} - next formatted ID, e.g. "DT-004"
+ */
+function getNextDesignId(type, existing) {
+  if (type !== 'token' && type !== 'component') {
+    throw new Error(`getNextDesignId: type must be 'token' or 'component', got ${type}`);
+  }
+  const prefix = type === 'token' ? 'DT' : 'DC';
+  return formatDesignId(prefix, nextIdNumber(existing));
+}
+
+// @cap-api parseDesignIds(content) -- Extract all DT-NNN / DC-NNN IDs from DESIGN.md content.
+// @cap-todo(ac:F-063/AC-1) Parser recognises inline `(id: DT-NNN)` and `(id: DC-NNN)` suffixes so callers can see which entries are already stable-ID-tagged.
+/**
+ * @param {string} content - DESIGN.md content
+ * @returns {{
+ *   tokens: string[],        // all DT-NNN IDs in file order
+ *   components: string[],    // all DC-NNN IDs in file order
+ *   byToken: Object<string,{id:string,key:string,value:string,line:number}>,
+ *   byComponent: Object<string,{id:string,name:string,line:number}>,
+ * }}
+ */
+function parseDesignIds(content) {
+  const result = {
+    tokens: [],
+    components: [],
+    byToken: {},
+    byComponent: {},
+  };
+  if (typeof content !== 'string' || content.length === 0) return result;
+
+  const lines = content.split('\n');
+  // @cap-decision Section tracking mirrors F-062's extendDesignMd approach — scan by ## / ### boundaries.
+  // We do not hard-code a section-name allowlist; any bullet with `(id: DT-NNN)` counts as a token entry,
+  // any `### Foo (id: DC-NNN)` header counts as a component. This tolerates user-added sections (e.g. typography
+  // tokens in the future) without breaking.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Component header
+    const compHeaderMatch = line.match(/^###\s+(\S[^(]*?)\s*\(id:\s*(DC-\d{3,})\)/);
+    if (compHeaderMatch) {
+      const name = compHeaderMatch[1].trim();
+      const id = compHeaderMatch[2];
+      result.components.push(id);
+      result.byComponent[id] = { id, name, line: i + 1 };
+      continue;
+    }
+
+    // Bullet token
+    const bulletMatch = line.match(/^-\s+([^:]+):\s*(.+?)\s*\(id:\s*(DT-\d{3,})\)\s*$/);
+    if (bulletMatch) {
+      const key = bulletMatch[1].trim();
+      const value = bulletMatch[2].trim();
+      const id = bulletMatch[3];
+      result.tokens.push(id);
+      result.byToken[id] = { id, key, value, line: i + 1 };
+    }
+  }
+
+  return result;
+}
+
+// @cap-api assignDesignIds(content) -- Walk DESIGN.md content and add DT/DC IDs to entries that lack them.
+// @cap-todo(ac:F-063/AC-1) Retrofits IDs onto an F-062-era DESIGN.md. Existing IDs are preserved verbatim (stable-ID guarantee D4).
+// @cap-decision Only color bullets (under `### Colors`) and component headers (under `## Components`) are IDed in v1.
+//               Spacing/typography scales stay un-IDed until a user feature explicitly needs to reference them.
+/**
+ * @param {string} content - DESIGN.md content
+ * @returns {{ content: string, assigned: { tokens: Array<{key:string,id:string}>, components: Array<{name:string,id:string}> } }}
+ */
+function assignDesignIds(content) {
+  const out = { content, assigned: { tokens: [], components: [] } };
+  if (typeof content !== 'string' || content.length === 0) return out;
+
+  const existing = parseDesignIds(content);
+  let nextDt = nextIdNumber(existing.tokens);
+  let nextDc = nextIdNumber(existing.components);
+
+  const lines = content.split('\n');
+  let inColors = false;
+  let inComponents = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Section tracking
+    if (trimmed.startsWith('### ')) {
+      // entering a subsection — decide context from the header text
+      if (trimmed === '### Colors') { inColors = true; continue; }
+      if (inComponents) {
+        // Component header — tag with DC if it lacks one
+        if (!DESIGN_COMPONENT_ID_RE.test(line)) {
+          const hdrMatch = line.match(/^###\s+(.+?)\s*$/);
+          if (hdrMatch) {
+            const name = hdrMatch[1].trim();
+            const id = formatDesignId('DC', nextDc++);
+            lines[i] = `### ${name} (id: ${id})`;
+            out.assigned.components.push({ name, id });
+          }
+        }
+        continue;
+      }
+      // other ### subsection (Spacing, Typography) — leave alone but close Colors
+      inColors = false;
+      continue;
+    }
+    if (trimmed.startsWith('## ')) {
+      inColors = false;
+      inComponents = (trimmed === '## Components');
+      continue;
+    }
+
+    if (inColors && line.startsWith('- ')) {
+      if (!DESIGN_TOKEN_ID_RE.test(line)) {
+        // Add ID suffix — preserve existing key/value text byte-for-byte up to the trailing whitespace
+        const bulletMatch = line.match(/^(-\s+([^:]+):\s*.+?)\s*$/);
+        if (bulletMatch) {
+          const base = bulletMatch[1];
+          const key = bulletMatch[2].trim();
+          const id = formatDesignId('DT', nextDt++);
+          lines[i] = `${base} (id: ${id})`;
+          out.assigned.tokens.push({ key, id });
+        }
+      }
+    }
+  }
+
+  out.content = lines.join('\n');
+  return out;
+}
+
+// @cap-api findFeaturesUsingDesignId(featureMap, designId) -- Impact-analysis for AC-6.
+// @cap-todo(ac:F-063/AC-6) Given a DT-NNN or DC-NNN, return features whose `usesDesign` includes it.
+/**
+ * @param {{features: Array<{id:string,title?:string,usesDesign?:string[]}>}} featureMap
+ * @param {string} designId - e.g. "DT-001"
+ * @returns {Array<{id:string,title:string|null}>} - features that reference this design ID
+ */
+function findFeaturesUsingDesignId(featureMap, designId) {
+  const out = [];
+  if (!featureMap || !Array.isArray(featureMap.features) || !designId) return out;
+  for (const f of featureMap.features) {
+    const uses = Array.isArray(f.usesDesign) ? f.usesDesign : [];
+    if (uses.includes(designId)) {
+      out.push({ id: f.id, title: f.title || null });
+    }
+  }
+  return out;
 }
 
 module.exports = {
@@ -581,4 +801,13 @@ module.exports = {
   readDesignMd,
   writeDesignMd,
   extendDesignMd,
+  // F-063
+  DESIGN_TOKEN_ID_RE,
+  DESIGN_COMPONENT_ID_RE,
+  formatDesignId,
+  nextIdNumber,
+  getNextDesignId,
+  parseDesignIds,
+  assignDesignIds,
+  findFeaturesUsingDesignId,
 };

@@ -96,6 +96,26 @@ if (json) {
 
 Display the output verbatim.
 
+## Step 2b: Append Design-Usage for the AC's feature (F-063)
+
+<!-- @cap-todo(ac:F-063/AC-5) /cap:trace shall emit a Design-Usage line per feature whose usesDesign is non-empty. -->
+
+```bash
+node -e "
+const fm = require('./cap/bin/lib/cap-feature-map.cjs');
+const d = require('./cap/bin/lib/cap-design.cjs');
+const trace = require('./cap/bin/lib/cap-trace.cjs');
+const featureId = process.argv[1];
+const map = fm.readFeatureMap(process.cwd());
+const feature = map.features.find(f => f.id === featureId);
+if (!feature) process.exit(0);
+const design = d.readDesignMd(process.cwd());
+const designIdx = design ? d.parseDesignIds(design) : { byToken: {}, byComponent: {} };
+const line = trace.formatDesignUsage(feature, designIdx);
+if (line) console.log('Design-Usage: ' + line);
+" '<FEATURE_ID>'
+```
+
 ## Step 3: Suggest next action (only when not in --json mode)
 
 Inspect the trace result and suggest one of:

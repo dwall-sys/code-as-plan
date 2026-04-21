@@ -37,6 +37,7 @@ const STATE_TRANSITIONS = {
  * @property {AcceptanceCriterion[]} acs - Acceptance criteria
  * @property {string[]} files - File references linked to this feature
  * @property {string[]} dependencies - Feature IDs this depends on
+ * @property {string[]} usesDesign - F-063: DT-NNN / DC-NNN IDs that this feature references (default [])
  * @property {Object<string,string>} metadata - Additional key-value metadata
  */
 
@@ -131,6 +132,9 @@ function parseFeatureMapContent(content) {
   const fileRefRE = /^-\s+`(.+?)`/;
   // Match dependencies: **Depends on:** F-001, F-002  or  - **Dependencies:** F-001
   const depsRE = /^-?\s*\*\*Depend(?:s on|encies):\*\*\s*(.+)/;
+  // @cap-todo(ac:F-063/AC-3) Match design usage: **Uses design:** DT-001, DC-001
+  // @cap-decision(F-063/D3) Line format mirrors **Depends on:** — same shape, same delimiter, same position.
+  const usesDesignRE = /^-?\s*\*\*Uses design:\*\*\s*(.+)/i;
   // Match status line: - **Status:** shipped  or  **Status:** shipped
   const statusLineRE = /^-?\s*\*\*Status:\*\*\s*(\w+)/;
   // File refs detected inline via regex test (not a stored RE)
@@ -165,6 +169,7 @@ function parseFeatureMapContent(content) {
         acs: [],
         files: [],
         dependencies: [],
+        usesDesign: [], // @cap-todo(ac:F-063/AC-3) F-063: default-empty DT/DC IDs list.
         metadata: {},
       };
       inAcTable = false;
@@ -269,6 +274,23 @@ function parseFeatureMapContent(content) {
       continue;
     }
 
+    // @cap-todo(ac:F-063/AC-3) Parse **Uses design:** line — DT/DC IDs comma-separated.
+    // Tolerant parser: accepts "DT-001", "DT-001 primary-color" (takes the ID prefix only).
+    const usesMatch = line.match(usesDesignRE);
+    if (usesMatch) {
+      currentFeature.usesDesign = usesMatch[1]
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(s => {
+          // Accept "DT-001" or "DT-001 primary-color" — keep only the ID token.
+          const m = s.match(/^(DT-\d{3,}|DC-\d{3,})\b/);
+          return m ? m[1] : s;
+        })
+        .filter(s => /^(DT-\d{3,}|DC-\d{3,})$/.test(s));
+      continue;
+    }
+
     const scanMatch = line.match(lastScanRE);
     if (scanMatch) lastScan = scanMatch[1].trim();
   }
@@ -335,6 +357,13 @@ function serializeFeatureMap(featureMap, options = {}) {
       lines.push('');
     }
 
+    // @cap-todo(ac:F-063/AC-3) Serialize **Uses design:** only when non-empty — additive, backward-compatible.
+    // Unset / empty arrays emit nothing so existing F-062-era FEATURE-MAP.md files roundtrip byte-identical.
+    if (Array.isArray(feature.usesDesign) && feature.usesDesign.length > 0) {
+      lines.push(`**Uses design:** ${feature.usesDesign.join(', ')}`);
+      lines.push('');
+    }
+
     if (feature.acs.length > 0) {
       lines.push('| AC | Status | Description |');
       lines.push('|----|--------|-------------|');
@@ -392,6 +421,7 @@ function addFeature(projectRoot, feature, appPath) {
     acs: feature.acs || [],
     files: [],
     dependencies: feature.dependencies || [],
+    usesDesign: feature.usesDesign || [], // F-063: default-empty DT/DC IDs list.
     metadata: feature.metadata || {},
   };
   featureMap.features.push(newFeature);
@@ -630,6 +660,76 @@ function enrichFromTags(projectRoot, scanResults, appPath) {
 
   writeFeatureMap(projectRoot, featureMap, appPath);
   return featureMap;
+}
+
+// @cap-feature(feature:F-063) enrichFromDesignTags — populate Feature.usesDesign from design-token/design-component tags.
+// @cap-api enrichFromDesignTags(projectRoot, scanResults, appPath) -- Add DT/DC IDs to each feature's usesDesign
+//   based on where design-token / design-component tags co-locate with a feature's files.
+// @cap-todo(ac:F-063/AC-3) Design-usage enrichment: when a file tagged @cap-feature(feature:F-NNN) also
+//   carries @cap-design-token(id:DT-NNN) or @cap-design-component(id:DC-NNN), the ID is appended to F-NNN.usesDesign.
+// @cap-decision Co-location (same file) is the heuristic. Cross-file usage would require import resolution,
+//   which /cap:design --scope handles explicitly (user-curated). This keeps the scanner pure and the UX predictable.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {import('./cap-tag-scanner.cjs').CapTag[]} scanResults - Tags from cap-tag-scanner (must include design-token/design-component entries)
+ * @param {string|null} [appPath=null] - Relative app path for monorepo scoping
+ * @returns {FeatureMap}
+ */
+function enrichFromDesignTags(projectRoot, scanResults, appPath) {
+  const featureMap = readFeatureMap(projectRoot, appPath);
+
+  // Build file -> featureId map (first @cap-feature wins, matches F-049 convention).
+  const fileToFeature = new Map();
+  for (const tag of scanResults) {
+    if (tag.type !== 'feature') continue;
+    const fid = tag.metadata && tag.metadata.feature;
+    if (!fid) continue;
+    if (!fileToFeature.has(tag.file)) fileToFeature.set(tag.file, fid);
+  }
+
+  // For each design tag, find its file's feature and append the design ID.
+  for (const tag of scanResults) {
+    if (tag.type !== 'design-token' && tag.type !== 'design-component') continue;
+    const designId = tag.metadata && tag.metadata.id;
+    if (!designId) continue;
+    const featureId = fileToFeature.get(tag.file);
+    if (!featureId) continue;
+
+    const feature = featureMap.features.find(f => f.id === featureId);
+    if (!feature) continue;
+    if (!Array.isArray(feature.usesDesign)) feature.usesDesign = [];
+    if (!feature.usesDesign.includes(designId)) feature.usesDesign.push(designId);
+  }
+
+  // Stable sort for deterministic output.
+  for (const f of featureMap.features) {
+    if (Array.isArray(f.usesDesign)) f.usesDesign.sort();
+  }
+
+  writeFeatureMap(projectRoot, featureMap, appPath);
+  return featureMap;
+}
+
+// @cap-api setFeatureUsesDesign(projectRoot, featureId, designIds, appPath) -- Replace a feature's usesDesign list.
+// @cap-todo(ac:F-063/AC-4) Called by /cap:design --scope after the user confirms which DT/DC IDs the feature uses.
+/**
+ * @param {string} projectRoot
+ * @param {string} featureId - e.g. "F-023"
+ * @param {string[]} designIds - list of DT-NNN / DC-NNN IDs (replaces existing value)
+ * @param {string|null} [appPath=null]
+ * @returns {boolean} - true if the feature existed and was updated
+ */
+function setFeatureUsesDesign(projectRoot, featureId, designIds, appPath) {
+  const featureMap = readFeatureMap(projectRoot, appPath);
+  const feature = featureMap.features.find(f => f.id === featureId);
+  if (!feature) return false;
+  const cleaned = (Array.isArray(designIds) ? designIds : [])
+    .map(s => String(s).trim())
+    .filter(s => /^(DT-\d{3,}|DC-\d{3,})$/.test(s));
+  // Stable, deterministic order.
+  feature.usesDesign = [...new Set(cleaned)].sort();
+  writeFeatureMap(projectRoot, featureMap, appPath);
+  return true;
 }
 
 // @cap-api enrichFromDeps(projectRoot) -- Read package.json, detect imports, add dependency info to features.
@@ -972,6 +1072,8 @@ module.exports = {
   detectDrift,
   formatDriftReport,
   enrichFromTags,
+  enrichFromDesignTags, // F-063
+  setFeatureUsesDesign, // F-063
   enrichFromDeps,
   getNextFeatureId,
   enrichFromScan,

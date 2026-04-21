@@ -35,6 +35,7 @@ Before starting the wizard, discover project context:
 **Mode from Task() input:**
 - `--new`: Run the full 3-question wizard, return a fresh family key.
 - `--extend`: Ask what to add (colors? component?), collect the additions, return an extension payload.
+- `--scope F-NNN` (F-063): Ask which DT/DC IDs the feature uses; collect new DT/DC entries if needed; return a scope payload.
 
 </project_context>
 
@@ -113,6 +114,33 @@ If `component`:
 Return the collected additions as structured output.
 </step>
 
+<step name="wizard_scope" number="2c">
+<!-- @cap-todo(ac:F-063/AC-4) /cap:design --scope F-NNN: which DT/DC IDs does the feature use? -->
+<!-- @cap-feature(feature:F-063) Scope-mode dialog — feature-to-design-ID mapping. -->
+
+**If mode is `--scope F-NNN`, run the focused dialog.**
+
+Task() input contains the feature title, currently declared uses-design, and the catalog of available DT/DC IDs.
+
+Q1: "Which tokens does {F-NNN — title} use?" — list available `DT-NNN name (#HEX)` entries plus an `add new token` option. Accept multi-select.
+
+Q2: "Which components does {F-NNN — title} use?" — list available `DC-NNN Name` entries plus an `add new component` option. Accept multi-select.
+
+For every `add new token` answer:
+  - Ask: "New token name?"
+  - Ask: "Hex value?"
+  - Validate hex (starts with `#`, 4/7/9 chars). Re-ask on invalid.
+
+For every `add new component` answer:
+  - Ask: "New component name? (PascalCase)"
+  - Ask: "Variants? (comma-separated)"
+  - Ask: "States? (comma-separated)"
+
+Collect the resolved `USES_DESIGN` list as the union of selected existing IDs. New tokens/components do not yet have IDs — command layer assigns them via `assignDesignIds` and appends them to USES_DESIGN after write.
+
+Return the scope payload as structured output (see step 3).
+</step>
+
 <step name="return_structured_output" number="3">
 
 **Return the exact delimited format below. The command layer parses this.**
@@ -136,6 +164,17 @@ MODE: extend
 COLORS: {JSON object of name->hex, or {} if none}
 COMPONENTS: {JSON object of name->{variants:[], states:[]}, or {} if none}
 === END DESIGN OUTPUT ===
+```
+
+For `--scope` mode (F-063):
+
+```
+=== SCOPE OUTPUT ===
+FEATURE_ID: F-NNN
+USES_DESIGN: DT-001, DC-001, ...
+NEW_TOKENS: {JSON object of name->hex, or {} if none}
+NEW_COMPONENTS: {JSON object of name->{variants:[], states:[]}, or {} if none}
+=== END SCOPE OUTPUT ===
 ```
 
 **Output rules:**

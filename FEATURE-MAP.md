@@ -1105,19 +1105,33 @@
 **Files:**
 - `cap/bin/lib/cap-design.cjs`
 - `tests/cap-design.test.cjs`
+- `tests/cap-design-adversarial.test.cjs`
 
-### F-063: Design-Feature Traceability (IDs + Tags + --scope) [planned]
+### F-063: Design-Feature Traceability (IDs + Tags + --scope) [shipped]
 
 **Depends on:** F-062
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | DESIGN.md-Einträge erhalten stabile IDs im Format `DT-NNN` (Design Token) und `DC-NNN` (Design Component), analog zu `F-NNN` / `AC-N`. |
-| AC-2 | pending | Tag-Scanner (F-001) wird erweitert um die Erkennung von `@cap-design-token(id:DT-NNN)` und `@cap-design-component(id:DC-NNN)` in Source-Code-Kommentaren. |
-| AC-3 | pending | Feature-Map-Parser (F-002) wird erweitert um ein optionales `uses-design:` Feld pro Feature, das DT- und DC-IDs auflistet. |
-| AC-4 | pending | `/cap:design --scope F-NNN` öffnet einen fokussierten Dialog: Agent fragt, welche Tokens/Components in F-NNN genutzt werden, aktualisiert `uses-design:` in FEATURE-MAP.md und legt bei Bedarf neue DT-/DC-Einträge in DESIGN.md an. |
-| AC-5 | pending | `cap:status` und `cap:trace` erweitert um "Design-Usage" je Feature (z.B. "F-023 nutzt: DT-001 primary-color, DC-001 Button"). |
-| AC-6 | pending | Impact-Analyse: Bei Änderung eines Tokens in DESIGN.md produziert `cap:deps --design DT-001` die Liste aller Features, die diesen Token referenzieren. |
+| AC-1 | tested | DESIGN.md-Einträge erhalten stabile IDs im Format `DT-NNN` (Design Token) und `DC-NNN` (Design Component), analog zu `F-NNN` / `AC-N`. |
+| AC-2 | tested | Tag-Scanner (F-001) wird erweitert um die Erkennung von `@cap-design-token(id:DT-NNN)` und `@cap-design-component(id:DC-NNN)` in Source-Code-Kommentaren. |
+| AC-3 | tested | Feature-Map-Parser (F-002) wird erweitert um ein optionales `uses-design:` Feld pro Feature, das DT- und DC-IDs auflistet. |
+| AC-4 | tested | `/cap:design --scope F-NNN` öffnet einen fokussierten Dialog: Agent fragt, welche Tokens/Components in F-NNN genutzt werden, aktualisiert `uses-design:` in FEATURE-MAP.md und legt bei Bedarf neue DT-/DC-Einträge in DESIGN.md an. |
+| AC-5 | tested | `cap:status` und `cap:trace` erweitert um "Design-Usage" je Feature (z.B. "F-023 nutzt: DT-001 primary-color, DC-001 Button"). |
+| AC-6 | tested | Impact-Analyse: Bei Änderung eines Tokens in DESIGN.md produziert `cap:deps --design DT-001` die Liste aller Features, die diesen Token referenzieren. |
+
+**Files:**
+- `cap/bin/lib/cap-design.cjs`
+- `cap/bin/lib/cap-tag-scanner.cjs`
+- `cap/bin/lib/cap-feature-map.cjs`
+- `cap/bin/lib/cap-deps.cjs`
+- `cap/bin/lib/cap-trace.cjs`
+- `commands/cap/design.md`
+- `commands/cap/deps.md`
+- `commands/cap/status.md`
+- `commands/cap/trace.md`
+- `agents/cap-designer.md`
+- `tests/cap-design-traceability.test.cjs`
 
 ### F-064: cap:design --review — Anti-Slop-Check [planned]
 
@@ -1189,4 +1203,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T21:16:19.824Z*
+*Last updated: 2026-04-21T22:16:59.275Z*
