@@ -114,7 +114,12 @@ function parseFeatureMapContent(content) {
   // Also accepts:          ### F-001: Title text          (no [state] — state comes from separate line)
   const featureHeaderRE = /^###\s+(F-\d{3}):\s+(.+?)\s*$/;
   // Match AC rows: | AC-N | status | description |
-  const acRowRE = /^\|\s*(AC-\d+)\s*\|\s*(\w+)\s*\|\s*(.+?)\s*\|/;
+  // End-anchor (\s*$) forces the non-greedy description group to expand up to the
+  // trailing pipe of the row, not the first internal pipe. Without the anchor an AC
+  // description containing a literal "|" character (e.g. "parse foo | bar from stdin")
+  // was silently truncated at the first pipe — which e.g. dropped F-057/AC-2 during
+  // the 2026-04-21 ECC feature batch and required a manual restore workaround.
+  const acRowRE = /^\|\s*(AC-\d+)\s*\|\s*(\w+)\s*\|\s*(.+?)\s*\|\s*$/;
   // @cap-todo(ac:F-041/AC-4) Strict header detector: only match the literal table header
   // "| AC | Status | Description |" so AC-N rows whose description contains the word "Status"
   // (e.g. F-041/AC-6) are not misclassified as table headers, which previously truncated the
