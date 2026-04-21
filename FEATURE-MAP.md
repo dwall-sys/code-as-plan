@@ -521,6 +521,7 @@
 - `commands/cap/memory.md`
 - `tests/cap-memory-pin.test.cjs`
 - `.claude/hooks/cap-memory.js`
+- `.claude/cap/bin/lib/cap-memory-pin.cjs`
 
 ### F-031: Implement Conversation Thread Tracking [shipped]
 
@@ -702,6 +703,11 @@
 
 **Files:**
 - `cap/bin/lib/cap-cluster-display.cjs`
+- `.claude/cap/bin/lib/cap-cluster-display.cjs`
+- `.claude/cap/bin/lib/cap-cluster-format.cjs`
+- `.claude/cap/bin/lib/cap-cluster-io.cjs`
+- `cap/bin/lib/cap-cluster-format.cjs`
+- `cap/bin/lib/cap-cluster-io.cjs`
 
 ### F-041: Fix Feature Map Parser Roundtrip Symmetry [tested]
 
@@ -714,7 +720,6 @@
 | AC-3 | tested | serializeFeatureMap shall write status values that match the canonical lifecycle (pending, prototyped, tested, shipped) without lowercasing transformation losses |
 | AC-4 | tested | parseFeatureMapContent shall not silently drop AC entries when both checkbox and table formats coexist in the same feature block |
 | AC-5 | tested | The fix shall include a regression test loading the actual repository FEATURE-MAP.md and asserting roundtrip stability for F-019 through F-040 |
-| AC-6 | tested | serializeFeatureMap shall emit Status lines as a serialization option to support the legacy non-table input format without forcing all features to table format on first write |
 
 **Files:**
 - `.claude/cap/bin/lib/cap-feature-map.cjs`
@@ -729,8 +734,6 @@
 |----|--------|-------------|
 | AC-1 | tested | updateFeatureState shall update child AC statuses according to a defined propagation rule when a feature transitions to tested or shipped |
 | AC-2 | tested | The propagation rule shall be documented as: state prototyped does not change AC status; state tested promotes ACs from pending/prototyped to tested; state shipped requires all ACs already at tested and rejects the transition otherwise |
-| AC-3 | tested | A new function setAcStatus(projectRoot, featureId, acId, newState, appPath) shall provide explicit per-AC state mutation for finer-grained control |
-| AC-4 | tested | Status drift detection shall flag features where feature state is shipped/tested but one or more ACs are still pending, returning a structured drift report |
 | AC-5 | tested | Tests shall cover all valid state-transition × AC-status combinations as a truth table |
 | AC-6 | tested | The CLI shall expose cap status --drift to surface mismatched feature/AC states for the entire Feature Map |
 
@@ -816,6 +819,8 @@
 - `tests/fixtures/polyglot/example.rs`
 - `tests/fixtures/polyglot/example.sh`
 - `tests/fixtures/polyglot/example_string_literal.py`
+- `tests/cap-tag-scanner-polylingual-adversarial.test.cjs`
+- `tests/fixtures/polyglot/example_js_string_comment.js`
 
 ### F-047: Unified Feature Anchor Block (CAP v3 — Optional, Breaking) [shipped]
 
@@ -833,11 +838,14 @@
 **Files:**
 - `cap/bin/lib/cap-anchor.cjs`
 - `cap/bin/lib/cap-migrate-tags.cjs`
-- `cap/bin/lib/cap-tag-scanner.cjs` (isUnifiedAnchorsEnabled + scanFile options)
+- `cap/bin/lib/cap-tag-scanner.cjs`
 - `commands/cap/migrate-tags.md`
 - `docs/F-047-decision.md`
 - `tests/cap-anchor.test.cjs`
 - `tests/cap-migrate-tags.test.cjs`
+- `.claude/cap/bin/lib/cap-anchor.cjs`
+- `.claude/cap/bin/lib/cap-migrate-tags.cjs`
+- `.claude/cap/bin/lib/cap-tag-scanner.cjs`
 
 ### F-048: Implementation Completeness Score (CAP v3 — Optional) [shipped]
 
@@ -854,10 +862,12 @@
 
 **Files:**
 - `cap/bin/lib/cap-completeness.cjs`
-- `cap/bin/lib/cap-feature-map.cjs` (transitionWithReason + shipped-gate hook)
-- `commands/cap/status.md` (--completeness fast-path)
+- `cap/bin/lib/cap-feature-map.cjs`
+- `commands/cap/status.md`
 - `commands/cap/completeness.md`
 - `tests/cap-completeness.test.cjs`
+- `.claude/cap/bin/lib/cap-completeness.cjs`
+- `.claude/cap/bin/lib/cap-feature-map.cjs`
 
 ### F-049: Automatic Dependency Inference from Imports (CAP v3 — Optional) [shipped]
 
@@ -869,13 +879,14 @@
 | AC-2 | tested | `diffDeclaredVsInferred()` compares FEATURE-MAP `**Depends on:**` to inferred edges and returns per-feature `missing`/`extraneous` rows; `formatDiffReport()` renders a human-readable report |
 | AC-3 | tested | `applyInferredDeps()` writes merged dependency lines back to FEATURE-MAP.md; `/cap:deps --auto-fix` orchestrator requires explicit user confirmation. `removeExtraneous` flag opt-in for destructive removal |
 | AC-4 | tested | Regex-based parser handles CJS `require()`, ESM `import … from`, ESM re-exports, and static `import()` for both .js/.cjs/.mjs and .ts/.tsx. Dynamic/computed specifiers are documented as explicit limitations in module header |
-| AC-5 | tested | `renderMermaidGraph()` emits a fenced `flowchart TD` with solid arrows for declared edges and dashed `-.->\|inferred\|` arrows for inferred-only edges; `/cap:deps --graph` surfaces it |
+| AC-5 | tested | `renderMermaidGraph()` emits a fenced `flowchart TD` with solid arrows for declared edges and dashed `-.->\ |
 | AC-6 | tested | `loadDepsConfig()` reads `.cap/config.json → autoDepsInference.enabled` (default false). `/cap:deps` command exits with an informative message when disabled — zero runtime impact on projects that don't opt in |
 
 **Files:**
 - `cap/bin/lib/cap-deps.cjs`
 - `commands/cap/deps.md`
 - `tests/cap-deps.test.cjs`
+- `.claude/cap/bin/lib/cap-deps.cjs`
 
 ### F-050: Refactor cap-cluster-display.cjs and Improve Error Diagnostics [tested]
 
@@ -887,9 +898,23 @@
 | AC-4 | tested | The public API of cap-cluster-display shall remain unchanged — callers see no behavioral difference |
 | AC-5 | tested | A before/after complexity comparison (cyclomatic complexity per function) shall be included in the PR description |
 
-### F-051: Fix Coverage Runner — Replace c8 with Node Native [shipped]
+**Files:**
+- `.claude/cap/bin/lib/cap-cluster-display.cjs`
+- `.claude/cap/bin/lib/cap-cluster-format.cjs`
+- `.claude/cap/bin/lib/cap-cluster-helpers.cjs`
+- `.claude/cap/bin/lib/cap-cluster-io.cjs`
+- `.claude/cap/bin/lib/cap-logger.cjs`
+- `cap/bin/lib/cap-cluster-display.cjs`
+- `cap/bin/lib/cap-cluster-format.cjs`
+- `cap/bin/lib/cap-cluster-helpers.cjs`
+- `cap/bin/lib/cap-cluster-io.cjs`
+- `cap/bin/lib/cap-logger.cjs`
+- `tests/cap-cluster-format.test.cjs`
+- `tests/cap-cluster-helpers.test.cjs`
+- `tests/cap-cluster-io.test.cjs`
+- `tests/cap-logger.test.cjs`
 
-Root cause of the "16 uncovered modules" TEST-AUDIT entry was not missing tests but a broken measurement: c8 (and Node's native reporter under default `--test` isolation) drops v8 coverage data written by per-file subprocesses on Node 22+. Actual measured coverage under `--test-isolation=none` is ~98% lines.
+### F-051: Fix Coverage Runner — Replace c8 with Node Native [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
@@ -905,12 +930,6 @@ Root cause of the "16 uncovered modules" TEST-AUDIT entry was not missing tests 
 
 ### F-052: Fix Shared-State Leaks in Test Suite [shipped]
 
-Surfaced by F-051's coverage-runner fix: 16 tests failed under `--test-isolation=none` due to latent state leaks hidden by default per-file isolation.
-
-Root causes found and fixed:
-1. **console.warn hook-vs-body mismatch (6 tests):** Node's test runner gives each test a distinct `console`. Patching `console.warn` in `beforeEach` does not reach the test body under `--test-isolation=none`. Fixed by introducing a `patchWarn()` helper that runs inside each test.
-2. **CAP_TEST_MODE env leak (10 tests):** `install-hardening.test.cjs` sets `process.env.CAP_TEST_MODE = '1'` at module top-level. Under isolation=none this leaks to `copilot-install.test.cjs`'s `execFileSync(install.js, …)` calls, where install.js reads CAP_TEST_MODE and exits early via `module.exports = …` before doing any installation. Fixed by `delete env.CAP_TEST_MODE` alongside the existing `delete env.GSD_TEST_MODE` in `runCopilotInstall`/`runCopilotUninstall`.
-
 | AC | Status | Description |
 |----|--------|-------------|
 | AC-1 | tested | 6 diagnostic tests in tests/cap-cluster-io.test.cjs patch `console.warn` from inside the test body via `patchWarn()` helper — verified by running tests/cap-logger.test.cjs before tests/cap-cluster-io.test.cjs under isolation=none |
@@ -924,10 +943,7 @@ Root causes found and fixed:
 
 ### F-053: Migrate cap-test-audit to Node Native Coverage [shipped]
 
-
 **Depends on:** F-051
-
-Follow-up to F-051: `cap/bin/lib/cap-test-audit.cjs` used to shell out to `npx c8 --reporter json` for coverage collection. That worked but was slow on first run (downloads c8), failed offline, and pinned an unpinned version. Now routes `node --test …` commands through Node's native `--experimental-test-coverage` and reserves c8 as the fallback for vitest/jest/ts-node wrappers.
 
 | AC | Status | Description |
 |----|--------|-------------|
@@ -942,6 +958,83 @@ Follow-up to F-051: `cap/bin/lib/cap-test-audit.cjs` used to shell out to `npx c
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-test-audit.test.cjs`
 
+### F-054: Hook-Based Tag Event Observation [shipped]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | PostToolUse-Hook feuert bei Edit, Write, MultiEdit, NotebookEdit. |
+| AC-2 | pending | Hook berechnet Tag-Diff (added/removed @cap-feature, @cap-todo) zwischen Before/After-Datei. |
+| AC-3 | pending | Hook appendiert JSONL-Zeile an .cap/memory/raw/tag-events-{YYYY-MM-DD}.jsonl mit {timestamp, tool, file, added:[], removed:[]}. |
+| AC-4 | pending | Kein Tag-Diff → kein Write (keine Leerzeilen, kein Noise). |
+| AC-5 | pending | Hook-Laufzeit <100 ms für Dateien bis 10 000 Zeilen (in Tests erzwungen). |
+| AC-6 | pending | Hook-Fehler werden in .cap/memory/raw/errors.log protokolliert und blockieren das Edit-Tool nie. |
+| AC-7 | pending | Datei-Rotation pro Kalendertag; Cleanup von >30 Tage alten Logs erfolgt über F-056. |
+
+**Files:**
+- `cap/bin/lib/cap-tag-observer.cjs`
+- `hooks/cap-tag-observer.js`
+- `tests/cap-tag-observer.test.cjs`
+
+### F-055: Confidence and Evidence Fields for Memory Entries [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Schema-Erweiterung für decisions.md, pitfalls.md, patterns.md: jede Entry-Frontmatter enthält confidence:float(0.0–1.0) und evidence_count:int≥1. |
+| AC-2 | pending | Neu erzeugte Einträge aus der cap-memory-Pipeline starten mit confidence:0.5, evidence_count:1. |
+| AC-3 | pending | Bestehende Einträge ohne diese Felder werden beim ersten Lesen additiv auf confidence:0.5, evidence_count:1 migriert (stumm, ohne User-Interaktion). |
+| AC-4 | pending | Re-Observation derselben Pattern-Beschreibung (Text-Similarity ≥0.8) erhöht evidence_count um 1 und confidence um 0.1 (Cap bei 0.95). |
+| AC-5 | pending | Widerspruch (konträrer Eintrag mit überlappendem File-Scope) senkt confidence um 0.2 (Floor 0.0), erhöht NICHT evidence_count. |
+| AC-6 | pending | Einträge mit confidence<0.3 werden im Markdown-Output gedimmt gerendert (z. B. Präfix '> *(low confidence)*'). |
+
+### F-056: Memory Prune Command (Decay + TTL) [planned]
+
+**Depends on:** F-055, F-054
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | /cap:memory prune ist als Subcommand von /cap:memory aufrufbar. |
+| AC-2 | pending | Default ist Dry-Run; --apply ist explizit erforderlich, um Dateien zu ändern. |
+| AC-3 | pending | Einträge mit last_seen >90 Tage verlieren -0.05 confidence pro weitere 30 Tage Inaktivität. |
+| AC-4 | pending | Einträge mit confidence<0.2 UND last_seen>180 Tage werden nach .cap/memory/archive/{YYYY-MM}.md verschoben (nicht gelöscht). |
+| AC-5 | pending | Raw-Event-Logs aus F-054 älter als 30 Tage werden hart gelöscht. |
+| AC-6 | pending | Prune-Run gibt Report aus (decayed, archived, purged) und appendiert .cap/memory/prune-log.jsonl mit {timestamp, decayed, archived, purged}. |
+
+### F-057: Checkpoint Command for Strategic Compact [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | /cap:checkpoint ist aufrufbar. |
+| AC-3 | pending | Bei erkanntem Breakpoint gibt Command Empfehlung aus: 'Jetzt /compact, weil {konkreter Grund}' (z. B. 'F-054 auf state=tested'). |
+| AC-4 | pending | Command ruft /cap:save --label checkpoint-{feature_id} implizit auf, bevor die Empfehlung ausgegeben wird. |
+| AC-5 | pending | Kein Breakpoint erkannt → Message 'Kein natürlicher Kontextbruch erkannt', keine weitere Action. |
+| AC-6 | pending | Command ist rein advisory — kein Auto-/compact, kein Force-Flag. |
+
+### F-058: Claude-Code Plugin Manifest [planned]
+
+**Depends on:** F-009, F-008
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | .claude-plugin/plugin.json in npm package enthält Metadaten (name, version, description, commands, agents, hooks). |
+| AC-2 | pending | .claude-plugin/marketplace.json enthält Marketplace-Metadaten für /plugin install code-as-plan. |
+| AC-3 | pending | Plugin-Manifest listet KEIN 'hooks'-Feld (Claude Code v2.1+ lädt Plugin-Hooks automatisch). |
+| AC-4 | pending | Npx-Install-Pfad bleibt funktional und primärer Install-Weg; er wird nicht deprecated. |
+| AC-5 | pending | cap-doctor erkennt beide Install-Modi (npx vs. Plugin) und zeigt den aktiven Modus in der Ausgabe. |
+| AC-6 | pending | Coexistence-Test: wenn beide Modi aktiv sind, werden Commands/Agents nicht doppelt registriert. |
+
+### F-059: Research-First Gate Before Prototype [planned]
+
+**Depends on:** F-004
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | /cap:prototype parst Feature-ACs nach Library-Nennungen (Regex gegen package.json-Namen und Doc-Referenzen). |
+| AC-2 | pending | Für jede referenzierte Library wird geprüft, ob .cap/stack-docs/{library}/ existiert und mtime <30 Tage ist. |
+| AC-3 | pending | Fehlen Docs: Warning mit Liste der Libraries, Empfehlung '/cap:refresh-docs {libs}' und Prompt 'trotzdem fortfahren? [y/N]'. |
+| AC-4 | pending | Mit --skip-docs-Flag wird der Check übersprungen (für reine Scaffolding-Features ohne externe Libs). |
+| AC-5 | pending | Check blockiert NIE hart ohne User-Input — Default ist Warning + Prompt, kein Error-Exit. |
+| AC-6 | pending | Anzahl geprüfter Libs und Anzahl fehlender Docs wird im Session-Log (cap-session) protokolliert. |
+
 ## Legend
 
 | State | Meaning |
@@ -952,4 +1045,4 @@ Follow-up to F-051: `cap/bin/lib/cap-test-audit.cjs` used to shell out to `npx c
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-20T13:03:18.136Z*
+*Last updated: 2026-04-20T21:38:40.225Z*

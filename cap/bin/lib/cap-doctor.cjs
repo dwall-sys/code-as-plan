@@ -46,6 +46,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-session-extract.cjs',
   'cap-session.cjs',
   'cap-stack-docs.cjs',
+  'cap-tag-observer.cjs',
   'cap-tag-scanner.cjs',
   'cap-test-audit.cjs',
   'cap-thread-migrator.cjs',
