@@ -26,26 +26,19 @@ Detect natural breakpoints in the CAP workflow and nudge the user toward `/compa
 
 <process>
 
-## Step 1: Analyze the current session + feature map
+## Step 1: Analyze and persist in a single call
 
-Run the checkpoint analyzer. It reads SESSION.json and FEATURE-MAP.md and returns a plan object (pure logic, no disk mutation):
+Run the checkpoint analyzer. `analyzeAndApply` reads SESSION.json and FEATURE-MAP.md, computes the plan, and — if a breakpoint was detected — persists the snapshot inside the same Node process. Collapsing the two legs into one call closes the TOCTOU window where the orchestrator's previous two-step version could observe a FEATURE-MAP mutation between analyze and persist.
 
 ```bash
 node -e "
-const path = require('node:path');
-const capSession = require('./cap/bin/lib/cap-session.cjs');
-const capFeatureMap = require('./cap/bin/lib/cap-feature-map.cjs');
 const capCheckpoint = require('./cap/bin/lib/cap-checkpoint.cjs');
-
-const root = process.cwd();
-const session = capSession.loadSession(root);
-const featureMap = capFeatureMap.readFeatureMap(root);
-const result = capCheckpoint.analyze(session, featureMap);
+const result = capCheckpoint.analyzeAndApply(process.cwd());
 console.log(JSON.stringify(result, null, 2));
 "
 ```
 
-The output is a JSON object of shape:
+The output shape:
 
 ```
 {
@@ -55,7 +48,8 @@ The output is a JSON object of shape:
     \"saveLabel\": \"checkpoint-F-057\" | null,
     \"message\": \"Jetzt /compact, weil ...\" | \"Kein natürlicher Kontextbruch erkannt.\"
   },
-  \"currentSnapshot\": { \"featureStates\": {...}, \"acStatuses\": {...} }
+  \"currentSnapshot\": { \"featureStates\": {...}, \"acStatuses\": {...} },
+  \"persisted\": true | false
 }
 ```
 
@@ -73,7 +67,7 @@ Then stop. Do NOT proceed to save or recommend. (AC-5)
 
 **If `plan.breakpoint` is non-null (breakpoint detected):**
 
-Continue to Step 3.
+Continue to Step 3. The checkpoint state is already persisted at this point (AC-4) — `analyzeAndApply` wrote `lastCheckpointAt` and `lastCheckpointSnapshot` with an FS post-condition read-back verifying the write landed.
 
 ## Step 3: Chain /cap:save with the derived label
 
@@ -81,30 +75,9 @@ Instruct Claude to invoke the `/cap:save` slash command with the `saveLabel` fro
 
 > Run `/cap:save checkpoint-F-057`
 
-Wait for `/cap:save` to complete. (AC-4)
+Wait for `/cap:save` to complete.
 
-## Step 4: Persist the checkpoint snapshot
-
-After `/cap:save` completes, run the side-effect function that writes `lastCheckpointAt` and `lastCheckpointSnapshot` to SESSION.json:
-
-```bash
-node -e "
-const capSession = require('./cap/bin/lib/cap-session.cjs');
-const capFeatureMap = require('./cap/bin/lib/cap-feature-map.cjs');
-const capCheckpoint = require('./cap/bin/lib/cap-checkpoint.cjs');
-
-const root = process.cwd();
-const session = capSession.loadSession(root);
-const featureMap = capFeatureMap.readFeatureMap(root);
-const result = capCheckpoint.analyze(session, featureMap);
-if (result.breakpoint) {
-  capCheckpoint.applyCheckpoint(root, result.currentSnapshot);
-  console.log('Checkpoint-State persistiert.');
-}
-"
-```
-
-## Step 5: Print the recommendation
+## Step 4: Print the recommendation
 
 Print the recommendation message from `plan.message` verbatim:
 
@@ -112,7 +85,7 @@ Print the recommendation message from `plan.message` verbatim:
 Jetzt /compact, weil {konkreter Grund}.
 ```
 
-## Step 6: Advisory boundary
+## Step 5: Advisory boundary
 
 **Do not invoke `/compact` automatically. The user decides.**
 

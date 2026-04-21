@@ -188,7 +188,7 @@ describe('adversarial: pickBreakpoint state-regression handling', () => {
     assert.ok(bp, 'regression is still reported');
     assert.equal(bp.kind, 'feature-transition');
     assert.equal(bp.featureId, 'F-054');
-    assert.equal(bp.reason, 'F-054 auf state=tested');
+    assert.equal(bp.reason, 'F-054 von shipped → tested');
   });
 
   it('regression + forward transition: forward wins because its STATE_RANK is higher', () => {
@@ -200,7 +200,7 @@ describe('adversarial: pickBreakpoint state-regression handling', () => {
     ];
     const bp = pickBreakpoint(diffs, null, []);
     assert.equal(bp.featureId, 'F-055', 'higher to-rank wins');
-    assert.equal(bp.reason, 'F-055 auf state=tested');
+    assert.equal(bp.reason, 'F-055 von prototyped → tested');
   });
 });
 
@@ -648,9 +648,10 @@ describe('adversarial: commands/cap/checkpoint.md structure', () => {
     assert.match(body, /checkpoint-/, 'must reference the checkpoint-{id} label convention');
   });
 
-  it('references the analyze() function (pure logic delegation)', () => {
-    assert.match(body, /capCheckpoint\.analyze/);
-    assert.match(body, /capCheckpoint\.applyCheckpoint/);
+  it('references the checkpoint analysis entry point (pure logic delegation)', () => {
+    // Post-TOCTOU-fix: the command collapses analyze + applyCheckpoint into a
+    // single analyzeAndApply call so both legs observe the same FEATURE-MAP.
+    assert.match(body, /capCheckpoint\.(analyze|analyzeAndApply)/);
   });
 
   it('explicitly states the advisory boundary against auto-/compact (AC-6)', () => {
@@ -707,7 +708,7 @@ describe('adversarial: checkpoint cycle with multiple transitions', () => {
     const r2 = analyze(capSession.loadSession(tmp), fm2);
     assert.ok(r2.breakpoint);
     assert.equal(r2.breakpoint.featureId, 'F-054');
-    assert.equal(r2.plan.message, 'Jetzt /compact, weil F-054 auf state=shipped.');
+    assert.equal(r2.plan.message, 'Jetzt /compact, weil F-054 von tested → shipped.');
     applyCheckpoint(tmp, r2.currentSnapshot, new Date('2026-04-20T11:00:00.000Z'));
 
     // Step 3: unchanged feature map, no step -> no breakpoint

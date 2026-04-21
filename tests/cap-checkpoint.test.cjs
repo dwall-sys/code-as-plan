@@ -269,7 +269,7 @@ describe('pickBreakpoint', () => {
     ];
     const bp = pickBreakpoint(diffs, null, []);
     assert.equal(bp.featureId, 'F-055');
-    assert.equal(bp.reason, 'F-055 auf state=shipped');
+    assert.equal(bp.reason, 'F-055 von tested → shipped');
   });
 
   it('when two state-transitions same rank: younger (larger number) feature wins', () => {
@@ -281,9 +281,17 @@ describe('pickBreakpoint', () => {
     assert.equal(bp.featureId, 'F-056');
   });
 
-  it('reason text includes the state for feature-transition kind', () => {
+  it('reason text includes the from→to transition for feature-transition kind', () => {
     const diffs = [
       { featureId: 'F-054', type: 'state-transition', from: 'prototyped', to: 'tested' },
+    ];
+    const bp = pickBreakpoint(diffs, null, []);
+    assert.equal(bp.reason, 'F-054 von prototyped → tested');
+  });
+
+  it('reason text falls back to "auf state=X" when from is null (first-time observation)', () => {
+    const diffs = [
+      { featureId: 'F-054', type: 'state-transition', from: null, to: 'tested' },
     ];
     const bp = pickBreakpoint(diffs, null, []);
     assert.equal(bp.reason, 'F-054 auf state=tested');

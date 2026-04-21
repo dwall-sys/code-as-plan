@@ -112,6 +112,58 @@ function captureFeatureSnapshot(features) {
   return snapshot;
 }
 
+/**
+ * Diff a single feature's state against the prior snapshot. Pushes at most one
+ * state-transition diff into `out`.
+ * @param {{id:string, state:string}} feature
+ * @param {Object<string,string>} prevStates
+ * @param {boolean} isFirstTime
+ * @param {FeatureDiff[]} out
+ */
+function diffFeatureState(feature, prevStates, isFirstTime, out) {
+  const curState = feature.state || 'planned';
+  const prevState = prevStates[feature.id];
+
+  if (isFirstTime || prevState === undefined) {
+    // Both cases emit only for non-planned features — "planned" is the baseline, not a transition.
+    if (curState !== 'planned') {
+      out.push({ featureId: feature.id, type: 'state-transition', from: null, to: curState });
+    }
+    return;
+  }
+  if (prevState !== curState) {
+    out.push({ featureId: feature.id, type: 'state-transition', from: prevState, to: curState });
+  }
+}
+
+/**
+ * Diff a single feature's AC statuses against the prior snapshot. Pushes any
+ * ac-status-update diffs into `out`.
+ * @param {{id:string, acs?:Array<{id:string, status:string}>}} feature
+ * @param {Object<string,string>} prevAcs
+ * @param {boolean} isFirstTime
+ * @param {FeatureDiff[]} out
+ */
+function diffFeatureACs(feature, prevAcs, isFirstTime, out) {
+  if (!Array.isArray(feature.acs)) return;
+  for (const ac of feature.acs) {
+    if (!ac || typeof ac.id !== 'string') continue;
+    const key = `${feature.id}/${ac.id}`;
+    const curStatus = ac.status || 'pending';
+    const prevStatus = prevAcs[key];
+
+    if (isFirstTime || prevStatus === undefined) {
+      if (curStatus !== 'pending') {
+        out.push({ featureId: feature.id, type: 'ac-status-update', acId: ac.id, from: null, to: curStatus });
+      }
+      continue;
+    }
+    if (prevStatus !== curStatus) {
+      out.push({ featureId: feature.id, type: 'ac-status-update', acId: ac.id, from: prevStatus, to: curStatus });
+    }
+  }
+}
+
 // @cap-todo(ac:F-057/AC-2) diffFeatureStates — finds every state-transition and ac-status-update between
 // a prior snapshot and the current feature array. Returns an array of diff objects.
 /**
@@ -128,85 +180,14 @@ function diffFeatureStates(prevSnapshot, currentFeatures) {
 
   const prevStates = (prevSnapshot && prevSnapshot.featureStates) || {};
   const prevAcs = (prevSnapshot && prevSnapshot.acStatuses) || {};
-  // Empty prev snapshot counts as "first-time": every non-planned feature and every non-pending AC
-  // is considered new. Any non-empty prev snapshot means "compare field-by-field".
   const isFirstTime =
     !prevSnapshot ||
     (Object.keys(prevStates).length === 0 && Object.keys(prevAcs).length === 0);
 
   for (const feature of currentFeatures) {
     if (!feature || typeof feature.id !== 'string') continue;
-    const curState = feature.state || 'planned';
-    const prevState = prevStates[feature.id];
-
-    if (isFirstTime) {
-      // First-time run: emit a transition for any non-planned feature.
-      if (curState !== 'planned') {
-        diffs.push({
-          featureId: feature.id,
-          type: 'state-transition',
-          from: null,
-          to: curState,
-        });
-      }
-    } else if (prevState === undefined) {
-      // Feature did not exist in prior snapshot — treat as transition if non-planned.
-      if (curState !== 'planned') {
-        diffs.push({
-          featureId: feature.id,
-          type: 'state-transition',
-          from: null,
-          to: curState,
-        });
-      }
-    } else if (prevState !== curState) {
-      diffs.push({
-        featureId: feature.id,
-        type: 'state-transition',
-        from: prevState,
-        to: curState,
-      });
-    }
-
-    // AC-level diffs — independent of feature-level transition.
-    if (Array.isArray(feature.acs)) {
-      for (const ac of feature.acs) {
-        if (!ac || typeof ac.id !== 'string') continue;
-        const key = `${feature.id}/${ac.id}`;
-        const curStatus = ac.status || 'pending';
-        const prevStatus = prevAcs[key];
-
-        if (isFirstTime) {
-          if (curStatus !== 'pending') {
-            diffs.push({
-              featureId: feature.id,
-              type: 'ac-status-update',
-              acId: ac.id,
-              from: null,
-              to: curStatus,
-            });
-          }
-        } else if (prevStatus === undefined) {
-          if (curStatus !== 'pending') {
-            diffs.push({
-              featureId: feature.id,
-              type: 'ac-status-update',
-              acId: ac.id,
-              from: null,
-              to: curStatus,
-            });
-          }
-        } else if (prevStatus !== curStatus) {
-          diffs.push({
-            featureId: feature.id,
-            type: 'ac-status-update',
-            acId: ac.id,
-            from: prevStatus,
-            to: curStatus,
-          });
-        }
-      }
-    }
+    diffFeatureState(feature, prevStates, isFirstTime, diffs);
+    diffFeatureACs(feature, prevAcs, isFirstTime, diffs);
   }
 
   return diffs;
@@ -251,10 +232,15 @@ function pickBreakpoint(diffs, sessionStep, _features) {
       return featureNumericId(b.featureId) - featureNumericId(a.featureId);
     });
     const winner = sorted[0];
+    // Render the from-state so the reason reads as a transition, not a bare end-state.
+    // First-time observations have from=null → omit the arrow to keep the message clean.
+    const reason = winner.from
+      ? `${winner.featureId} von ${winner.from} → ${winner.to}`
+      : `${winner.featureId} auf state=${winner.to}`;
     return {
       kind: 'feature-transition',
       featureId: winner.featureId,
-      reason: `${winner.featureId} auf state=${winner.to}`,
+      reason,
     };
   }
 
@@ -342,6 +328,12 @@ function analyze(sessionJson, featureMap) {
 // timestamp to SESSION.json. Kept separate from analyze() to preserve the pure-function boundary.
 /**
  * Persist the checkpoint state to SESSION.json. The path argument is the project root.
+ *
+ * Verifies the post-condition by re-reading SESSION.json and asserting the
+ * timestamp round-tripped. An updateSession that silently fails (e.g. EACCES
+ * after a race with another hook) would otherwise leave lastCheckpointAt
+ * stale and the next run would emit duplicate checkpoints.
+ *
  * @param {string} projectRoot - Absolute path to the project root containing .cap/SESSION.json
  * @param {FeatureSnapshot} newSnapshot - Snapshot to persist
  * @param {Date} [now] - Override timestamp (for deterministic testing). Defaults to new Date().
@@ -352,10 +344,53 @@ function applyCheckpoint(projectRoot, newSnapshot, now) {
     throw new TypeError('applyCheckpoint: projectRoot must be a non-empty string');
   }
   const timestamp = (now instanceof Date ? now : new Date()).toISOString();
-  return capSession.updateSession(projectRoot, {
+  const snapshot = newSnapshot || { featureStates: {}, acStatuses: {} };
+  const updated = capSession.updateSession(projectRoot, {
     lastCheckpointAt: timestamp,
-    lastCheckpointSnapshot: newSnapshot || { featureStates: {}, acStatuses: {} },
+    lastCheckpointSnapshot: snapshot,
   });
+
+  // FS post-condition: read back SESSION.json and confirm the write landed.
+  // AC-4 mandates persistence; a silent write failure must throw, not pass.
+  const readback = capSession.loadSession(projectRoot);
+  if (!readback || readback.lastCheckpointAt !== timestamp) {
+    throw new Error(
+      `applyCheckpoint: SESSION.json post-condition failed — expected lastCheckpointAt=${timestamp}, got ${readback && readback.lastCheckpointAt}`,
+    );
+  }
+  return updated;
+}
+
+/**
+ * Convenience wrapper that runs analyze() and applyCheckpoint() in a single
+ * call against a freshly-loaded session + feature map, eliminating the TOCTOU
+ * window where the orchestrator's two Node invocations might observe
+ * different FEATURE-MAP.md contents between analyze and persist.
+ *
+ * Orchestrators that cannot collapse both steps into one process can still
+ * use analyze() + applyCheckpoint() separately, but must pass
+ * result.currentSnapshot from the first call through to the second —
+ * never recompute.
+ *
+ * @param {string} projectRoot
+ * @param {{now?:Date, loadSession?:Function, readFeatureMap?:Function}} [opts]
+ * @returns {AnalyzeResult & {persisted:boolean}}
+ */
+function analyzeAndApply(projectRoot, opts = {}) {
+  const capFeatureMap = require('./cap-feature-map.cjs');
+  const loadSession = opts.loadSession || capSession.loadSession;
+  const readFeatureMap = opts.readFeatureMap || capFeatureMap.readFeatureMap;
+
+  const session = loadSession(projectRoot);
+  const featureMap = readFeatureMap(projectRoot);
+  const result = analyze(session, featureMap);
+
+  if (!result.breakpoint) {
+    return { ...result, persisted: false };
+  }
+
+  applyCheckpoint(projectRoot, result.currentSnapshot, opts.now);
+  return { ...result, persisted: true };
 }
 
 /**
@@ -380,10 +415,13 @@ module.exports = {
   TERMINAL_STEPS,
   STATE_RANK,
   captureFeatureSnapshot,
+  diffFeatureState,
+  diffFeatureACs,
   diffFeatureStates,
   pickBreakpoint,
   analyze,
   applyCheckpoint,
+  analyzeAndApply,
   // Exposed for test/diagnostic use
   sessionPath,
   hasSession,
