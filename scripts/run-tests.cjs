@@ -21,7 +21,11 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const nodeArgs = ['--test'];
+// The default TAP reporter swallows failure details under
+// --experimental-test-isolation=none (only `# fail N` in the summary, no
+// per-test `not ok` lines), which makes red CI unnecessarily opaque.
+// The spec reporter emits explicit ✖ lines with the assertion error.
+const nodeArgs = ['--test', '--test-reporter=spec'];
 if (wantsCoverage) {
   // Node >=22 defaults to process-per-file isolation. Coverage from those
   // subprocesses is dropped by both c8 and the native reporter, so force
