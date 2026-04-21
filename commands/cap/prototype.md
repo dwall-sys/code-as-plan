@@ -1,7 +1,7 @@
 ---
 name: cap:prototype
 description: Feature Map-driven prototype pipeline -- reads FEATURE-MAP.md, confirms ACs with user, spawns cap-prototyper to build annotated code scaffold. Supports --architecture and --annotate modes.
-argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch] [--research]"
+argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch] [--research] [--skip-docs]"
 allowed-tools:
   - Read
   - Write
@@ -34,6 +34,7 @@ On completion, automatically runs `/cap:scan` to update Feature Map status.
 - `--non-interactive` -- skip AC confirmation gate (for CI)
 - `--no-branch` -- stay on current branch (skip auto feature-branch creation)
 - `--research` -- explicitly enable F-024 pitfall research (opt-in as of F-044). Default is research SKIPPED — Opus 4.7 already knows most major libraries, so up-front Context7 fetches are redundant in the common case. Use `--research` when prototyping against an unfamiliar SDK or a known-pitfall service (Supabase RLS, Stripe webhooks, OAuth callbacks, etc.).
+- `--skip-docs` -- bypass the F-059 research-first gate entirely (for scaffolding-only features with no external library surface). Default is to run the gate.
 </objective>
 
 <context>
@@ -55,6 +56,7 @@ Check `$ARGUMENTS` for:
 - `--non-interactive` -- if present, set `non_interactive = true`
 - `--research` -- if present, set `research_mode = true`. Otherwise `research_mode = false` (opt-in as of F-044).
 - `--no-branch` -- if present, set `skip_branch = true`
+- `--skip-docs` -- if present, set `skip_docs = true` (bypass the F-059 research-first gate).
 - `path` -- target directory (defaults to `.`)
 
 If neither `--architecture` nor `--annotate`: set `mode = "PROTOTYPE"`
@@ -116,6 +118,58 @@ git checkout -b "feature/{feature_id}-{slug}" 2>/dev/null
 If `CURRENT_BRANCH` is already a `feature/` branch: stay on it, log: `Already on feature branch: {CURRENT_BRANCH}`
 
 If git is not available or not a git repo: skip silently.
+
+## Step 1c: Research-First Gate (F-059)
+
+<!-- @cap-todo(ac:F-059/AC-1) Scope AC descriptions to target_features and parse library mentions against package.json. -->
+<!-- @cap-todo(ac:F-059/AC-2) Check .cap/stack-docs/{library}.md mtime vs 30-day threshold. -->
+<!-- @cap-todo(ac:F-059/AC-4) --skip-docs bypasses the gate entirely for scaffolding-only features. -->
+<!-- @cap-todo(ac:F-059/AC-5) Gate never hard-blocks — default flow is warning + user prompt. -->
+
+**Skip this step** if any of:
+- `skip_docs` is true (`--skip-docs` flag)
+- `non_interactive` is true (CI flow cannot prompt)
+- `mode == "ANNOTATE"` (retrofitting tags, not building against libs)
+
+Otherwise, run the gate against the AC descriptions of `target_features`:
+
+```bash
+node -e "
+const gate = require('./cap/bin/lib/cap-research-gate.cjs');
+const target = JSON.parse(process.env.CAP_TARGET_FEATURES || '[]');
+const acs = target.flatMap(f => (f.acs || []).map(a => a.description || ''));
+const result = gate.runGate({ projectRoot: process.cwd(), acDescriptions: acs });
+const warning = gate.formatWarning(result);
+console.log(JSON.stringify({ result, warning }));
+"
+```
+
+where `CAP_TARGET_FEATURES` is the JSON-encoded `target_features` array from Step 1.
+
+Parse the JSON output. If `warning` is a non-empty string:
+
+1. Print `warning` verbatim to the user.
+2. Ask the user: "Proceed anyway? [y/N]"
+3. On `y` / `yes`: continue to Step 2.
+4. On anything else (including empty input / `N` / Ctrl+C): STOP with message "Aborted by research-first gate. Run `/cap:refresh-docs {libs}` or retry with `--skip-docs`." Do not spawn the prototyper.
+
+Regardless of whether the gate fired or was skipped, log the outcome:
+
+```bash
+node -e "
+const gate = require('./cap/bin/lib/cap-research-gate.cjs');
+const r = JSON.parse(process.env.CAP_GATE_RESULT || '{}');
+gate.logGateCheck(process.cwd(), {
+  skipped: process.env.CAP_GATE_SKIPPED === '1',
+  libsChecked: (r.libraries || []).length,
+  missing: (r.missing || []).length,
+  stale: (r.stale || []).length,
+});
+"
+```
+
+<!-- @cap-todo(ac:F-059/AC-3) Warning includes /cap:refresh-docs recommendation + y/N prompt — emitted by formatWarning. -->
+<!-- @cap-todo(ac:F-059/AC-6) logGateCheck appends a JSONL event with libsChecked + missing counts to .cap/session-log.jsonl. -->
 
 ## Step 2: Present ACs for confirmation
 
