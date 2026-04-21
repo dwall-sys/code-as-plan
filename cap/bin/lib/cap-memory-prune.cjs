@@ -230,7 +230,7 @@ function selectStaleRawLogs(rawDir, now, maxAgeDays = RAW_LOG_RETENTION_DAYS) {
 
 /**
  * Human-readable report block.
- * @param {{dryRun:boolean, decayed:number, archived:number, purged:number, rawLogFiles:string[]}} result
+ * @param {{dryRun:boolean, decayed:number, archived:number, purged:number, rawLogFiles:string[], migrationWarning?:boolean}} result
  * @returns {string}
  */
 function formatReport(result) {
@@ -246,6 +246,12 @@ function formatReport(result) {
     lines.push('  Raw logs targeted:');
     for (const f of result.rawLogFiles) lines.push(`    - ${path.basename(f)}`);
   }
+  if (result.migrationWarning) {
+    lines.push('');
+    lines.push('Warning: archive count dwarfs decay count — likely a first-run migration');
+    lines.push('  of pre-F-055 memory files (missing last_seen, treated as Infinity-age).');
+    lines.push('  Review archived entries before committing.');
+  }
   if (result.dryRun) {
     lines.push('');
     lines.push('Rerun with --apply to commit these changes.');
@@ -256,7 +262,7 @@ function formatReport(result) {
 /**
  * Single-line JSONL record for prune-log.jsonl.
  * @cap-todo(ac:F-056/AC-6)
- * @param {{dryRun:boolean, decayed:number, archived:number, purged:number}} result
+ * @param {{dryRun:boolean, decayed:number, archived:number, purged:number, archiveFile?:string|null, errors?:Array}} result
  * @param {Date} now
  * @returns {string}
  */
@@ -267,8 +273,24 @@ function formatPruneLogEntry(result, now) {
     decayed: result.decayed | 0,
     archived: result.archived | 0,
     purged: result.purged | 0,
+    // Additive (new in review follow-up): keep the payload shape extensible without
+    // breaking older log-consumers that read only the original keys.
+    archiveFile: result.archiveFile ? path.basename(result.archiveFile) : null,
+    errorCount: Array.isArray(result.errors) ? result.errors.length : 0,
   };
   return JSON.stringify(payload) + '\n';
+}
+
+/**
+ * Normalise an Error-or-string into a short, log-safe message string.
+ * @param {unknown} err
+ * @returns {string}
+ */
+function errorMessage(err) {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  if (err && typeof err.message === 'string') return err.message;
+  return String(err);
 }
 
 // --- Archive writing ---
@@ -336,6 +358,94 @@ function writeArchive(archiveDir, archivedEntries, now) {
 // --- Main entry point ---
 
 /**
+ * Classify entries across all decay-eligible category files.
+ * @param {string} memDir
+ * @param {Date} now
+ * @returns {{perCategoryKept:Object, allDecayed:Array, allArchived:MemoryEntry[], errors:Array}}
+ */
+function classifyPhase(memDir, now) {
+  const allDecayed = [];
+  const allArchived = [];
+  const perCategoryKept = {};
+  const errors = [];
+
+  for (const category of DECAY_CATEGORIES) {
+    try {
+      const fp = path.join(memDir, CATEGORY_FILES[category]);
+      const { entries } = readMemoryFile(fp);
+      const enriched = entries.map((e) => ({ category, content: e.content, metadata: e.metadata }));
+      const { kept, decayed, archived } = classifyEntries(enriched, now);
+      perCategoryKept[category] = kept;
+      for (const d of decayed) allDecayed.push(d);
+      for (const a of archived) allArchived.push(a);
+    } catch (err) {
+      errors.push({ stage: `classify:${category}`, message: errorMessage(err) });
+      perCategoryKept[category] = [];
+    }
+  }
+
+  return { perCategoryKept, allDecayed, allArchived, errors };
+}
+
+/**
+ * Apply the side-effects of a prune run: write archive, rewrite memory files,
+ * purge stale raw logs, append the prune-log record. Each stage captures its
+ * own errors into `errors`; archive/memory failures short-circuit the
+ * remainder to avoid partial rewrites.
+ *
+ * @param {{projectRoot:string, archiveDir:string, pruneLogPath:string, rawLogFiles:string[], allArchived:MemoryEntry[], perCategoryKept:Object, now:Date}} ctx
+ * @param {Object} result - mutated in place with final counts + archiveFile
+ * @param {Array} errors - mutated in place with per-stage failures
+ * @returns {void}
+ */
+function applySideEffects(ctx, result, errors) {
+  const { projectRoot, archiveDir, pruneLogPath, rawLogFiles, allArchived, perCategoryKept, now } = ctx;
+
+  const entriesToWrite = [];
+  for (const category of DECAY_CATEGORIES) {
+    for (const e of perCategoryKept[category] || []) {
+      entriesToWrite.push({ category, content: e.content, file: e.file, metadata: e.metadata });
+    }
+  }
+
+  // Archive first so a failed archive leaves live memory intact and archived
+  // entries remain recoverable on the next run. If archive succeeds but memory
+  // rewrite fails, we re-archive idempotent duplicates — never data loss.
+  try {
+    result.archiveFile = writeArchive(archiveDir, allArchived, now);
+  } catch (err) {
+    errors.push({ stage: 'write-archive', message: errorMessage(err) });
+    return;
+  }
+
+  try {
+    writeMemoryDirectory(projectRoot, entriesToWrite);
+  } catch (err) {
+    errors.push({ stage: 'write-memory', message: errorMessage(err) });
+    return;
+  }
+
+  const purgedOk = [];
+  for (const f of rawLogFiles) {
+    try {
+      fs.unlinkSync(f);
+      purgedOk.push(f);
+    } catch (err) {
+      errors.push({ stage: 'unlink-raw-log', message: `${path.basename(f)}: ${errorMessage(err)}` });
+    }
+  }
+  result.purgedFiles = purgedOk;
+  result.purged = purgedOk.length;
+
+  try {
+    fs.mkdirSync(path.dirname(pruneLogPath), { recursive: true });
+    fs.appendFileSync(pruneLogPath, formatPruneLogEntry(result, now), 'utf8');
+  } catch (err) {
+    errors.push({ stage: 'append-prune-log', message: errorMessage(err) });
+  }
+}
+
+/**
  * Prune project memory: decay stale entries, archive very-stale low-confidence ones,
  * purge old raw-event-log files.
  *
@@ -344,7 +454,7 @@ function writeArchive(archiveDir, archivedEntries, now) {
  * @cap-todo(ac:F-056/AC-6)
  * @param {string} projectRoot
  * @param {{apply?:boolean, now?:Date}} [options]
- * @returns {{dryRun:boolean, decayed:number, archived:number, purged:number, decayedEntries:Array, archivedEntries:MemoryEntry[], purgedFiles:string[], rawLogFiles:string[], archiveFile:string|null, errors:Array<{stage:string, message:string}>}}
+ * @returns {{dryRun:boolean, decayed:number, archived:number, purged:number, decayedEntries:Array, archivedEntries:MemoryEntry[], purgedFiles:string[], rawLogFiles:string[], archiveFile:string|null, migrationWarning:boolean, errors:Array<{stage:string, message:string}>}}
  */
 function prune(projectRoot, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date();
@@ -355,37 +465,18 @@ function prune(projectRoot, options = {}) {
   const archiveDir = path.join(projectRoot, ...ARCHIVE_DIR_PARTS);
   const pruneLogPath = path.join(projectRoot, ...PRUNE_LOG_PARTS);
 
-  const allDecayed = [];
-  const allArchived = [];
-  const perCategoryKept = {};
-  const errors = [];
+  const { perCategoryKept, allDecayed, allArchived, errors } = classifyPhase(memDir, now);
 
-  for (const category of DECAY_CATEGORIES) {
-    try {
-      const filename = CATEGORY_FILES[category];
-      const fp = path.join(memDir, filename);
-      const { entries } = readMemoryFile(fp);
-      const enriched = entries.map((e) => ({
-        category,
-        content: e.content,
-        metadata: e.metadata,
-      }));
-      const { kept, decayed, archived } = classifyEntries(enriched, now);
-      perCategoryKept[category] = kept;
-      for (const d of decayed) allDecayed.push(d);
-      for (const a of archived) allArchived.push(a);
-    } catch (err) {
-      errors.push({ stage: `classify:${category}`, message: err && err.message ? err.message : String(err) });
-      perCategoryKept[category] = [];
-    }
-  }
+  // selectStaleRawLogs already swallows its own I/O errors (empty/missing dir,
+  // readdir failure) and returns []. Wrapping it in an outer try/catch was
+  // redundant dead code — the inner handler is authoritative.
+  const rawLogFiles = selectStaleRawLogs(rawDir, now, RAW_LOG_RETENTION_DAYS);
 
-  let rawLogFiles = [];
-  try {
-    rawLogFiles = selectStaleRawLogs(rawDir, now, RAW_LOG_RETENTION_DAYS);
-  } catch (err) {
-    errors.push({ stage: 'select-raw-logs', message: err && err.message ? err.message : String(err) });
-  }
+  // Migration warning: if a run archives dramatically more than it decays,
+  // the most likely cause is pre-F-055 memory files that lack last_seen —
+  // classifyEntries then treats them as Infinity-age and archives wholesale.
+  // Flag so the CLI can surface a "looks like a first-run migration" hint.
+  const migrationWarning = allArchived.length >= 5 && allArchived.length > allDecayed.length * 4;
 
   const result = {
     dryRun: !apply,
@@ -397,62 +488,17 @@ function prune(projectRoot, options = {}) {
     purgedFiles: rawLogFiles.slice(),
     rawLogFiles: rawLogFiles.slice(),
     archiveFile: null,
+    migrationWarning,
     errors,
   };
 
   if (!apply) return result;
 
-  // --- Side-effects from here on ---
-
-  // Rewrite category files with kept+decayed (archived entries removed).
-  const entriesToWrite = [];
-  for (const category of DECAY_CATEGORIES) {
-    for (const e of perCategoryKept[category] || []) {
-      entriesToWrite.push({
-        category,
-        content: e.content,
-        file: e.file,
-        metadata: e.metadata,
-      });
-    }
-  }
-  // Archive first so a failed archive write leaves the live memory files intact
-  // and the archived entries remain recoverable on the next run. If archive
-  // succeeds but the memory rewrite fails, at worst we re-archive duplicates
-  // next time (idempotent append), never losing entries mid-flight.
-  try {
-    const archiveFile = writeArchive(archiveDir, allArchived, now);
-    result.archiveFile = archiveFile;
-  } catch (err) {
-    errors.push({ stage: 'write-archive', message: err && err.message ? err.message : String(err) });
-    return result;
-  }
-
-  try {
-    writeMemoryDirectory(projectRoot, entriesToWrite);
-  } catch (err) {
-    errors.push({ stage: 'write-memory', message: err && err.message ? err.message : String(err) });
-    return result;
-  }
-
-  const purgedOk = [];
-  for (const f of rawLogFiles) {
-    try {
-      fs.unlinkSync(f);
-      purgedOk.push(f);
-    } catch (err) {
-      errors.push({ stage: 'unlink-raw-log', message: `${path.basename(f)}: ${err && err.message ? err.message : String(err)}` });
-    }
-  }
-  result.purgedFiles = purgedOk;
-  result.purged = purgedOk.length;
-
-  try {
-    fs.mkdirSync(path.dirname(pruneLogPath), { recursive: true });
-    fs.appendFileSync(pruneLogPath, formatPruneLogEntry(result, now), 'utf8');
-  } catch (err) {
-    errors.push({ stage: 'append-prune-log', message: err && err.message ? err.message : String(err) });
-  }
+  applySideEffects(
+    { projectRoot, archiveDir, pruneLogPath, rawLogFiles, allArchived, perCategoryKept, now },
+    result,
+    errors,
+  );
 
   return result;
 }
@@ -475,5 +521,9 @@ module.exports = {
   formatPruneLogEntry,
   formatArchivedEntry,
   writeArchive,
+  // Exported for unit testing — not part of the CLI surface.
+  classifyPhase,
+  applySideEffects,
+  errorMessage,
   prune,
 };
