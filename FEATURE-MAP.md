@@ -1029,7 +1029,7 @@
 - `cap/bin/lib/cap-session.cjs`
 - `tests/cap-checkpoint.test.cjs`
 
-### F-058: Claude-Code Plugin Manifest [planned]
+### F-058: Claude-Code Plugin Manifest [shipped]
 
 **Depends on:** F-009, F-008
 
@@ -1041,6 +1041,10 @@
 | AC-4 | pending | Npx-Install-Pfad bleibt funktional und primärer Install-Weg; er wird nicht deprecated. |
 | AC-5 | pending | cap-doctor erkennt beide Install-Modi (npx vs. Plugin) und zeigt den aktiven Modus in der Ausgabe. |
 | AC-6 | pending | Coexistence-Test: wenn beide Modi aktiv sind, werden Commands/Agents nicht doppelt registriert. |
+
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-plugin-manifest.test.cjs`
 
 ### F-059: Research-First Gate Before Prototype [planned]
 
@@ -1065,4 +1069,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T08:21:33.992Z*
+*Last updated: 2026-04-21T09:05:50.742Z*

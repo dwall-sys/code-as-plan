@@ -1,0 +1,22 @@
+{
+  "name": "cap",
+  "version": "4.0.0",
+  "description": "CAP — Code as Plan. Build first, plan from code. Farley-aligned engineering framework.",
+  "author": {
+    "name": "TÂCHES"
+  },
+  "homepage": "https://github.com/dwall-sys/code-as-plan",
+  "repository": "https://github.com/dwall-sys/code-as-plan",
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "code-first",
+    "engineering-framework",
+    "prototype-driven",
+    "annotation-driven",
+    "farley"
+  ],
+  "commands": "./commands/cap/"
+}

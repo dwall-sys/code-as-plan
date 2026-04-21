@@ -7,6 +7,7 @@
 
 // @cap-feature(feature:F-005) Doctor Health Check — verify required and optional external dependencies
 // @cap-feature(feature:F-019) Module Integrity Verification — verify CAP CJS modules exist and load correctly
+// @cap-feature(feature:F-058) Claude-Code Plugin Manifest — detect npx vs plugin install modes and surface coexistence
 
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -265,6 +266,117 @@ function checkPlatformPaths(installDir) {
   };
 }
 
+// @cap-todo(ac:F-058/AC-5) cap-doctor shall detect both install modes (npx vs plugin) and show the active mode.
+// @cap-todo(ac:F-058/AC-6) Coexistence check — surface warning when both npx and plugin install modes are active.
+/**
+ * @typedef {Object} InstallModeReport
+ * @property {boolean} npx - True when npx install footprint ($HOME/.claude/cap/) is present.
+ * @property {boolean} plugin - True when plugin install footprint is detected.
+ * @property {boolean} coexist - True when both npx and plugin are active simultaneously.
+ * @property {string} active - Primary active mode: 'npx', 'plugin', 'both', or 'none'.
+ * @property {string[]} pluginPaths - Absolute paths where plugin footprint was detected.
+ * @property {string} [npxPath] - Absolute path to the npx install dir when present.
+ * @property {string[]} warnings - Human-readable warnings (coexistence, missing, etc).
+ */
+
+/**
+ * @cap-decision Plugin footprint detection uses two heuristics: (1) presence of a Claude plugin
+ * cache entry under $HOME/.claude/plugins/cache/cap@* (loaded marketplace plugin) OR (2) presence
+ * of .claude-plugin/plugin.json in cwd plus CLAUDE_PLUGIN_ROOT env hint. We do not hard-require
+ * CLAUDE_PLUGIN_ROOT because that env var is only set when Claude Code spawns a hook inside
+ * a plugin — a doctor invocation from the CLI never has it, so relying on it alone would false-negative.
+ * @cap-decision npx footprint is the existing detection used by detectInstallDir() — $HOME/.claude/cap/
+ * written by the installer. No change to that detection.
+ *
+ * Detect which install mode(s) of CAP are active on this machine.
+ * @param {Object} [opts]
+ * @param {string} [opts.homeDir] - Override HOME for testing.
+ * @param {string} [opts.cwd] - Override cwd for testing.
+ * @returns {InstallModeReport}
+ */
+function detectInstallMode(opts) {
+  const options = opts || {};
+  const homeDir = options.homeDir || process.env.HOME || os.homedir();
+  const cwd = options.cwd || process.cwd();
+  const warnings = [];
+
+  // npx footprint: installer writes to $HOME/.claude/cap/
+  const npxPath = path.join(homeDir, '.claude', 'cap');
+  const npxPresent = fs.existsSync(npxPath);
+
+  // Plugin footprint: Claude Code caches installed plugins at $HOME/.claude/plugins/cache/<name>@<source>/
+  const pluginPaths = [];
+  const pluginCacheDir = path.join(homeDir, '.claude', 'plugins', 'cache');
+  if (fs.existsSync(pluginCacheDir)) {
+    try {
+      const entries = fs.readdirSync(pluginCacheDir);
+      for (const entry of entries) {
+        // Match "cap@..." (plugin name is "cap" per plugin.json)
+        if (entry === 'cap' || entry.startsWith('cap@')) {
+          pluginPaths.push(path.join(pluginCacheDir, entry));
+        }
+      }
+    } catch (err) {
+      // Surface unreadable cache directories so the user learns why detection came up empty
+      // instead of silently reporting "no plugin installed".
+      const code = err && err.code ? err.code : 'unknown';
+      warnings.push(`Plugin cache directory is unreadable (${code}): ${pluginCacheDir}`);
+    }
+  }
+
+  // Local-dev plugin footprint: .claude-plugin/plugin.json in cwd with name === "cap". Foreign
+  // manifests (a different plugin living in the same repo) must not register as a CAP install.
+  const localManifest = path.join(cwd, '.claude-plugin', 'plugin.json');
+  if (fs.existsSync(localManifest)) {
+    try {
+      const raw = fs.readFileSync(localManifest, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.name === 'cap') {
+        pluginPaths.push(localManifest);
+      }
+    } catch (_err) {
+      // Malformed manifest JSON: do not count as a CAP footprint. The other doctor checks will
+      // separately flag the broken file via module/config validation when in scope.
+    }
+  }
+
+  const pluginPresent = pluginPaths.length > 0;
+  const coexist = npxPresent && pluginPresent;
+
+  let active;
+  if (coexist) {
+    active = 'both';
+  } else if (npxPresent) {
+    active = 'npx';
+  } else if (pluginPresent) {
+    active = 'plugin';
+  } else {
+    active = 'none';
+  }
+
+  // @cap-todo(ac:F-058/AC-6) Emit warning (not hard failure) when both modes coexist.
+  if (coexist) {
+    warnings.push(
+      'Both npx and plugin install modes are active. ' +
+      'Commands and hooks may be registered twice. ' +
+      'Recommended: pick one install path (npx is primary) and remove the other to avoid duplicate registration.'
+    );
+  }
+
+  const report = {
+    npx: npxPresent,
+    plugin: pluginPresent,
+    coexist,
+    active,
+    pluginPaths,
+    warnings,
+  };
+  if (npxPresent) {
+    report.npxPath = npxPath;
+  }
+  return report;
+}
+
 /**
  * Run full doctor check.
  * @param {string} [projectRoot] - Optional project root for project-specific checks
@@ -373,6 +485,8 @@ function runDoctor(projectRoot) {
   // @cap-todo(ac:F-019/AC-4) Module integrity check runs automatically as part of /cap:doctor
   const moduleResult = checkModuleIntegrity();
   const platformResult = checkPlatformPaths();
+  // @cap-todo(ac:F-058/AC-5) Install-mode detection runs automatically and is surfaced in the doctor report.
+  const installMode = detectInstallMode();
 
   // Compute summary
   const requiredTools = tools.filter(t => t.required);
@@ -390,6 +504,7 @@ function runDoctor(projectRoot) {
     modulesOk: moduleResult.modulesOk,
     modulesTotal: moduleResult.modulesTotal,
     platformPaths: platformResult,
+    installMode,
   };
 
   // Build install commands for missing tools
@@ -467,6 +582,28 @@ function formatReport(report) {
     }
   }
 
+  // @cap-todo(ac:F-058/AC-5) Render active install mode in the doctor output.
+  // @cap-todo(ac:F-058/AC-6) Render coexistence warning when both modes are active.
+  if (report.installMode) {
+    const im = report.installMode;
+    lines.push('');
+    lines.push('  Install mode:');
+    let modeLine;
+    if (im.active === 'both') {
+      modeLine = '  ⚠ npx (primary) + plugin (secondary) — coexistence detected';
+    } else if (im.active === 'npx') {
+      modeLine = '  ✓ npx (primary)';
+    } else if (im.active === 'plugin') {
+      modeLine = '  ✓ plugin';
+    } else {
+      modeLine = '  - none detected';
+    }
+    lines.push(`  ${modeLine}`);
+    for (const w of im.warnings) {
+      lines.push(`    ⚠ ${w}`);
+    }
+  }
+
   lines.push('');
   lines.push(`  Required:  ${report.requiredOk}/${report.requiredTotal} OK`);
   lines.push(`  Optional:  ${report.optionalOk}/${report.optionalTotal} OK`);
@@ -510,5 +647,6 @@ module.exports = {
   formatReport,
   checkModuleIntegrity,
   checkPlatformPaths,
+  detectInstallMode,
   CAP_MODULE_MANIFEST,
 };
