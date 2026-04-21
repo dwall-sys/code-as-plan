@@ -21,6 +21,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-affinity-engine.cjs',
   'cap-anchor.cjs',
   'cap-annotation-writer.cjs',
+  'cap-checkpoint.cjs',
   'cap-cluster-detect.cjs',
   'cap-cluster-display.cjs',
   'cap-cluster-format.cjs',

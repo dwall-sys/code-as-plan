@@ -1013,15 +1013,21 @@
 - `commands/cap/memory.md`
 - `tests/cap-memory-prune.test.cjs`
 
-### F-057: Checkpoint Command for Strategic Compact [planned]
+### F-057: Checkpoint Command for Strategic Compact [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
 | AC-1 | pending | /cap:checkpoint ist aufrufbar. |
+| AC-2 | pending | Command prueft SESSION.json und FEATURE-MAP-Diff seit letzter Checkpoint-Zeit auf logische Breakpoints. |
 | AC-3 | pending | Bei erkanntem Breakpoint gibt Command Empfehlung aus: 'Jetzt /compact, weil {konkreter Grund}' (z. B. 'F-054 auf state=tested'). |
 | AC-4 | pending | Command ruft /cap:save --label checkpoint-{feature_id} implizit auf, bevor die Empfehlung ausgegeben wird. |
 | AC-5 | pending | Kein Breakpoint erkannt → Message 'Kein natürlicher Kontextbruch erkannt', keine weitere Action. |
 | AC-6 | pending | Command ist rein advisory — kein Auto-/compact, kein Force-Flag. |
+
+**Files:**
+- `cap/bin/lib/cap-checkpoint.cjs`
+- `cap/bin/lib/cap-session.cjs`
+- `tests/cap-checkpoint.test.cjs`
 
 ### F-058: Claude-Code Plugin Manifest [planned]
 
@@ -1059,4 +1065,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T07:59:04.472Z*
+*Last updated: 2026-04-21T08:21:33.992Z*
