@@ -13,7 +13,15 @@ const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const pluginManifest = require('./cap-plugin-manifest.cjs');
+
+// Tolerant require: the install-hardening test fixture copies cap-doctor.cjs
+// alone to verify missing-module detection. If we require cap-plugin-manifest
+// eagerly, the load of doctor itself throws and the integrity checker reports
+// a single "cannot load manifest" failure instead of the 30+ expected misses.
+// A tolerant null fallback keeps CAP_MODULE_MANIFEST loadable in isolation;
+// detectInstallMode guards its plugin-name use against the null case below.
+let pluginManifest;
+try { pluginManifest = require('./cap-plugin-manifest.cjs'); } catch (_e) { pluginManifest = null; }
 
 // @cap-todo(ac:F-019/AC-5) Module manifest — authoritative list of expected CAP modules
 // @cap-decision Manifest is a flat array of filenames maintained manually. When a new module is added to
@@ -314,13 +322,19 @@ function detectInstallMode(opts) {
 
   // Plugin footprint: Claude Code caches installed plugins at $HOME/.claude/plugins/cache/<name>@<source>/
   const pluginPaths = [];
+  // Fallback to the hard-coded plugin name when cap-plugin-manifest.cjs is not
+  // loadable (install-hardening fixture path). The name hasn't changed since
+  // F-058 and is covered by a dedicated contract test there.
+  const pluginName = (pluginManifest && pluginManifest.PLUGIN_NAME) || 'cap';
+  const isCapManifest = (pluginManifest && pluginManifest.isCapPluginManifest)
+    || ((m) => !!(m && typeof m === 'object' && m.name === pluginName));
   const pluginCacheDir = path.join(homeDir, '.claude', 'plugins', 'cache');
   if (fs.existsSync(pluginCacheDir)) {
     try {
       const entries = fs.readdirSync(pluginCacheDir);
-      const capPrefix = `${pluginManifest.PLUGIN_NAME}@`;
+      const capPrefix = `${pluginName}@`;
       for (const entry of entries) {
-        if (entry === pluginManifest.PLUGIN_NAME || entry.startsWith(capPrefix)) {
+        if (entry === pluginName || entry.startsWith(capPrefix)) {
           pluginPaths.push(path.join(pluginCacheDir, entry));
         }
       }
@@ -339,7 +353,7 @@ function detectInstallMode(opts) {
     try {
       const raw = fs.readFileSync(localManifest, 'utf8');
       const parsed = JSON.parse(raw);
-      if (pluginManifest.isCapPluginManifest(parsed)) {
+      if (isCapManifest(parsed)) {
         pluginPaths.push(localManifest);
       }
     } catch (_err) {

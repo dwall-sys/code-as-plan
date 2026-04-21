@@ -14,6 +14,12 @@ const os = require('node:os');
 const repoRoot = path.resolve(__dirname, '..');
 const { probeProjectAnchors } = require(path.join(repoRoot, 'cap/bin/lib/convention-reader.cjs'));
 
+// The .claude/ directory is gitignored — it's a local install artefact that a
+// dev machine has but a fresh CI checkout does not. Tests that assert invariants
+// on the mirror must skip gracefully when the mirror is absent, otherwise every
+// CI matrix job fails with ENOENT before any real assertion runs.
+const hasClaudeMirror = fs.existsSync(path.join(repoRoot, '.claude'));
+
 // ─── AC-2 — pitfall research is opt-in via --research ───────────────────────
 
 describe('F-044/AC-2 — pitfall research opt-in', () => {
@@ -69,14 +75,14 @@ describe('F-044/AC-2 — pitfall research opt-in', () => {
     );
   });
 
-  it('.claude mirror of prototype.md uses --research opt-in', () => {
+  it('.claude mirror of prototype.md uses --research opt-in', { skip: !hasClaudeMirror }, () => {
     const md = fs.readFileSync(path.join(repoRoot, '.claude/commands/cap/prototype.md'), 'utf8');
     assert.match(md, /argument-hint:[^\n]*--research/);
     assert.match(md, /## Step 2b: Pitfall Research \(only when --research is set\)/);
     assert.doesNotMatch(md, /Skip this step if `--skip-research` is in the arguments/);
   });
 
-  it('.claude mirror of debug.md uses --research opt-in', () => {
+  it('.claude mirror of debug.md uses --research opt-in', { skip: !hasClaudeMirror }, () => {
     const md = fs.readFileSync(path.join(repoRoot, '.claude/commands/cap/debug.md'), 'utf8');
     assert.match(md, /## Step 2c: Pitfall Research for Debug Context \(only when --research is set\)/);
     assert.match(md, /Skip this step if `--research` is NOT in `\$ARGUMENTS`/);
@@ -186,7 +192,7 @@ describe('F-044/AC-3 — probeProjectAnchors two-anchor probe', () => {
 // ─── AC-3 mirror parity ─────────────────────────────────────────────────────
 
 describe('F-044/AC-3 — .claude mirror of convention-reader is byte-identical', () => {
-  it('cap/bin/lib/convention-reader.cjs and .claude/cap/bin/lib/convention-reader.cjs are identical', () => {
+  it('cap/bin/lib/convention-reader.cjs and .claude/cap/bin/lib/convention-reader.cjs are identical', { skip: !hasClaudeMirror }, () => {
     const a = fs.readFileSync(path.join(repoRoot, 'cap/bin/lib/convention-reader.cjs'), 'utf8');
     const b = fs.readFileSync(path.join(repoRoot, '.claude/cap/bin/lib/convention-reader.cjs'), 'utf8');
     assert.strictEqual(a, b, 'convention-reader.cjs and its .claude mirror must be byte-identical');
@@ -218,14 +224,14 @@ describe('F-044/AC-6 — public command surface intact', () => {
     assert.match(fm, /^allowed-tools:/m, 'frontmatter must have allowed-tools');
   });
 
-  it('.claude mirror of prototype.md frontmatter is intact', () => {
+  it('.claude mirror of prototype.md frontmatter is intact', { skip: !hasClaudeMirror }, () => {
     const md = fs.readFileSync(path.join(repoRoot, '.claude/commands/cap/prototype.md'), 'utf8');
     const fmMatch = md.match(/^---\n([\s\S]+?)\n---/);
     assert.ok(fmMatch);
     assert.match(fmMatch[1], /^name: cap:prototype$/m);
   });
 
-  it('.claude mirror of debug.md frontmatter is intact', () => {
+  it('.claude mirror of debug.md frontmatter is intact', { skip: !hasClaudeMirror }, () => {
     const md = fs.readFileSync(path.join(repoRoot, '.claude/commands/cap/debug.md'), 'utf8');
     const fmMatch = md.match(/^---\n([\s\S]+?)\n---/);
     assert.ok(fmMatch);

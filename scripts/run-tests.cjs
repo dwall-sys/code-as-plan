@@ -21,15 +21,26 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const nodeArgs = ['--test'];
+// The default TAP reporter swallows failure details under
+// --experimental-test-isolation=none (only `# fail N` in the summary, no
+// per-test `not ok` lines), which makes red CI unnecessarily opaque.
+// The spec reporter emits explicit ✖ lines with the assertion error.
+const nodeArgs = ['--test', '--test-reporter=spec'];
 if (wantsCoverage) {
   // Node >=22 defaults to process-per-file isolation. Coverage from those
   // subprocesses is dropped by both c8 and the native reporter, so force
   // single-process execution when measuring coverage. Plain `npm test` keeps
   // the safer default isolation on purpose: it surfaces shared-state leaks
   // (F-052 was found exactly this way), which isolation=none would hide.
+  // Flag-name history: `--experimental-test-isolation` landed in Node v22.8.0;
+  // the non-experimental `--test-isolation=...` form was stabilised in v23.x.
+  // CI runs on Node 22 reject the stabilised name with "bad option", so we use
+  // the experimental prefix — Node 23+ still accepts it for back-compat.
+  // Discovered during the 2026-04-21 F-054..F-059 batch: every feature PR
+  // merged with red CI because this mismatch failed the runner before a single
+  // test executed.
   nodeArgs.push(
-    '--test-isolation=none',
+    '--experimental-test-isolation=none',
     '--experimental-test-coverage',
     '--test-coverage-lines=0.7',
     '--test-coverage-include=cap/bin/lib/*.cjs'
