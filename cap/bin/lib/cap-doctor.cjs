@@ -40,6 +40,7 @@ const CAP_MODULE_MANIFEST = [
   'cap-completeness.cjs',
   'cap-deps.cjs',
   'cap-design.cjs',
+  'cap-design-families.cjs',
   'cap-divergence-detector.cjs',
   'cap-doctor.cjs',
   'cap-feature-map.cjs',

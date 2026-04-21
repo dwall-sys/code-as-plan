@@ -1133,17 +1133,23 @@
 - `agents/cap-designer.md`
 - `tests/cap-design-traceability.test.cjs`
 
-### F-064: cap:design --review — Anti-Slop-Check [planned]
+### F-064: cap:design --review — Anti-Slop-Check [shipped]
 
 **Depends on:** F-062
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | `/cap:design --review` spawnt cap-designer-Agent im Review-Mode, der bestehende DESIGN.md gegen Anti-Slop-Regeln prüft. |
-| AC-2 | pending | Review-Output ist ein strukturierter Report: Violations-Liste mit Token-ID/Component-ID, Regelverletzung, Verbesserungsvorschlag. |
-| AC-3 | pending | Review ist rein read-only — keine automatischen Änderungen an DESIGN.md. |
-| AC-4 | pending | Review-Regelbasis ist konfigurierbar via `.cap/design-rules.md` (optional, Default-Regelset bei fehlender Datei). |
-| AC-5 | pending | Review ist idempotent und deterministisch (gleiche Eingabe → gleicher Report). |
+| AC-1 | tested | `/cap:design --review` spawnt cap-designer-Agent im Review-Mode, der bestehende DESIGN.md gegen Anti-Slop-Regeln prüft. |
+| AC-2 | tested | Review-Output ist ein strukturierter Report: Violations-Liste mit Token-ID/Component-ID, Regelverletzung, Verbesserungsvorschlag. |
+| AC-3 | tested | Review ist rein read-only — keine automatischen Änderungen an DESIGN.md. |
+| AC-4 | tested | Review-Regelbasis ist konfigurierbar via `.cap/design-rules.md` (optional, Default-Regelset bei fehlender Datei). |
+| AC-5 | tested | Review ist idempotent und deterministisch (gleiche Eingabe → gleicher Report). |
+
+**Files:**
+- `cap/bin/lib/cap-design.cjs`
+- `commands/cap/design.md`
+- `agents/cap-designer.md`
+- `tests/cap-design-review.test.cjs`
 
 ### F-065: CAP-UI Core — Local Server + Static Export [planned]
 
@@ -1203,4 +1209,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T22:16:59.275Z*
+*Last updated: 2026-04-21T22:44:50.562Z*
