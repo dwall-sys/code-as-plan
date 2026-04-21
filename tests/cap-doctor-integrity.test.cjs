@@ -20,7 +20,8 @@ const LIB_DIR = path.join(__dirname, '..', 'cap', 'bin', 'lib');
 
 describe('CAP_MODULE_MANIFEST', () => {
   it('contains expected module entries', () => {
-    assert.equal(CAP_MODULE_MANIFEST.length, 68);
+    // @cap-decision(F-064) Bumped 68 -> 69 when cap-design-families.cjs was extracted from cap-design.cjs (size split).
+    assert.equal(CAP_MODULE_MANIFEST.length, 69);
   });
 
   it('every entry ends with .cjs', () => {
@@ -46,7 +47,7 @@ describe('checkModuleIntegrity', () => {
   it('returns all modules as OK for the real lib directory', () => {
     const result = checkModuleIntegrity(LIB_DIR);
     assert.equal(result.modulesOk, result.modulesTotal);
-    assert.equal(result.modulesTotal, 68);
+    assert.equal(result.modulesTotal, 69);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -59,7 +60,7 @@ describe('checkModuleIntegrity', () => {
   it('reports FAIL for a non-existent directory', () => {
     const result = checkModuleIntegrity('/tmp/cap-test-nonexistent-dir');
     assert.equal(result.modulesOk, 0);
-    assert.equal(result.modulesTotal, 68);
+    assert.equal(result.modulesTotal, 69);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -180,7 +181,7 @@ describe('runDoctor includes module integrity', () => {
     const report = runDoctor();
     assert.ok(typeof report.modulesOk === 'number');
     assert.ok(typeof report.modulesTotal === 'number');
-    assert.equal(report.modulesTotal, 68);
+    assert.equal(report.modulesTotal, 69);
   });
 
   it('report includes platformPaths', () => {

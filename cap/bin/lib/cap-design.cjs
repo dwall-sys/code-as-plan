@@ -1,9 +1,14 @@
 // @cap-context CAP F-062 DESIGN.md engine -- deterministic aesthetic picker + idempotent DESIGN.md writer.
 // @cap-context CAP F-063 additively attaches stable DT-NNN / DC-NNN IDs to DESIGN.md entries and exposes helpers for feature-map traceability.
+// @cap-context CAP F-064 adds a pure, read-only review engine for DESIGN.md (Anti-Slop-Check).
 // @cap-decision DESIGN.md is a single markdown file at project root next to FEATURE-MAP.md. Zero-deps, diffable, inspectable.
 // @cap-decision(F-063/D1) ID format is an INLINE suffix — bullet form `- key: value (id: DT-NNN)`, component form `### Name (id: DC-NNN)`. Preserves F-062's line-scan merge, stays dense, diff-friendly.
 // @cap-decision(F-063/D2) ID assignment is SEQUENTIAL per type (DT-001, DT-002...; DC-001, DC-002...). Computed from max existing ID + 1 — deterministic, human-readable, no gaps required but tolerated.
 // @cap-decision(F-063/D4) Stable-ID guarantee — once assigned, NEVER renumbered. assignDesignIds only fills entries without ids; existing IDs are preserved byte-identical. This keeps F-068 (visual editor) edits from churning diffs.
+// @cap-decision(F-064/D1) Design rules source-of-truth: DEFAULT_DESIGN_RULES is a frozen superset of ANTI_SLOP_RULES plus structural checks. Users override via `.cap/design-rules.md` (markdown-bullet format, no YAML, matches CAP convention).
+// @cap-decision(F-064/D2) Review report artifact location: `.cap/DESIGN-REVIEW.md`. DESIGN.md itself is never modified by review — AC-3 is a hard read-only constraint enforced at library boundary (reviewDesign takes strings, never a path).
+// @cap-decision(F-064/D3) Violation severity levels: `error` (hard rule violation), `warning` (style suggestion), `info` (informational). Default `warning`. Declared per-rule.
+// @cap-decision(F-064/D4) Idempotence guarantee: violations sorted by (location.id || '__global__', rule-name, location.line || 0). No timestamps in report. Same input → byte-identical output.
 // @cap-decision Idempotence guaranteed by pinning all tokens per aesthetic family in a lookup table and emitting NO timestamps, NO LLM-generated flavor text.
 // @cap-constraint Zero external dependencies -- Node.js built-ins only (fs, path).
 
@@ -11,9 +16,22 @@
 
 // @cap-feature(feature:F-062) cap:design Core — DESIGN.md + Aesthetic Picker
 // @cap-feature(feature:F-063) Design-Feature Traceability — DT/DC IDs, tag recognition, and feature-map usesDesign helpers
+// @cap-feature(feature:F-064) cap:design --review — Anti-Slop-Check (pure review engine, read-only)
 
 const fs = require('node:fs');
 const path = require('node:path');
+
+// @cap-decision(F-064) Data extracted to cap-design-families.cjs once this file crossed 40KB.
+//                      Re-exported below so the public API surface (AESTHETIC_FAMILIES, ANTI_SLOP_RULES, FAMILY_MAP,
+//                      VALID_*) is unchanged for existing callers (F-062/F-063 tests, commands).
+const {
+  ANTI_SLOP_RULES,
+  AESTHETIC_FAMILIES,
+  FAMILY_MAP,
+  VALID_READ_HEAVY,
+  VALID_USER_TYPES,
+  VALID_COURAGE,
+} = require('./cap-design-families.cjs');
 
 const DESIGN_FILE = 'DESIGN.md';
 
@@ -46,319 +64,8 @@ const DESIGN_FILE = 'DESIGN.md';
  * @property {Object<string, { variants: string[], states: string[] }>} components
  */
 
-// @cap-todo(ac:F-062/AC-6) Anti-Slop constraint block -- surfaced in both agent prompt and DESIGN.md output.
-// @cap-decision Anti-Slop rules pinned as constants so agent and writer share the same source of truth.
-const ANTI_SLOP_RULES = Object.freeze([
-  'No generic fonts: Inter, Roboto, Arial, Helvetica, SF Pro are forbidden as primary display typefaces.',
-  'No cliche gradients: linear-gradient(to right, #667eea, #764ba2) and similar purple-blue combos are forbidden.',
-  'No cookie-cutter layouts: centered hero + 3-column feature cards + CTA is a banned template.',
-]);
+// Data moved to cap-design-families.cjs — see require() at top of file.
 
-// @cap-todo(ac:F-062/AC-2) Nine Aesthetic Families lookup -- pinned tokens for determinism (AC-7).
-// @cap-decision Canonical Button + Card components specified per family so buildDesignMd satisfies AC-3 minimum.
-const AESTHETIC_FAMILIES = Object.freeze({
-  'editorial-minimalism': Object.freeze({
-    key: 'editorial-minimalism',
-    name: 'Editorial Minimalism',
-    referenceBrands: ['Linear', 'Vercel', 'Stripe'],
-    colors: Object.freeze({
-      primary: '#111111',
-      secondary: '#555555',
-      background: '#FAFAFA',
-      surface: '#FFFFFF',
-      text: '#0A0A0A',
-      muted: '#888888',
-      accent: '#2B6CB0',
-    }),
-    spacing: Object.freeze([4, 8, 16, 24, 40, 64]),
-    typography: Object.freeze({
-      family: 'Söhne, Neue Haas Grotesk',
-      familyMono: 'Söhne Mono, JetBrains Mono',
-      scale: Object.freeze([12, 14, 16, 20, 28, 40]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'secondary', 'ghost']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['plain', 'outlined']),
-        states: Object.freeze(['default', 'hover']),
-      }),
-    }),
-  }),
-  'terminal-core': Object.freeze({
-    key: 'terminal-core',
-    name: 'Terminal-Core',
-    referenceBrands: ['Warp', 'Ghostty', 'Fly.io'],
-    colors: Object.freeze({
-      primary: '#00FF9C',
-      secondary: '#2E7D5B',
-      background: '#0B0F0D',
-      surface: '#111614',
-      text: '#D7FFE6',
-      muted: '#6B8A7A',
-      accent: '#FFB020',
-    }),
-    spacing: Object.freeze([4, 8, 16, 24, 32]),
-    typography: Object.freeze({
-      family: 'Berkeley Mono, iA Writer Quattro',
-      familyMono: 'Berkeley Mono, JetBrains Mono',
-      scale: Object.freeze([12, 14, 16, 20, 24, 32]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'ghost', 'danger']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['framed', 'ascii-bordered']),
-        states: Object.freeze(['default', 'focus']),
-      }),
-    }),
-  }),
-  'warm-editorial': Object.freeze({
-    key: 'warm-editorial',
-    name: 'Warm Editorial',
-    referenceBrands: ['Are.na', 'Ghost', 'Substack Reader'],
-    colors: Object.freeze({
-      primary: '#6B4423',
-      secondary: '#8B5A3C',
-      background: '#F5EFE6',
-      surface: '#FFFAF0',
-      text: '#2D1F15',
-      muted: '#9C8A78',
-      accent: '#B85C38',
-    }),
-    spacing: Object.freeze([4, 8, 16, 24, 40, 72]),
-    typography: Object.freeze({
-      family: 'GT Super, Tiempos Text',
-      familyMono: 'GT America Mono',
-      scale: Object.freeze([14, 16, 18, 22, 32, 48]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'secondary', 'text']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['article', 'quote']),
-        states: Object.freeze(['default', 'hover']),
-      }),
-    }),
-  }),
-  'data-dense-pro': Object.freeze({
-    key: 'data-dense-pro',
-    name: 'Data-Dense Pro',
-    referenceBrands: ['Bloomberg Terminal', 'Retool', 'Grafana'],
-    colors: Object.freeze({
-      primary: '#1F4E79',
-      secondary: '#4A7BAA',
-      background: '#0E1117',
-      surface: '#161B22',
-      text: '#E6EDF3',
-      muted: '#7D8590',
-      accent: '#F78166',
-    }),
-    spacing: Object.freeze([2, 4, 8, 12, 16, 24]),
-    typography: Object.freeze({
-      family: 'Söhne Mono, IBM Plex Sans',
-      familyMono: 'IBM Plex Mono',
-      scale: Object.freeze([11, 12, 13, 14, 16, 20]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'secondary', 'ghost', 'danger']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled', 'loading']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['metric', 'table-wrapper', 'dense']),
-        states: Object.freeze(['default', 'selected']),
-      }),
-    }),
-  }),
-  'cinematic-dark': Object.freeze({
-    key: 'cinematic-dark',
-    name: 'Cinematic Dark',
-    referenceBrands: ['Arc Browser', 'Raycast', 'Linear dark'],
-    colors: Object.freeze({
-      primary: '#8B5CF6',
-      secondary: '#5B4BC9',
-      background: '#0A0A0F',
-      surface: '#13131A',
-      text: '#EDEDF2',
-      muted: '#6E6E7A',
-      accent: '#F59E0B',
-    }),
-    spacing: Object.freeze([4, 8, 16, 24, 40, 64]),
-    typography: Object.freeze({
-      family: 'Söhne, Neue Haas Grotesk',
-      familyMono: 'Berkeley Mono',
-      scale: Object.freeze([12, 14, 16, 20, 28, 44]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'glass', 'ghost']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['elevated', 'flush']),
-        states: Object.freeze(['default', 'hover']),
-      }),
-    }),
-  }),
-  'playful-color': Object.freeze({
-    key: 'playful-color',
-    name: 'Playful Color',
-    referenceBrands: ['Notion', 'Figma Community', 'Duolingo'],
-    colors: Object.freeze({
-      primary: '#FF5E5B',
-      secondary: '#FFD23F',
-      background: '#FFFDF6',
-      surface: '#FFFFFF',
-      text: '#1B1B1F',
-      muted: '#6E6E73',
-      accent: '#00CECB',
-    }),
-    spacing: Object.freeze([4, 8, 16, 24, 40]),
-    typography: Object.freeze({
-      family: 'GT Walsheim, Söhne Breit',
-      familyMono: 'Fira Code',
-      scale: Object.freeze([13, 15, 17, 22, 30, 44]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'secondary', 'ghost', 'icon']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['tile', 'sticker', 'highlight']),
-        states: Object.freeze(['default', 'hover', 'active']),
-      }),
-    }),
-  }),
-  'glass-soft-futurism': Object.freeze({
-    key: 'glass-soft-futurism',
-    name: 'Glass/Soft-Futurism',
-    referenceBrands: ['Apple Vision Pro', 'Spline', 'visionOS patterns'],
-    colors: Object.freeze({
-      primary: '#A5B4FC',
-      secondary: '#C4B5FD',
-      background: '#0F172A',
-      surface: 'rgba(255,255,255,0.06)',
-      text: '#F1F5F9',
-      muted: '#94A3B8',
-      accent: '#FBBF24',
-    }),
-    spacing: Object.freeze([4, 8, 16, 24, 40, 56]),
-    typography: Object.freeze({
-      family: 'SF Pro Display Rounded, Söhne',
-      familyMono: 'SF Mono',
-      scale: Object.freeze([12, 14, 16, 20, 28, 40]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['glass-primary', 'glass-secondary', 'ghost']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['glass', 'frosted', 'floating']),
-        states: Object.freeze(['default', 'hover']),
-      }),
-    }),
-  }),
-  'neon-brutalist': Object.freeze({
-    key: 'neon-brutalist',
-    name: 'Neon Brutalist',
-    referenceBrands: ['Figma Config sites', 'Gumroad', 'Readymag'],
-    colors: Object.freeze({
-      primary: '#FF00E5',
-      secondary: '#00FFD1',
-      background: '#FFFF00',
-      surface: '#FFFFFF',
-      text: '#000000',
-      muted: '#333333',
-      accent: '#0057FF',
-    }),
-    spacing: Object.freeze([4, 8, 16, 32, 56]),
-    typography: Object.freeze({
-      family: 'PP Neue Machina, Söhne Breit',
-      familyMono: 'Departure Mono',
-      scale: Object.freeze([14, 18, 24, 36, 56, 88]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['slab', 'outline', 'inverse']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['slab', 'shadowed', 'offset']),
-        states: Object.freeze(['default', 'hover']),
-      }),
-    }),
-  }),
-  'cult-indie': Object.freeze({
-    key: 'cult-indie',
-    name: 'Cult/Indie Picks',
-    referenceBrands: ['Pitchfork.com', 'Are.na clubs', 'Cortex'],
-    colors: Object.freeze({
-      primary: '#D62828',
-      secondary: '#003049',
-      background: '#FDF6E3',
-      surface: '#FFFBEA',
-      text: '#1A1A1A',
-      muted: '#7A6E57',
-      accent: '#F77F00',
-    }),
-    spacing: Object.freeze([4, 8, 12, 20, 36, 60]),
-    typography: Object.freeze({
-      family: 'PP Editorial New, PP Right Serif',
-      familyMono: 'Cartograph CF',
-      scale: Object.freeze([13, 15, 18, 24, 36, 56]),
-    }),
-    components: Object.freeze({
-      Button: Object.freeze({
-        variants: Object.freeze(['primary', 'underlined', 'mono']),
-        states: Object.freeze(['default', 'hover', 'active', 'disabled']),
-      }),
-      Card: Object.freeze({
-        variants: Object.freeze(['zine', 'poster']),
-        states: Object.freeze(['default', 'hover']),
-      }),
-    }),
-  }),
-});
-
-// @cap-todo(ac:F-062/AC-2) 3-Question Wizard mapping to one of 9 Aesthetic Families.
-// @cap-decision Mapping is a pure deterministic lookup (AC-7): same input triplet -> same family, no randomness.
-// Answer space: readHeavy ∈ {read-heavy, scan-heavy}, userType ∈ {consumer, professional, developer}, courageFactor ∈ {safe, balanced, bold}.
-// 2 * 3 * 3 = 18 cells, each mapped explicitly to one of the 9 families. Avoids fall-through ambiguity.
-const FAMILY_MAP = Object.freeze({
-  // read-heavy branch — content-first aesthetics
-  'read-heavy|consumer|safe': 'warm-editorial',
-  'read-heavy|consumer|balanced': 'warm-editorial',
-  'read-heavy|consumer|bold': 'cult-indie',
-  'read-heavy|professional|safe': 'editorial-minimalism',
-  'read-heavy|professional|balanced': 'editorial-minimalism',
-  'read-heavy|professional|bold': 'cult-indie',
-  'read-heavy|developer|safe': 'editorial-minimalism',
-  'read-heavy|developer|balanced': 'terminal-core',
-  'read-heavy|developer|bold': 'terminal-core',
-  // scan-heavy branch — dense/visual aesthetics
-  'scan-heavy|consumer|safe': 'playful-color',
-  'scan-heavy|consumer|balanced': 'playful-color',
-  'scan-heavy|consumer|bold': 'neon-brutalist',
-  'scan-heavy|professional|safe': 'data-dense-pro',
-  'scan-heavy|professional|balanced': 'cinematic-dark',
-  'scan-heavy|professional|bold': 'glass-soft-futurism',
-  'scan-heavy|developer|safe': 'data-dense-pro',
-  'scan-heavy|developer|balanced': 'cinematic-dark',
-  'scan-heavy|developer|bold': 'neon-brutalist',
-});
-
-const VALID_READ_HEAVY = Object.freeze(['read-heavy', 'scan-heavy']);
-const VALID_USER_TYPES = Object.freeze(['consumer', 'professional', 'developer']);
-const VALID_COURAGE = Object.freeze(['safe', 'balanced', 'bold']);
 
 // @cap-api mapAnswersToFamily(readHeavy, userType, courageFactor) -- Deterministic wizard-answer lookup.
 // @cap-todo(ac:F-062/AC-2) Maps the 3 wizard answers to exactly one of the 9 aesthetic families.
@@ -788,6 +495,443 @@ function findFeaturesUsingDesignId(featureMap, designId) {
   return out;
 }
 
+// @cap-feature(feature:F-064) Anti-Slop Review Engine — pure review function over DESIGN.md content.
+// @cap-constraint reviewDesign is synchronous, pure (string-in / array-out). No I/O, no fs access, no mutation of inputs.
+
+const DESIGN_REVIEW_FILE = '.cap/DESIGN-REVIEW.md';
+
+// @cap-decision(F-064/D3) Severity levels frozen here so callers cannot introduce silent new levels.
+const REVIEW_SEVERITIES = Object.freeze(['error', 'warning', 'info']);
+
+// @cap-todo(ac:F-064/AC-2) Structured rule schema: name, severity, kind, check(content, ctx) -> violations[].
+// @cap-decision(F-064/D1) Default rules are pinned here. Built-in checks cover typography, color, layout, structure.
+//              Each rule returns an array of { id, kind, rule, location, suggestion, severity }.
+//              Rules are PURE functions of (content, parsedContext). No network, no fs, no randomness.
+const DEFAULT_DESIGN_RULES = Object.freeze([
+  // Typography
+  Object.freeze({
+    name: 'typography/no-generic-fonts',
+    severity: 'error',
+    kind: 'typography',
+    description: 'Reject generic fonts (Inter, Roboto, Arial, Helvetica, sans-serif) as primary typefaces.',
+    suggestion: 'Use an opinionated typeface aligned with the aesthetic family (see Tokens).',
+  }),
+  // Color
+  Object.freeze({
+    name: 'color/no-cliche-gradients',
+    severity: 'error',
+    kind: 'color',
+    description: 'Reject cliche purple-blue SaaS-template gradients (e.g. #667eea -> #764ba2).',
+    suggestion: 'Derive gradients from the primary + accent tokens; purple-blue duos are SaaS-template slop.',
+  }),
+  // Layout
+  Object.freeze({
+    name: 'layout/no-cookie-cutter',
+    severity: 'warning',
+    kind: 'layout',
+    description: 'Reject "centered hero + 3-column feature cards + CTA" template-grammar mentions.',
+    suggestion: 'Break the template grammar — vary hero alignment or section grammar.',
+  }),
+  // Structure (F-063-aware)
+  Object.freeze({
+    name: 'structure/inconsistent-token-ids',
+    severity: 'warning',
+    kind: 'structure',
+    description: 'Tokens without DT-NNN IDs when the DESIGN.md has some IDs already (inconsistent coverage).',
+    suggestion: 'Run /cap:design --review or re-run /cap:design to retrofit DT-NNN IDs.',
+  }),
+  Object.freeze({
+    name: 'structure/inconsistent-component-ids',
+    severity: 'warning',
+    kind: 'structure',
+    description: 'Components without DC-NNN IDs when the DESIGN.md has some IDs already (inconsistent coverage).',
+    suggestion: 'Retrofit DC-NNN IDs via assignDesignIds.',
+  }),
+  Object.freeze({
+    name: 'structure/duplicate-ids',
+    severity: 'error',
+    kind: 'structure',
+    description: 'Duplicate DT-NNN or DC-NNN ID detected — violates stable-ID guarantee (F-063/D4).',
+    suggestion: 'Rename the duplicate to the next free ID; investigate which entry is the original.',
+  }),
+]);
+
+// @cap-decision(F-064/D1) Generic font list is a frozen set — matched case-insensitively against the typography family value.
+//              "SF Pro" is excluded here (allowed for glass-soft-futurism family per F-062) — cf. ANTI_SLOP_RULES wording.
+const GENERIC_FONT_PATTERNS = Object.freeze([
+  /(^|[,\s"'])inter([,\s"']|$)/i,
+  /(^|[,\s"'])roboto([,\s"']|$)/i,
+  /(^|[,\s"'])arial([,\s"']|$)/i,
+  /(^|[,\s"'])helvetica([,\s"']|$)/i,
+  /(^|[,\s"'])sans-serif([,\s"']|$)/i,
+]);
+
+// @cap-decision(F-064/D1) Purple-blue cliche gradient regex — matches the canonical #667eea/#764ba2 duo AND common near-variants.
+//              We do not attempt full color-space analysis in v1 — literal string matching is adequate for template-slop detection.
+const CLICHE_GRADIENT_PATTERNS = Object.freeze([
+  /#667eea/i,
+  /#764ba2/i,
+  /linear-gradient\s*\(\s*[^)]*#66[67][a-f0-9]{3}[^)]*#76[4-5][a-f0-9]{3}/i,
+]);
+
+// @cap-decision(F-064/D1) Cookie-cutter layout markers — substring matches against DESIGN.md content.
+const COOKIE_CUTTER_PHRASES = Object.freeze([
+  'centered hero + 3-column feature cards',
+  'hero + 3-column feature cards + cta',
+  '3-column feature cards',
+]);
+
+// @cap-api parseDesignRules(ruleMarkdown) -- Parse optional `.cap/design-rules.md`; return default rules if input is empty/null.
+// @cap-todo(ac:F-064/AC-4) Review-Regelbasis ist konfigurierbar via `.cap/design-rules.md` — markdown bullets under `## Rules`.
+// @cap-decision(F-064/D1) Custom-rule format is MARKDOWN bullets, not YAML, matching CAP's `.md` convention.
+//              Each bullet: `- **[kind] rule-name**: description. Suggestion: ...` with optional `[severity: error|warning|info]` prefix.
+//              Parser is intentionally forgiving — malformed bullets are SKIPPED (not errored).
+/**
+ * @param {string|null|undefined} ruleMarkdown - Content of `.cap/design-rules.md` or null.
+ * @returns {Array<{name:string, severity:string, kind:string, description:string, suggestion:string}>}
+ *          Frozen default ruleset if input is empty; otherwise the parsed ruleset.
+ */
+function parseDesignRules(ruleMarkdown) {
+  if (typeof ruleMarkdown !== 'string' || ruleMarkdown.trim().length === 0) {
+    return DEFAULT_DESIGN_RULES;
+  }
+
+  const lines = ruleMarkdown.split('\n');
+  let inRulesSection = false;
+  const out = [];
+  let currentRule = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (/^##\s+Rules\s*$/i.test(trimmed)) {
+      inRulesSection = true;
+      continue;
+    }
+    if (inRulesSection && /^##\s+\S/.test(trimmed)) {
+      // Entering a different H2 closes the Rules section.
+      inRulesSection = false;
+      if (currentRule) { out.push(Object.freeze(currentRule)); currentRule = null; }
+      continue;
+    }
+
+    if (!inRulesSection) continue;
+
+    // Bullet start: `- **[kind] rule-name**: description`
+    //             or `- **[kind][severity:error] rule-name**: description`
+    const bulletMatch = line.match(/^\s*-\s+\*\*\[([^\]]+)\](?:\[severity:\s*(error|warning|info)\])?\s+([^*]+?)\*\*\s*:\s*(.*)$/i);
+    if (bulletMatch) {
+      if (currentRule) out.push(Object.freeze(currentRule));
+      const kind = bulletMatch[1].trim();
+      const severity = (bulletMatch[2] || 'warning').trim().toLowerCase();
+      const name = `${kind}/${bulletMatch[3].trim()}`;
+      const description = bulletMatch[4].trim();
+      currentRule = { name, severity, kind, description, suggestion: '' };
+      continue;
+    }
+
+    // Continuation: "  Suggestion: ..."
+    const sugMatch = line.match(/^\s+Suggestion:\s*(.+)$/i);
+    if (sugMatch && currentRule) {
+      currentRule.suggestion = sugMatch[1].trim();
+      continue;
+    }
+  }
+
+  if (currentRule) out.push(Object.freeze(currentRule));
+
+  // @cap-decision If user's file has NO valid rules, fall back to defaults (loud-quiet middle ground).
+  //               A user with malformed rules should still get the baseline Anti-Slop coverage.
+  if (out.length === 0) return DEFAULT_DESIGN_RULES;
+
+  return Object.freeze(out);
+}
+
+// @cap-api reviewDesign(designMdContent, rules) -- Pure review function. Returns sorted, deterministic violations array.
+// @cap-todo(ac:F-064/AC-1) Review engine applies rules to DESIGN.md content, returns structured violations.
+// @cap-todo(ac:F-064/AC-2) Violation schema: { id, kind, rule, location, suggestion, severity }.
+// @cap-todo(ac:F-064/AC-3) PURE function — no writes. Takes string input, returns array. Never touches fs.
+// @cap-todo(ac:F-064/AC-5) Deterministic: sort order is (location.id || '__global__', rule-name, location.line || 0).
+/**
+ * @param {string} designMdContent - DESIGN.md content to review.
+ * @param {Array<object>} [rules] - Ruleset (defaults to DEFAULT_DESIGN_RULES).
+ * @returns {Array<{id:string|null, kind:string, rule:string, location:{line:number|null,id:string|null,section:string|null}, suggestion:string, severity:string}>}
+ */
+function reviewDesign(designMdContent, rules) {
+  if (typeof designMdContent !== 'string') {
+    throw new Error('reviewDesign requires a string (DESIGN.md content)');
+  }
+  const activeRules = Array.isArray(rules) && rules.length > 0 ? rules : DEFAULT_DESIGN_RULES;
+  const ruleIndex = new Map();
+  for (const r of activeRules) ruleIndex.set(r.name, r);
+
+  const violations = [];
+  const lines = designMdContent.split('\n');
+  const ids = parseDesignIds(designMdContent);
+
+  // --- Rule: typography/no-generic-fonts ---
+  // @cap-todo(ac:F-064/AC-1) Check typography.family bullet value against the generic-font denylist.
+  const typoRule = ruleIndex.get('typography/no-generic-fonts');
+  if (typoRule) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const m = line.match(/^-\s+family(?:Mono)?:\s*"([^"]+)"/);
+      if (!m) continue;
+      const value = m[1];
+      for (const pat of GENERIC_FONT_PATTERNS) {
+        if (pat.test(value)) {
+          violations.push({
+            id: null,
+            kind: typoRule.kind,
+            rule: typoRule.name,
+            location: { line: i + 1, id: null, section: 'Typography' },
+            suggestion: typoRule.suggestion,
+            severity: typoRule.severity,
+          });
+          break; // one violation per line is enough
+        }
+      }
+    }
+  }
+
+  // --- Rule: color/no-cliche-gradients ---
+  // @cap-todo(ac:F-064/AC-1) Match cliche purple-blue gradients anywhere in the document.
+  const gradRule = ruleIndex.get('color/no-cliche-gradients');
+  if (gradRule) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const pat of CLICHE_GRADIENT_PATTERNS) {
+        if (pat.test(line)) {
+          // Attempt to attach a DT-NNN id if the bullet has one inline.
+          const idMatch = line.match(DESIGN_TOKEN_ID_RE);
+          violations.push({
+            id: idMatch ? idMatch[1] : null,
+            kind: gradRule.kind,
+            rule: gradRule.name,
+            location: { line: i + 1, id: idMatch ? idMatch[1] : null, section: null },
+            suggestion: gradRule.suggestion,
+            severity: gradRule.severity,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  // --- Rule: layout/no-cookie-cutter ---
+  // @cap-todo(ac:F-064/AC-1) Match cookie-cutter layout phrases (case-insensitive substring).
+  const layoutRule = ruleIndex.get('layout/no-cookie-cutter');
+  if (layoutRule) {
+    const lcContent = designMdContent.toLowerCase();
+    for (const phrase of COOKIE_CUTTER_PHRASES) {
+      const idx = lcContent.indexOf(phrase);
+      if (idx === -1) continue;
+      // Find the line number for the first hit only — deterministic, one violation per phrase.
+      let cum = 0;
+      let lineNum = 1;
+      for (let i = 0; i < lines.length; i++) {
+        if (cum + lines[i].length >= idx) { lineNum = i + 1; break; }
+        cum += lines[i].length + 1; // +1 for the \n
+      }
+      violations.push({
+        id: null,
+        kind: layoutRule.kind,
+        rule: layoutRule.name,
+        location: { line: lineNum, id: null, section: null },
+        suggestion: layoutRule.suggestion,
+        severity: layoutRule.severity,
+      });
+    }
+  }
+
+  // --- Rule: structure/inconsistent-token-ids ---
+  // @cap-todo(ac:F-064/AC-1) Flag token bullets without DT-NNN when any DT-NNN exists in the file.
+  const tokenStructRule = ruleIndex.get('structure/inconsistent-token-ids');
+  if (tokenStructRule && ids.tokens.length > 0) {
+    let inColors = false;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed === '### Colors') { inColors = true; continue; }
+      if (trimmed.startsWith('## ') || (trimmed.startsWith('### ') && trimmed !== '### Colors')) {
+        inColors = false;
+        continue;
+      }
+      if (inColors && lines[i].startsWith('- ') && !DESIGN_TOKEN_ID_RE.test(lines[i])) {
+        const keyMatch = lines[i].match(/^-\s+([^:]+):/);
+        const key = keyMatch ? keyMatch[1].trim() : null;
+        violations.push({
+          id: null,
+          kind: tokenStructRule.kind,
+          rule: tokenStructRule.name,
+          location: { line: i + 1, id: null, section: 'Colors' },
+          suggestion: tokenStructRule.suggestion + (key ? ` (missing on: ${key})` : ''),
+          severity: tokenStructRule.severity,
+        });
+      }
+    }
+  }
+
+  // --- Rule: structure/inconsistent-component-ids ---
+  // @cap-todo(ac:F-064/AC-1) Flag component headers without DC-NNN when any DC-NNN exists.
+  const compStructRule = ruleIndex.get('structure/inconsistent-component-ids');
+  if (compStructRule && ids.components.length > 0) {
+    let inComponents = false;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed === '## Components') { inComponents = true; continue; }
+      if (trimmed.startsWith('## ') && trimmed !== '## Components') { inComponents = false; continue; }
+      if (inComponents && trimmed.startsWith('### ') && !DESIGN_COMPONENT_ID_RE.test(lines[i])) {
+        const nameMatch = lines[i].match(/^###\s+(.+?)\s*$/);
+        const name = nameMatch ? nameMatch[1].trim() : null;
+        violations.push({
+          id: null,
+          kind: compStructRule.kind,
+          rule: compStructRule.name,
+          location: { line: i + 1, id: null, section: 'Components' },
+          suggestion: compStructRule.suggestion + (name ? ` (missing on: ${name})` : ''),
+          severity: compStructRule.severity,
+        });
+      }
+    }
+  }
+
+  // --- Rule: structure/duplicate-ids ---
+  // @cap-todo(ac:F-064/AC-1) Defensive check — duplicate IDs should never exist but we scan anyway.
+  const dupRule = ruleIndex.get('structure/duplicate-ids');
+  if (dupRule) {
+    const seenDt = new Map();
+    const seenDc = new Map();
+    for (const id of ids.tokens) seenDt.set(id, (seenDt.get(id) || 0) + 1);
+    for (const id of ids.components) seenDc.set(id, (seenDc.get(id) || 0) + 1);
+    for (const [id, count] of seenDt.entries()) {
+      if (count > 1) {
+        violations.push({
+          id,
+          kind: dupRule.kind,
+          rule: dupRule.name,
+          location: { line: ids.byToken[id] ? ids.byToken[id].line : null, id, section: 'Colors' },
+          suggestion: dupRule.suggestion,
+          severity: dupRule.severity,
+        });
+      }
+    }
+    for (const [id, count] of seenDc.entries()) {
+      if (count > 1) {
+        violations.push({
+          id,
+          kind: dupRule.kind,
+          rule: dupRule.name,
+          location: { line: ids.byComponent[id] ? ids.byComponent[id].line : null, id, section: 'Components' },
+          suggestion: dupRule.suggestion,
+          severity: dupRule.severity,
+        });
+      }
+    }
+  }
+
+  // @cap-todo(ac:F-064/AC-5) Deterministic sort: (location.id || '__global__', rule-name, location.line || 0).
+  // @cap-decision(F-064/D4) '__global__' sentinel sorts after real IDs alphabetically because 'DT-' < 'DC-' < '__global__' in ASCII.
+  //              That is acceptable — the important invariant is CONSISTENT ordering, not a specific bucket order.
+  violations.sort((a, b) => {
+    const aId = a.location && a.location.id ? a.location.id : '__global__';
+    const bId = b.location && b.location.id ? b.location.id : '__global__';
+    if (aId !== bId) return aId < bId ? -1 : 1;
+    if (a.rule !== b.rule) return a.rule < b.rule ? -1 : 1;
+    const aLine = (a.location && typeof a.location.line === 'number') ? a.location.line : 0;
+    const bLine = (b.location && typeof b.location.line === 'number') ? b.location.line : 0;
+    return aLine - bLine;
+  });
+
+  return violations;
+}
+
+// @cap-api formatReviewReport(violations) -- Render a deterministic markdown report.
+// @cap-todo(ac:F-064/AC-2) Renders violations as structured markdown (IDs, rules, locations, suggestions).
+// @cap-todo(ac:F-064/AC-5) No timestamps. Byte-identical output for byte-identical input.
+/**
+ * @param {Array<object>} violations - Output of reviewDesign.
+ * @returns {string} Markdown report body.
+ */
+function formatReviewReport(violations) {
+  const lines = [];
+  lines.push('# DESIGN.md Review');
+  lines.push('');
+  lines.push('> Anti-Slop-Check report. Read-only artifact produced by /cap:design --review.');
+  lines.push('> Violations listed below. DESIGN.md itself is NEVER modified by review.');
+  lines.push('');
+
+  if (!Array.isArray(violations) || violations.length === 0) {
+    lines.push('## Summary');
+    lines.push('');
+    lines.push('No violations found. DESIGN.md passes all configured rules.');
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  // --- Summary counts by severity ---
+  const counts = { error: 0, warning: 0, info: 0 };
+  for (const v of violations) {
+    const sev = v.severity && counts[v.severity] !== undefined ? v.severity : 'warning';
+    counts[sev]++;
+  }
+
+  lines.push('## Summary');
+  lines.push('');
+  lines.push(`- Total violations: ${violations.length}`);
+  lines.push(`- Errors:   ${counts.error}`);
+  lines.push(`- Warnings: ${counts.warning}`);
+  lines.push(`- Info:     ${counts.info}`);
+  lines.push('');
+
+  lines.push('## Violations');
+  lines.push('');
+
+  for (const v of violations) {
+    const id = v.id || (v.location && v.location.id) || '(global)';
+    const rule = v.rule || '(unnamed)';
+    const kind = v.kind || 'unknown';
+    const severity = v.severity || 'warning';
+    const line = v.location && typeof v.location.line === 'number' ? `line ${v.location.line}` : 'n/a';
+    const section = v.location && v.location.section ? v.location.section : null;
+
+    lines.push(`### ${id} — ${rule} [${severity}]`);
+    lines.push('');
+    lines.push(`- kind: ${kind}`);
+    lines.push(`- location: ${line}${section ? ` (${section})` : ''}`);
+    if (v.suggestion) lines.push(`- suggestion: ${v.suggestion}`);
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+// @cap-api readDesignRules(projectRoot) -- Read `.cap/design-rules.md` if present.
+// @cap-todo(ac:F-064/AC-4) Returns null when no file (parseDesignRules treats null as default-rules trigger).
+/**
+ * @param {string} projectRoot - Absolute path to project root.
+ * @returns {string|null}
+ */
+function readDesignRules(projectRoot) {
+  const filePath = path.join(projectRoot, '.cap', 'design-rules.md');
+  if (!fs.existsSync(filePath)) return null;
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+// @cap-api writeDesignReview(projectRoot, content) -- Write review report to `.cap/DESIGN-REVIEW.md`.
+// @cap-decision(F-064/D2) Report artifact lives under `.cap/` runtime dir, matching `.cap/REVIEW.md` pattern.
+//              DESIGN.md is NEVER touched by review — AC-3 hard read-only constraint.
+/**
+ * @param {string} projectRoot - Absolute path to project root.
+ * @param {string} content - Report content.
+ */
+function writeDesignReview(projectRoot, content) {
+  const capDir = path.join(projectRoot, '.cap');
+  if (!fs.existsSync(capDir)) fs.mkdirSync(capDir, { recursive: true });
+  const filePath = path.join(projectRoot, DESIGN_REVIEW_FILE);
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
 module.exports = {
   DESIGN_FILE,
   AESTHETIC_FAMILIES,
@@ -810,4 +954,13 @@ module.exports = {
   parseDesignIds,
   assignDesignIds,
   findFeaturesUsingDesignId,
+  // F-064
+  DESIGN_REVIEW_FILE,
+  REVIEW_SEVERITIES,
+  DEFAULT_DESIGN_RULES,
+  parseDesignRules,
+  reviewDesign,
+  formatReviewReport,
+  readDesignRules,
+  writeDesignReview,
 };
