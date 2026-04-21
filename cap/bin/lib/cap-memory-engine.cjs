@@ -9,6 +9,7 @@
 // @cap-history(sessions:2, edits:27, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 27 edits
 const fs = require('node:fs');
 const path = require('node:path');
+const confidence = require('./cap-memory-confidence.cjs');
 
 // --- Constants ---
 
@@ -461,10 +462,19 @@ function accumulate(sessionAnalyses, options = {}) {
 /**
  * Extract memory entries from code tags (via tag scanner).
  * Code tags are high-signal, zero-noise — they are explicit developer annotations.
+ *
+ * Learning signals (F-055): when `options.existingEntries` is supplied and
+ * `options.learningSignals !== false`, each new entry is compared against the
+ * existing set. Matches are merged as re-observations (confidence bump, evidence +1);
+ * contradictions damp the existing entry's confidence without merging.
+ *
  * @param {Array<{type: string, file: string, line: number, metadata: Object, description: string, subtype: string|null}>} tags - Tags from cap-tag-scanner
+ * @param {Object} [options]
+ * @param {Array} [options.existingEntries] - Entries previously read from .cap/memory/*.md (for learning signals)
+ * @param {boolean} [options.learningSignals] - Default true; opt-out for callers that want raw extraction
  * @returns {MemoryEntry[]}
  */
-function accumulateFromCode(tags) {
+function accumulateFromCode(tags, options = {}) {
   const entries = [];
   const seen = new Set();
 
@@ -476,6 +486,7 @@ function accumulateFromCode(tags) {
       if (seen.has('d:' + key)) continue;
       seen.add('d:' + key);
 
+      // @cap-todo(ac:F-055/AC-2) New entries start with confidence:0.5, evidence_count:1 (injected via initFields).
       entries.push({
         category: 'decision',
         file: tag.file,
@@ -487,6 +498,7 @@ function accumulateFromCode(tags) {
           features: tag.metadata?.feature ? [tag.metadata.feature] : [],
           pinned: false,
           line: tag.line,
+          ...confidence.initFields(),
         },
       });
     }
@@ -499,6 +511,7 @@ function accumulateFromCode(tags) {
       if (seen.has('p:' + key)) continue;
       seen.add('p:' + key);
 
+      // @cap-todo(ac:F-055/AC-2)
       entries.push({
         category: 'pitfall',
         file: tag.file,
@@ -510,6 +523,7 @@ function accumulateFromCode(tags) {
           features: tag.metadata?.feature ? [tag.metadata.feature] : [],
           pinned: false,
           line: tag.line,
+          ...confidence.initFields(),
         },
       });
     }
@@ -521,6 +535,7 @@ function accumulateFromCode(tags) {
       if (seen.has('p:' + key)) continue;
       seen.add('p:' + key);
 
+      // @cap-todo(ac:F-055/AC-2)
       entries.push({
         category: 'pitfall',
         file: tag.file,
@@ -532,12 +547,46 @@ function accumulateFromCode(tags) {
           features: tag.metadata?.feature ? [tag.metadata.feature] : [],
           pinned: false,
           line: tag.line,
+          ...confidence.initFields(),
         },
       });
     }
   }
 
-  return entries;
+  // Learning signals: opt-in via existingEntries presence; can be disabled explicitly.
+  const signalsEnabled = options.learningSignals !== false && Array.isArray(options.existingEntries);
+  if (!signalsEnabled) return entries;
+
+  // Work on a mutable copy so contradictions can rewrite existing entries in-place for the caller's view.
+  const existing = options.existingEntries.map((e) => ({
+    ...e,
+    metadata: { ...(e.metadata || {}) },
+  }));
+
+  const result = [];
+  for (const newEntry of entries) {
+    const { mergedEntry, action } = confidence.applyLearningSignals(newEntry, existing);
+
+    if (action === 'reobserved') {
+      // @cap-todo(ac:F-055/AC-4) Re-observation: bump evidence + confidence on the existing entry.
+      result.push(mergedEntry);
+    } else if (action === 'contradicted') {
+      // @cap-todo(ac:F-055/AC-5) Contradiction: damp the existing entry's confidence; keep the new entry as a separate observation.
+      const updateRec = mergedEntry._contradictedExistingUpdate;
+      if (updateRec && existing[updateRec.index]) {
+        existing[updateRec.index] = { ...existing[updateRec.index], metadata: updateRec.updatedMetadata };
+      }
+      const clean = { ...mergedEntry };
+      delete clean._contradictedExistingUpdate;
+      result.push(clean);
+      // Also emit the damped existing entry so the caller writes it back with updated confidence.
+      result.push(existing[updateRec.index]);
+    } else {
+      result.push(mergedEntry);
+    }
+  }
+
+  return result;
 }
 
 // --- Convenience: Full Pipeline Input ---
