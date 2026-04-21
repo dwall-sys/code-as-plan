@@ -53,7 +53,21 @@ const NEGATION_MARKERS = [
  * @typedef {Object} ConfidenceFields
  * @property {number} confidence - Float in [0.0, 1.0]
  * @property {number} evidence_count - Integer >= 1
+ * @property {string} [last_seen] - ISO timestamp of the most recent observation (AC-3, F-056)
  */
+
+/** Epoch sentinel used when no last_seen and no source exist — behaves as "very old" for decay. */
+const EPOCH_ZERO = '1970-01-01T00:00:00.000Z';
+
+/**
+ * Normalize a Date-or-ISO-string to an ISO timestamp.
+ * @param {Date|undefined} now
+ * @returns {string}
+ */
+function nowIso(now) {
+  const d = now instanceof Date ? now : new Date();
+  return d.toISOString();
+}
 
 // --- Tokenization + Similarity (AC-4) ---
 
@@ -179,10 +193,16 @@ function isContradiction(newEntry, existingEntry) {
 // --- Field Operations ---
 
 /**
+ * @cap-todo(ac:F-056/AC-3) last_seen seeded on first observation so decay has a reference point.
+ * @param {Date} [now]
  * @returns {ConfidenceFields}
  */
-function initFields() {
-  return { confidence: DEFAULT_CONFIDENCE, evidence_count: DEFAULT_EVIDENCE };
+function initFields(now) {
+  return {
+    confidence: DEFAULT_CONFIDENCE,
+    evidence_count: DEFAULT_EVIDENCE,
+    last_seen: nowIso(now),
+  };
 }
 
 /**
@@ -196,33 +216,40 @@ function round2(n) {
 
 /**
  * Apply a re-observation: +1 evidence, +0.1 confidence, capped at CONFIDENCE_CAP.
+ * @cap-todo(ac:F-056/AC-3) last_seen refreshed so the decay clock resets on reaffirmation.
  * @param {ConfidenceFields} fields
+ * @param {Date} [now]
  * @returns {ConfidenceFields}
  */
-function bumpOnReObservation(fields) {
+function bumpOnReObservation(fields, now) {
   const f = ensureFields(fields);
   return {
+    ...f,
     confidence: round2(Math.min(CONFIDENCE_CAP, f.confidence + REOBSERVATION_BUMP)),
     evidence_count: f.evidence_count + 1,
+    last_seen: nowIso(now),
   };
 }
 
+// @cap-decision Contradiction does NOT refresh last_seen — a rebuttal is not a reaffirmation, and resetting the decay clock on disagreement would reward stale-but-contested entries.
 /**
  * Apply a contradiction: -0.2 confidence, floored at CONFIDENCE_FLOOR.
  * Evidence count is NOT incremented — a contradiction is not a confirmation.
  * @param {ConfidenceFields} fields
+ * @param {Date} [_now] - accepted for signature parity; not used (see decision above).
  * @returns {ConfidenceFields}
  */
-function dampOnContradiction(fields) {
+function dampOnContradiction(fields, _now) {
   const f = ensureFields(fields);
   return {
+    ...f,
     confidence: round2(Math.max(CONFIDENCE_FLOOR, f.confidence - CONTRADICTION_DAMP)),
     evidence_count: f.evidence_count,
   };
 }
 
 /**
- * Return a shallow clone of `metadata` with `confidence` and `evidence_count`
+ * Return a shallow clone of `metadata` with `confidence`, `evidence_count`, and `last_seen`
  * defaulted if missing. Does not mutate the input.
  * Used for AC-3 lazy migration — reading an old file without the fields
  * yields entries that look fully-formed downstream.
@@ -232,10 +259,12 @@ function dampOnContradiction(fields) {
  * We clamp to [0, 1] rather than [FLOOR, CAP] because 1.00 is a valid
  * hand-edited value; CAP is only the bump-on-reobservation ceiling.
  *
+ * @cap-todo(ac:F-056/AC-3) last_seen lazy-migration: fall back to metadata.source, else epoch-0.
  * @param {Object} metadata
+ * @param {Date} [_now] - accepted for signature parity; last_seen default does not depend on "now".
  * @returns {Object}
  */
-function ensureFields(metadata) {
+function ensureFields(metadata, _now) {
   const src = metadata || {};
   const out = { ...src };
   if (typeof out.confidence !== 'number' || Number.isNaN(out.confidence)) {
@@ -245,6 +274,9 @@ function ensureFields(metadata) {
   }
   if (typeof out.evidence_count !== 'number' || !Number.isFinite(out.evidence_count) || out.evidence_count < 1) {
     out.evidence_count = DEFAULT_EVIDENCE;
+  }
+  if (typeof out.last_seen !== 'string' || out.last_seen.length === 0) {
+    out.last_seen = typeof out.source === 'string' && out.source.length > 0 ? out.source : EPOCH_ZERO;
   }
   return out;
 }
@@ -334,6 +366,7 @@ module.exports = {
   REOBSERVATION_BUMP,
   CONTRADICTION_DAMP,
   NEGATION_MARKERS,
+  EPOCH_ZERO,
 
   // Tokenization + similarity
   tokenize,

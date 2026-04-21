@@ -991,19 +991,27 @@
 - `cap/bin/lib/cap-memory-dir.cjs`
 - `tests/cap-memory-confidence.test.cjs`
 - `tests/cap-memory-dir-confidence.test.cjs`
+- `tests/cap-memory-confidence-adversarial.test.cjs`
 
-### F-056: Memory Prune Command (Decay + TTL) [planned]
+### F-056: Memory Prune Command (Decay + TTL) [shipped]
 
 **Depends on:** F-055, F-054
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | /cap:memory prune ist als Subcommand von /cap:memory aufrufbar. |
-| AC-2 | pending | Default ist Dry-Run; --apply ist explizit erforderlich, um Dateien zu ändern. |
-| AC-3 | pending | Einträge mit last_seen >90 Tage verlieren -0.05 confidence pro weitere 30 Tage Inaktivität. |
-| AC-4 | pending | Einträge mit confidence<0.2 UND last_seen>180 Tage werden nach .cap/memory/archive/{YYYY-MM}.md verschoben (nicht gelöscht). |
-| AC-5 | pending | Raw-Event-Logs aus F-054 älter als 30 Tage werden hart gelöscht. |
-| AC-6 | pending | Prune-Run gibt Report aus (decayed, archived, purged) und appendiert .cap/memory/prune-log.jsonl mit {timestamp, decayed, archived, purged}. |
+| AC-1 | prototyped | /cap:memory prune ist als Subcommand von /cap:memory aufrufbar. |
+| AC-2 | prototyped | Default ist Dry-Run; --apply ist explizit erforderlich, um Dateien zu ändern. |
+| AC-3 | prototyped | Einträge mit last_seen >90 Tage verlieren -0.05 confidence pro weitere 30 Tage Inaktivität. |
+| AC-4 | prototyped | Einträge mit confidence<0.2 UND last_seen>180 Tage werden nach .cap/memory/archive/{YYYY-MM}.md verschoben (nicht gelöscht). |
+| AC-5 | prototyped | Raw-Event-Logs aus F-054 älter als 30 Tage werden hart gelöscht. |
+| AC-6 | prototyped | Prune-Run gibt Report aus (decayed, archived, purged) und appendiert .cap/memory/prune-log.jsonl mit {timestamp, decayed, archived, purged}. |
+
+**Files:**
+- `cap/bin/lib/cap-memory-prune.cjs`
+- `cap/bin/lib/cap-memory-confidence.cjs`
+- `cap/bin/lib/cap-memory-dir.cjs`
+- `commands/cap/memory.md`
+- `tests/cap-memory-prune.test.cjs`
 
 ### F-057: Checkpoint Command for Strategic Compact [planned]
 
@@ -1051,4 +1059,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T07:26:48.051Z*
+*Last updated: 2026-04-21T07:59:04.472Z*

@@ -94,6 +94,8 @@ function generateCategoryMarkdown(category, entries) {
     out.push(`${prefix}- **Files:** ${files}`);
     out.push(`${prefix}- **Confidence:** ${fields.confidence.toFixed(2)}`);
     out.push(`${prefix}- **Evidence:** ${fields.evidence_count}`);
+    // @cap-todo(ac:F-056/AC-3) Last Seen bullet written so the decay clock roundtrips through disk.
+    out.push(`${prefix}- **Last Seen:** ${fields.last_seen}`);
     if (entry.metadata.confirmations) {
       out.push(`${prefix}- **Confirmed:** ${entry.metadata.confirmations} times`);
     }
@@ -360,6 +362,13 @@ function readMemoryFile(filePath) {
     const eviMatch = line.match(/^-\s+\*\*Evidence:\*\*\s+(\d+)\s*$/);
     if (eviMatch) {
       current.metadata.evidence_count = Number(eviMatch[1]);
+      continue;
+    }
+
+    // @cap-todo(ac:F-056/AC-3) Last Seen parsed back; missing values get ensureFields-migrated.
+    const lastSeenMatch = line.match(/^-\s+\*\*Last Seen:\*\*\s+(.+?)\s*$/);
+    if (lastSeenMatch) {
+      current.metadata.last_seen = lastSeenMatch[1].trim();
       continue;
     }
 

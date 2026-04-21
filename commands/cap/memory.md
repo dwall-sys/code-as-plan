@@ -1,7 +1,7 @@
 ---
 name: cap:memory
 description: "Manage project memory — bootstrap, run pipeline, pin/unpin annotations, view status."
-argument-hint: "[init|status|pin|unpin] [--dry-run]"
+argument-hint: "[init|status|pin|unpin|prune] [--dry-run|--apply]"
 allowed-tools:
   - Read
   - Write
@@ -23,6 +23,7 @@ Manage project memory — bootstrap from existing sessions, run incremental pipe
 - `status` — show memory summary (annotation counts, stale, pinned, last run)
 - `pin <file> <content-prefix>` — mark a @cap-pitfall as pinned:true
 - `unpin <file> <content-prefix>` — remove pinned:true from annotation
+- `prune [--apply]` — decay stale entries, archive very-stale low-confidence ones, purge old raw-logs (default dry-run)
 - `--dry-run` — show what would change without writing
 </objective>
 
@@ -142,5 +143,30 @@ process.exit(result.changed || result.status === 'not-pinned' ? 0 : 1);
 ```
 
 Same argument semantics as `pin`. An already-unpinned annotation exits 0 with a no-op message.
+
+## Subcommand: prune `[--apply]`
+
+<!-- @cap-todo(ac:F-056/AC-1) /cap:memory prune is the F-056 subcommand for decay + archive + raw-log purge. -->
+<!-- @cap-todo(ac:F-056/AC-2) Default is dry-run; --apply is required to mutate files. -->
+<!-- @cap-todo(ac:F-056/AC-6) Prune emits a human report and appends .cap/memory/prune-log.jsonl. -->
+
+```bash
+node -e "
+const prune = require('./cap/bin/lib/cap-memory-prune.cjs');
+const applyFlag = process.argv.slice(1).includes('--apply');
+const result = prune.prune(process.cwd(), { apply: applyFlag });
+console.log(prune.formatReport(result));
+process.exit(result.errors && result.errors.length > 0 ? 1 : 0);
+" -- {ARGS}
+```
+
+What prune does:
+
+- **Decay** (AC-3): entries with `last_seen > 90 days` lose `-0.05` confidence per additional 30 days of inactivity, floored at `0.0`. Pinned entries are never decayed.
+- **Archive** (AC-4): entries with `confidence < 0.2` AND `last_seen > 180 days` move to `.cap/memory/archive/{YYYY-MM}.md` (the archival month, not the entry's own month). Decay runs first — an entry can cross the threshold via decay and get archived in the same run. Pinned entries are never archived.
+- **Purge** (AC-5): raw event logs under `.cap/memory/raw/tag-events-YYYY-MM-DD.jsonl` older than 30 days are hard-deleted.
+- **Report + log** (AC-6): a console report is emitted. On `--apply`, a single JSONL line `{timestamp, dryRun, decayed, archived, purged}` is appended to `.cap/memory/prune-log.jsonl`.
+
+Default behaviour is **dry-run** — no files are touched and no prune-log entry is written. Pass `--apply` explicitly to commit the changes.
 
 </process>
