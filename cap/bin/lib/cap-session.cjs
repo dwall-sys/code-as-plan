@@ -72,6 +72,12 @@ function getDefaultSession() {
     activeDebugSession: null,
     activeThread: null,
     metadata: {},
+    // @cap-feature(feature:F-057) Checkpoint persistence fields — additive, null by default.
+    // lastCheckpointAt = ISO timestamp of the most recent /cap:checkpoint that detected a breakpoint.
+    // lastCheckpointSnapshot = minimal snapshot of feature states + AC statuses at that moment,
+    // so future /cap:checkpoint runs can diff against it.
+    lastCheckpointAt: null,
+    lastCheckpointSnapshot: null,
   };
 }
 
