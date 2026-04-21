@@ -11,6 +11,8 @@
     "cap",
     "agents",
     "hooks/dist",
+    "hooks/hooks.json",
+    ".claude-plugin",
     "scripts"
   ],
   "keywords": [

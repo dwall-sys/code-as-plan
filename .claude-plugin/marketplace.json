@@ -1,0 +1,23 @@
+{
+  "name": "code-as-plan",
+  "owner": {
+    "name": "TÂCHES"
+  },
+  "metadata": {
+    "description": "Official marketplace for CAP — Code as Plan.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "cap",
+      "source": "./",
+      "description": "CAP — build first, plan from code, annotation-driven workflow.",
+      "category": "productivity",
+      "tags": [
+        "engineering",
+        "workflow",
+        "annotation-driven"
+      ]
+    }
+  ]
+}
