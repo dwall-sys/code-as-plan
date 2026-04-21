@@ -1,0 +1,6 @@
+# CAP ephemeral state -- do not commit
+SESSION.json
+debug/
+
+# Latest review report — overwritten on each cap:review run, not a historical artefact
+REVIEW.md
