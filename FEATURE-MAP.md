@@ -1151,16 +1151,21 @@
 - `agents/cap-designer.md`
 - `tests/cap-design-review.test.cjs`
 
-### F-065: CAP-UI Core — Local Server + Static Export [planned]
+### F-065: CAP-UI Core — Local Server + Static Export [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Neuer Command `/cap:ui --serve` startet lokalen Node-http-Server auf konfigurierbarem Port (Default 4747), zero-deps, ausschließlich Node-builtins. |
-| AC-2 | pending | UI rendert Feature-Map + Memory + Threads als lesbare HTML-Ansicht im Browser. |
-| AC-3 | pending | File-Watcher beobachtet FEATURE-MAP.md, DESIGN.md, .cap/memory/, .cap/SESSION.json → UI aktualisiert sich in Realtime via Server-Sent-Events. |
-| AC-4 | pending | `/cap:ui --share` generiert einen standalone HTML-Snapshot (inkl. inline CSS/JS, kein externer Fetch nötig) in `.cap/ui/snapshot.html`, shareable via PR/Slack. |
-| AC-5 | pending | UI ist read-only für Feature-Map und Memory; Edit-Endpoints werden in F-068 spezifisch für DESIGN.md eingeführt. |
-| AC-6 | pending | Server logged alle Events (Server-Start, SSE-Verbindungen, File-Änderungen) auf stdout mit Zeitstempeln für Debugging. |
+| AC-1 | tested | Neuer Command `/cap:ui --serve` startet lokalen Node-http-Server auf konfigurierbarem Port (Default 4747), zero-deps, ausschließlich Node-builtins. |
+| AC-2 | tested | UI rendert Feature-Map + Memory + Threads als lesbare HTML-Ansicht im Browser. |
+| AC-3 | tested | File-Watcher beobachtet FEATURE-MAP.md, DESIGN.md, .cap/memory/, .cap/SESSION.json → UI aktualisiert sich in Realtime via Server-Sent-Events. |
+| AC-4 | tested | `/cap:ui --share` generiert einen standalone HTML-Snapshot (inkl. inline CSS/JS, kein externer Fetch nötig) in `.cap/ui/snapshot.html`, shareable via PR/Slack. |
+| AC-5 | tested | UI ist read-only für Feature-Map und Memory; Edit-Endpoints werden in F-068 spezifisch für DESIGN.md eingeführt. |
+| AC-6 | tested | Server logged alle Events (Server-Start, SSE-Verbindungen, File-Änderungen) auf stdout mit Zeitstempeln für Debugging. |
+
+**Files:**
+- `cap/bin/lib/cap-ui.cjs`
+- `commands/cap/ui.md`
+- `tests/cap-ui.test.cjs`
 
 ### F-066: Tag Mind-Map Visualization [planned]
 
@@ -1209,4 +1214,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-21T22:44:50.562Z*
+*Last updated: 2026-04-22T09:30:25.828Z*
