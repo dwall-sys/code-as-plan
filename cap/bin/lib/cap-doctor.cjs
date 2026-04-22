@@ -72,6 +72,12 @@ const CAP_MODULE_MANIFEST = [
   'cap-trace.cjs',
   // @cap-feature(feature:F-065) CAP-UI Core module entry.
   'cap-ui.cjs',
+  // @cap-feature(feature:F-068) CAP-UI Design Editor (DESIGN.md-only edit surface).
+  'cap-ui-design-editor.cjs',
+  // @cap-feature(feature:F-066) CAP-UI Tag Mind-Map module (extracted from cap-ui.cjs during F-068 hand-off).
+  'cap-ui-mind-map.cjs',
+  // @cap-feature(feature:F-067) CAP-UI Thread + Cluster Navigator module (extracted from cap-ui.cjs during F-068 hand-off).
+  'cap-ui-thread-nav.cjs',
   'commands.cjs',
   'config.cjs',
   'convention-reader.cjs',
