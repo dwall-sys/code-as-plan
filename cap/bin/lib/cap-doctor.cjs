@@ -70,6 +70,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-thread-synthesis.cjs',
   'cap-thread-tracker.cjs',
   'cap-trace.cjs',
+  // @cap-feature(feature:F-065) CAP-UI Core module entry.
+  'cap-ui.cjs',
   'commands.cjs',
   'config.cjs',
   'convention-reader.cjs',
