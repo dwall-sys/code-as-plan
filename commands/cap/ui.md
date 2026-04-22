@@ -1,7 +1,7 @@
 ---
 name: cap:ui
-description: CAP-UI local read-only server (--serve, default) or standalone HTML snapshot (--share) of Feature Map, Memory, Threads and DESIGN.md. Zero deps. Node-builtin http + SSE only.
-argument-hint: "[--serve | --share] [--port N]"
+description: CAP-UI local read-only server (--serve, default) or standalone HTML snapshot (--share) of Feature Map, Memory, Threads and DESIGN.md. Optional --editable unlocks DESIGN.md write endpoints (F-068). Zero deps. Node-builtin http + SSE only.
+argument-hint: "[--serve | --share] [--port N] [--editable]"
 allowed-tools:
   - Read
   - Write
@@ -10,11 +10,15 @@ allowed-tools:
 ---
 
 <!-- @cap-context CAP F-065 /cap:ui command — orchestrates cap-ui.cjs. No agent is spawned: this is deterministic infrastructure with no wizard. -->
+<!-- @cap-context CAP F-068 adds a --editable flag to --serve. It unlocks a DESIGN.md-only write surface (color picker, spacing sliders, component variants). FEATURE-MAP.md and Memory stay read-only even in edit mode. -->
 <!-- @cap-decision Command layer parses flags and calls cap-ui.cjs directly. No Task()/agent spawn — there is nothing conversational here. -->
 <!-- @cap-decision --serve is the default because developers running /cap:ui interactively expect a browser view, not a snapshot-only export. -->
+<!-- @cap-decision(F-068) --editable is opt-in. Default --serve stays fully read-only to match F-065/AC-5. --share never embeds the edit UI (no server to write to). -->
 <!-- @cap-constraint Zero external deps. Do not introduce npm packages at any point in this command. -->
+<!-- @cap-constraint SECURITY: --editable exposes DESIGN.md PUT/DELETE endpoints on localhost. Do NOT use on shared hosts, tunnels (ngrok), or anywhere the loopback is reachable by other users. -->
 
 <!-- @cap-feature(feature:F-065) CAP-UI Core — Local Server + Static Export -->
+<!-- @cap-feature(feature:F-068) CAP-UI Visual Design Editor — DESIGN.md-only edit surface -->
 
 <objective>
 <!-- @cap-todo(ac:F-065/AC-1) /cap:ui --serve starts local Node http server on configurable port (default 4747), zero deps, node builtins only. -->
@@ -28,12 +32,23 @@ Runs one of two flows:
 - `--serve` (default) — starts a local HTTP server on port 4747 (or `--port N`) that renders the Feature Map, Memory, Threads, and DESIGN.md. Broadcasts file changes to the browser via Server-Sent Events.
 - `--share` — writes a standalone HTML snapshot to `.cap/ui/snapshot.html` with inline CSS/JS, safe to share via PR/Slack.
 
+Optional flags:
+- `--editable` (F-068, only valid with `--serve`) — unlocks the DESIGN.md Visual Editor:
+  - Color-pickers for each DT-NNN color token
+  - Range sliders for spacing + typography scales
+  - Variant add/remove per DC-NNN component
+  - Edits are atomic (temp+rename), Git-friendly (single-line diffs), and restricted to DESIGN.md.
+  - FEATURE-MAP.md and Memory remain read-only even in edit mode.
+  - **Security**: write endpoints are exposed on localhost. Do not use on shared hosts, tunnels, or multi-user machines.
+
 **Key guarantees:**
 - Zero runtime dependencies. Only `node:` builtins (`http`, `fs`, `path`, `url`, `os`).
-- Read-only: no POST/PUT/DELETE routes, no forms, no edit endpoints (F-065/AC-5). DESIGN.md editor is scoped to F-068.
+- Read-only by default: no POST/PUT/DELETE routes, no forms, no edit endpoints without `--editable` (F-065/AC-5).
+- `--editable` only unlocks `/api/design/*` PUT/DELETE; FEATURE-MAP + Memory always 405 on writes (F-068/AC-6).
 - SSE-only for live updates (no WebSockets).
 - Port auto-increments up to +10 if the default is taken; fails loudly otherwise.
 - `--share` snapshot contains no external URLs (no Google Fonts, no CDN, no fetch calls) — safe for offline sharing.
+- `--share` NEVER embeds the edit UI, even when run in a session where `--editable` was set — snapshots are static and have no server to write against.
 
 </objective>
 
@@ -48,14 +63,16 @@ $ARGUMENTS
 ## Step 0: Parse flags
 
 <!-- @cap-todo(ac:F-065/AC-1) Parse --serve (default), --share, --port N from $ARGUMENTS. -->
+<!-- @cap-todo(ac:F-068/AC-1) Parse --editable flag. Only valid with --serve; --share ignores it. -->
 
 Inspect `$ARGUMENTS`:
 - `--share` — set `mode = "share"`
 - `--serve` — set `mode = "serve"`
 - `--port N` — capture `port` (integer)
+- `--editable` — set `editable = true` (ignored with `--share`)
 - If no mode flag, default to `mode = "serve"`
 
-Log: `cap:ui | mode: {mode}`{ " | port: " + port if mode === 'serve' && port }
+Log: `cap:ui | mode: {mode}`{ " | port: " + port if mode === 'serve' && port }{ " | editable" if editable }
 
 ## Step 1: Dispatch by mode
 
@@ -99,9 +116,10 @@ Start the server in the foreground and print the URL. The server blocks until th
 node -e "
 const ui = require('./cap/bin/lib/cap-ui.cjs');
 const port = {PORT_OR_DEFAULT};
+const editable = {EDITABLE};
 (async function(){
-  const { url, port: actual, stop } = await ui.startServer({ projectRoot: process.cwd(), port });
-  console.log('cap:ui listening on ' + url + '  (port ' + actual + ')');
+  const { url, port: actual, stop } = await ui.startServer({ projectRoot: process.cwd(), port, editable });
+  console.log('cap:ui listening on ' + url + '  (port ' + actual + ')' + (editable ? '  [EDITABLE — DESIGN.md writes enabled]' : ''));
   console.log('Ctrl+C to stop.');
   process.on('SIGINT', async function(){
     console.log('\\ncap:ui stopping…');
@@ -140,7 +158,10 @@ session.updateSession(process.cwd(), {
 ## Notes
 
 - **No agent is spawned.** cap:ui is pure infrastructure — no LLM call is required.
-- **Mind-Map (F-066), Thread Navigator details (F-067), DESIGN.md editor (F-068)** are future features and are NOT implemented here. F-065 ships the scaffolding only.
+- **Mind-Map (F-066), Thread Navigator (F-067), DESIGN.md editor (F-068)** are all shipped.
 - **Port conflicts**: if 4747 is taken, the server auto-tries 4748, 4749, …, up to 4757; then fails with a clear error.
 - **File watcher caveats**: `fs.watch` is platform-specific. Linux fires multiple events per write (inotify); macOS coalesces via FSEvents. A 100ms debounce smooths the difference.
-- **Read-only guarantee**: the HTML has no `<form>`, no POST targets, and the server rejects non-GET/HEAD methods with 405.
+- **Read-only guarantee (default)**: the HTML has no `<form>`, no POST targets, and the server rejects non-GET/HEAD methods with 405. Only `--editable` unlocks PUT/DELETE on `/api/design/*`.
+- **Edit scope (F-068/AC-6)**: `--editable` is strictly DESIGN.md. FEATURE-MAP.md and Memory endpoints always respond 405 on writes — collaboration there stays Git-based.
+- **Atomic writes (F-068/AC-5)**: each edit writes a temp file and renames it over DESIGN.md, so a crashed process never leaves a truncated file.
+- **Path-traversal guard (F-068)**: `createSnapshot(outputPath)` now refuses paths that escape the project root; the same guard gates DESIGN.md edits.

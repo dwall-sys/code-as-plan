@@ -714,7 +714,10 @@ describe('cap-ui adversarial: basic security hardening', () => {
     const s = await ui.startServer({ projectRoot: tmp, port: 0, watch: false });
     toStop.push(s.stop);
     const res = await httpGet(s.url + '/?x=<script>alert(1)</script>');
-    assert.strictEqual(res.status, 404, 'query variant of / currently routes to 404 (exact match) — acceptable read-only posture');
+    // @cap-decision(F-068/refactor) After the route-table refactor, matchRoute strips the query string
+    //   so `/?x=...` maps to route `/` and returns 200 (was 404 under the pre-F-068 exact-match comparison).
+    //   This is the better behaviour — query strings are standard and should not produce a 404 on the index route.
+    assert.strictEqual(res.status, 200, 'query strings on / are ignored by the router (matchRoute strips them pre-match)');
     // Whatever the status, body must not echo the unescaped script.
     assert.ok(!res.body.includes('<script>alert(1)</script>'), 'body must never echo unescaped input');
   });

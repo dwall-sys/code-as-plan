@@ -1199,18 +1199,26 @@
 - `cap/bin/lib/cap-ui.cjs`
 - `tests/cap-ui-thread-nav.test.cjs`
 
-### F-068: CAP-UI Visual Design Editor (DESIGN.md) [planned]
+### F-068: CAP-UI Visual Design Editor (DESIGN.md) [shipped]
 
 **Depends on:** F-065, F-062
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | CAP-UI erhält eine Edit-Ansicht für DESIGN.md, aktivierbar via `cap:ui --serve --editable`. |
-| AC-2 | pending | Color-Picker für alle Farb-Tokens (DT-NNN mit Typ color) — Änderung im UI schreibt zurück in DESIGN.md. |
-| AC-3 | pending | Numerische Slider für Spacing-Tokens und Typography-Scales mit Live-Preview. |
-| AC-4 | pending | Komponenten-Inspector: zeigt Component-Specs (Varianten, States), erlaubt Hinzufügen/Entfernen von Varianten. |
-| AC-5 | pending | Alle Edits werden atomisch in DESIGN.md persistiert, Git-friendly (kleine Diffs, stabile Reihenfolge). |
-| AC-6 | pending | Edits sind für FEATURE-MAP.md und Memory explizit *nicht* erlaubt — Collab bleibt dort Git-basiert. |
+| AC-1 | tested | CAP-UI erhält eine Edit-Ansicht für DESIGN.md, aktivierbar via `cap:ui --serve --editable`. |
+| AC-2 | tested | Color-Picker für alle Farb-Tokens (DT-NNN mit Typ color) — Änderung im UI schreibt zurück in DESIGN.md. |
+| AC-3 | tested | Numerische Slider für Spacing-Tokens und Typography-Scales mit Live-Preview. |
+| AC-4 | tested | Komponenten-Inspector: zeigt Component-Specs (Varianten, States), erlaubt Hinzufügen/Entfernen von Varianten. |
+| AC-5 | tested | Alle Edits werden atomisch in DESIGN.md persistiert, Git-friendly (kleine Diffs, stabile Reihenfolge). |
+| AC-6 | tested | Edits sind für FEATURE-MAP.md und Memory explizit *nicht* erlaubt — Collab bleibt dort Git-basiert. |
+
+**Files:**
+- `cap/bin/lib/cap-ui-design-editor.cjs`
+- `cap/bin/lib/cap-ui-mind-map.cjs`
+- `cap/bin/lib/cap-ui-thread-nav.cjs`
+- `cap/bin/lib/cap-ui.cjs`
+- `commands/cap/ui.md`
+- `tests/cap-ui-design-editor.test.cjs`
 
 ## Legend
 
@@ -1222,4 +1230,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-22T10:13:19.187Z*
+*Last updated: 2026-04-22T10:48:33.176Z*
