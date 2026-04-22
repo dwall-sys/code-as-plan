@@ -1167,17 +1167,21 @@
 - `commands/cap/ui.md`
 - `tests/cap-ui.test.cjs`
 
-### F-066: Tag Mind-Map Visualization [planned]
+### F-066: Tag Mind-Map Visualization [shipped]
 
 **Depends on:** F-065, F-063
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | CAP-UI erhält eine Mind-Map-Ansicht, die alle `@cap-*` Tags (Features, ACs, Risks, Decisions, Design-Tokens, Design-Components) als Graph visualisiert. |
-| AC-2 | pending | Knoten: Features (F-NNN), Design-Tokens (DT-NNN), Design-Components (DC-NNN). Kanten: uses-design, depends_on, Feature-AC-Beziehungen. |
-| AC-3 | pending | Rendering via SVG + inline JS (keine externen Libraries zur Runtime; Build-Step darf D3-Bundle inlinen). |
-| AC-4 | pending | Interaktion: Zoom, Pan, Filter nach Feature-Gruppen, Hover-Details, Click-to-Focus (isoliert einen Subgraph). |
-| AC-5 | pending | Mind-Map ist Teil des `--share`-Exports und der `--serve`-UI. |
+| AC-1 | tested | CAP-UI erhält eine Mind-Map-Ansicht, die alle `@cap-*` Tags (Features, ACs, Risks, Decisions, Design-Tokens, Design-Components) als Graph visualisiert. |
+| AC-2 | tested | Knoten: Features (F-NNN), Design-Tokens (DT-NNN), Design-Components (DC-NNN). Kanten: uses-design, depends_on, Feature-AC-Beziehungen. |
+| AC-3 | tested | Rendering via SVG + inline JS (keine externen Libraries zur Runtime; Build-Step darf D3-Bundle inlinen). |
+| AC-4 | tested | Interaktion: Zoom, Pan, Filter nach Feature-Gruppen, Hover-Details, Click-to-Focus (isoliert einen Subgraph). |
+| AC-5 | tested | Mind-Map ist Teil des `--share`-Exports und der `--serve`-UI. |
+
+**Files:**
+- `cap/bin/lib/cap-ui.cjs`
+- `tests/cap-ui-mind-map.test.cjs`
 
 ### F-067: Thread + Cluster Navigator [planned]
 
@@ -1214,4 +1218,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-22T09:30:25.828Z*
+*Last updated: 2026-04-22T09:49:26.992Z*
