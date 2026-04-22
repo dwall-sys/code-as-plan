@@ -1183,17 +1183,21 @@
 - `cap/bin/lib/cap-ui.cjs`
 - `tests/cap-ui-mind-map.test.cjs`
 
-### F-067: Thread + Cluster Navigator [planned]
+### F-067: Thread + Cluster Navigator [shipped]
 
 **Depends on:** F-065
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | CAP-UI erhält eine Thread-Browser-Ansicht, die `.cap/memory/threads/*.json` chronologisch listet mit Timestamp, Name, Feature-IDs, Keywords. |
-| AC-2 | pending | Click auf einen Thread zeigt Details: Problem-Statement, Solution-Shape, Boundary-Decisions, Feature-IDs, Parent-Thread-Link. |
-| AC-3 | pending | Neural Clusters (aus F-037) werden visualisiert: pro Cluster Namen, Thread-Zugehörigkeit, Pairwise-Affinity, Drift-Status. |
-| AC-4 | pending | Keyword-Overlap-View: für zwei ausgewählte Threads zeigt die UI gemeinsame Keywords. |
-| AC-5 | pending | Cluster-Drift-Warnungen werden im UI hervorgehoben (wenn ein Cluster Drift-Status hat). |
+| AC-1 | tested | CAP-UI erhält eine Thread-Browser-Ansicht, die `.cap/memory/threads/*.json` chronologisch listet mit Timestamp, Name, Feature-IDs, Keywords. |
+| AC-2 | tested | Click auf einen Thread zeigt Details: Problem-Statement, Solution-Shape, Boundary-Decisions, Feature-IDs, Parent-Thread-Link. |
+| AC-3 | tested | Neural Clusters (aus F-037) werden visualisiert: pro Cluster Namen, Thread-Zugehörigkeit, Pairwise-Affinity, Drift-Status. |
+| AC-4 | tested | Keyword-Overlap-View: für zwei ausgewählte Threads zeigt die UI gemeinsame Keywords. |
+| AC-5 | tested | Cluster-Drift-Warnungen werden im UI hervorgehoben (wenn ein Cluster Drift-Status hat). |
+
+**Files:**
+- `cap/bin/lib/cap-ui.cjs`
+- `tests/cap-ui-thread-nav.test.cjs`
 
 ### F-068: CAP-UI Visual Design Editor (DESIGN.md) [planned]
 
@@ -1218,4 +1222,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-22T09:49:26.992Z*
+*Last updated: 2026-04-22T10:13:19.187Z*
