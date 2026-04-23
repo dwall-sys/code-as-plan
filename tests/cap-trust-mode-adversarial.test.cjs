@@ -45,12 +45,21 @@ function writeRawConfig(root, raw) {
 }
 
 function captureStderr() {
+  // Guard against double-capture — if a prior test crashed before restoring,
+  // re-binding process.stderr.write would capture the already-patched wrapper
+  // and cause infinite recursion under coverage runners that instrument stderr.
+  if (originalStderrWrite) return;
   stderrLines = [];
   originalStderrWrite = process.stderr.write.bind(process.stderr);
-  process.stderr.write = (chunk, ...rest) => {
+  // Capture into buffer but deliberately DO NOT delegate to originalStderrWrite.
+  // Delegation is fragile across coverage tools (c8) that themselves patch
+  // stderr; the delegate chain can recurse. The contract of stream.write()
+  // is `boolean`, so returning true satisfies Node's expectations without
+  // emitting the captured line to the parent process.
+  process.stderr.write = (chunk) => {
     const s = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
     stderrLines.push(s);
-    return 0 /* swallow — don't actually print during tests */ || originalStderrWrite(chunk, ...rest);
+    return true;
   };
 }
 
