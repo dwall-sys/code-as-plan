@@ -1302,7 +1302,7 @@
 | AC-6 | pending | Für jeden Pattern muss das Board die Optionen Approve (→ Apply via F-074), Reject, Skip und bei Rückzug-Empfehlung (F-074) zusätzlich Unlearn anbieten. |
 | AC-7 | pending | Approve muss die Learn-Pipeline (F-074 Apply) synchron triggern und den Exit-Code 0 nur bei erfolgreichem Commit zurückgeben. |
 
-### F-075: Provision Trust-Mode Configuration Slot [tested]
+### F-075: Provision Trust-Mode Configuration Slot [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
@@ -1324,4 +1324,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-23T13:22:02.792Z*
+*Last updated: 2026-04-23T13:52:23.752Z*
