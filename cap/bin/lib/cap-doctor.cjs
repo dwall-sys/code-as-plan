@@ -65,6 +65,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-stack-docs.cjs',
   'cap-tag-observer.cjs',
   'cap-tag-scanner.cjs',
+  // @cap-feature(feature:F-061) Token Telemetry — LLM-call metrics + per-session aggregates.
+  'cap-telemetry.cjs',
   'cap-test-audit.cjs',
   'cap-thread-migrator.cjs',
   'cap-thread-synthesis.cjs',
