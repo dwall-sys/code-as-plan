@@ -1220,7 +1220,7 @@
 - `commands/cap/ui.md`
 - `tests/cap-ui-design-editor.test.cjs`
 
-### F-061: Implement Token Telemetry [tested]
+### F-061: Implement Token Telemetry [shipped]
 
 | AC | Status | Description |
 |----|--------|-------------|
@@ -1324,4 +1324,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-23T12:40:22.727Z*
+*Last updated: 2026-04-23T13:01:39.850Z*
