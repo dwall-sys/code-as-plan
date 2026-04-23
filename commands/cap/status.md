@@ -166,6 +166,28 @@ console.log(JSON.stringify({ filesWithTags: filesWithTags.size, totalFiles, tota
 
 Store as `tag_stats`.
 
+## Step 3a: Load Token Telemetry status
+
+<!-- @cap-feature(feature:F-061) Token Telemetry — surfaces per-session token usage + LLM budget remaining. -->
+<!-- @cap-todo(ac:F-061/AC-3) /cap:status shall display current session token consumption and LLM budget remaining capacity. -->
+
+```bash
+node -e "
+const telemetry = require('./cap/bin/lib/cap-telemetry.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+try {
+  const s = session.loadSession(process.cwd());
+  // Session-ID proxy: startedAt (stable for the current session window). Null when no session active.
+  const sessionId = s.startedAt || null;
+  console.log(telemetry.formatSessionStatusLine(process.cwd(), sessionId));
+} catch (e) {
+  console.log('Token Telemetry: (not available)');
+}
+"
+```
+
+Store as `token_telemetry_status` and render it verbatim under the dashboard's `Session:` block.
+
 ## Step 3b: Load Neural Memory status
 
 <!-- @cap-todo(ac:F-040/AC-3) Extend /cap:status with Neural Memory section: active cluster count, dormant nodes, highest-affinity pair, last clustering timestamp -->
@@ -196,6 +218,7 @@ Session:
   Current step:   {session_state.step or "none"}
   Session duration: {session_state.durationMinutes} minutes {or "no active session"}
   Last command:   {session_state.lastCommand} ({session_state.lastCommandTimestamp})
+  {token_telemetry_status}
 
 Features ({fm_status.totalFeatures} total):
   planned:    {byState.planned}

@@ -23,7 +23,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     // @cap-decision(F-064) Bumped 68 -> 69 when cap-design-families.cjs was extracted from cap-design.cjs (size split).
     // @cap-decision(F-065) Bumped 69 -> 70 when cap-ui.cjs was added (CAP-UI Core — local server + static export).
     // @cap-decision(F-068) Bumped 70 -> 73 when cap-ui was split into cap-ui.cjs + cap-ui-mind-map.cjs + cap-ui-thread-nav.cjs + cap-ui-design-editor.cjs (F-067 hand-off + F-068 editor).
-    assert.equal(CAP_MODULE_MANIFEST.length, 73);
+    // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added (Token Telemetry observability).
+    assert.equal(CAP_MODULE_MANIFEST.length, 74);
   });
 
   it('every entry ends with .cjs', () => {
@@ -51,7 +52,8 @@ describe('checkModuleIntegrity', () => {
     assert.equal(result.modulesOk, result.modulesTotal);
     // @cap-decision(F-065) Bumped 69 -> 70 when cap-ui.cjs was added.
     // @cap-decision(F-068) Bumped 70 -> 73 when cap-ui was split into 3 siblings + the new design editor.
-    assert.equal(result.modulesTotal, 73);
+    // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added.
+    assert.equal(result.modulesTotal, 74);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -66,7 +68,8 @@ describe('checkModuleIntegrity', () => {
     assert.equal(result.modulesOk, 0);
     // @cap-decision(F-065) Bumped 69 -> 70 when cap-ui.cjs was added.
     // @cap-decision(F-068) Bumped 70 -> 73 after the cap-ui split + design-editor addition.
-    assert.equal(result.modulesTotal, 73);
+    // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added.
+    assert.equal(result.modulesTotal, 74);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -189,7 +192,8 @@ describe('runDoctor includes module integrity', () => {
     assert.ok(typeof report.modulesTotal === 'number');
     // @cap-decision(F-065) Bumped 69 -> 70 when cap-ui.cjs was added.
     // @cap-decision(F-068) Bumped 70 -> 73 after the cap-ui split + design-editor addition.
-    assert.equal(report.modulesTotal, 73);
+    // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added.
+    assert.equal(report.modulesTotal, 74);
   });
 
   it('report includes platformPaths', () => {

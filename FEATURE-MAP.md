@@ -1220,6 +1220,100 @@
 - `commands/cap/ui.md`
 - `tests/cap-ui-design-editor.test.cjs`
 
+### F-061: Implement Token Telemetry [tested]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Das System muss pro LLM-Call Token-Verbrauch (prompt/completion/total), Modell, Dauer und Command-Kontext in `.cap/telemetry/llm-calls.jsonl` persistieren. |
+| AC-2 | tested | Das System muss pro Session einen Aggregat-Record (Call-Count, Total-Tokens, Budget-Verbrauch) schreiben, der per Feature-ID und Session-ID auffindbar ist. |
+| AC-3 | tested | Der `/cap:status`-Command muss den aktuellen Session-Token-Verbrauch und die Rest-Kapazität des LLM-Budgets anzeigen. |
+| AC-4 | tested | Die Telemetrie-API muss eine Query-Funktion `getLlmUsage(projectRoot, { sessionId, featureId, range })` exponieren, die von Signal-Collectors (F-070) und Pattern-Pipeline (F-071) konsumiert wird. |
+| AC-5 | tested | Das System darf keine Roh-Prompts oder Roh-Completions persistieren — nur Metriken und Hashes. |
+| AC-6 | tested | Bei deaktivierter Telemetrie (`.cap/config: telemetry.enabled=false`) müssen alle Writes no-op sein, ohne andere Commands zu brechen. |
+| AC-7 | tested | Die Telemetrie-Writes müssen zero-deps (nur `node:fs`, `node:path`, `node:crypto`) implementiert sein. |
+
+### F-070: Collect Learning Signals [planned]
+
+**Depends on:** F-061
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Das System muss einen Override-Collector bereitstellen, der User-Korrekturen an Agent-Vorschlägen (Edit-nach-Write, Reject-Approval) in `.cap/learning/signals/overrides.jsonl` erfasst. |
+| AC-2 | pending | Das System muss einen Memory-Reference-Collector bereitstellen, der Zugriffe auf `.cap/memory/*.md` pro Session zählt und in `.cap/learning/signals/memory-refs.jsonl` schreibt. |
+| AC-3 | pending | Das System muss einen Decision-Regret-Collector bereitstellen, der rückwirkend als `@cap-decision regret:true` markierte Entscheidungen erkennt und in `.cap/learning/signals/regrets.jsonl` erfasst. |
+| AC-4 | pending | Jeder Signal-Record muss Session-ID, Feature-ID, Timestamp, Signal-Typ und Kontext-Hash enthalten (keine Roh-Texte). |
+| AC-5 | pending | Die Collectors müssen via Claude-Code-Hooks (PreToolUse / Stop) getriggert werden, ohne Command-Laufzeit messbar zu verlangsamen (< 50ms Overhead pro Hook). |
+| AC-6 | pending | Das System muss eine `getSignals(type, range)`-API exponieren, die von Pattern-Pipeline (F-071) und Fitness-Score (F-072) konsumiert wird. |
+| AC-7 | pending | Bei fehlenden Signal-Files müssen Collectors self-initialisieren (Lazy-Create), ohne Fehler zu werfen. |
+
+### F-071: Extract Patterns via Heuristics and LLM [planned]
+
+**Depends on:** F-070
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Das System muss in Stufe 1 eine deterministische Heuristik-Engine (TF-IDF, RegEx-Cluster, Frequenz-Analyse) auf Signal-Records ausführen und Kandidaten-Signale mit Score in `.cap/learning/candidates/*.json` schreiben. |
+| AC-2 | pending | Das System muss in Stufe 2 einen LLM-Call triggern, sobald ein Kandidat die Schwelle `≥ 3 ähnliche Overrides ODER ≥ 1 Regret` erreicht. |
+| AC-3 | pending | Der LLM-Call darf ausschließlich aggregierte Kandidaten-Metadaten (keine Roh-Signale, keine User-Texte) als Prompt erhalten und muss einen konkreten Patch-Vorschlag (L1 Parameter, L2 Rule oder L3 Prompt-Template) zurückgeben. |
+| AC-4 | pending | Das System muss das LLM-Budget-Hard-Limit von 3 Calls pro Session durchsetzen; Overflow-Kandidaten müssen in `.cap/learning/queue/` mit `deferred:budget` markiert werden. |
+| AC-5 | pending | Bei LLM-Unverfügbarkeit muss die Heuristik-Stufe weiterlaufen und Vorschläge mit `degraded:true` ausgeben (Graceful-Degradation). |
+| AC-6 | pending | Jeder Pattern-Vorschlag muss als `P-NNN` (zero-padded, sequenziell, nie renumeriert) ID erhalten, mit Feature-Ref, Lern-Level (L1/L2/L3), Vorschlag-Payload und Confidence-Score. |
+| AC-7 | pending | Das Budget-Override (`llmBudgetPerSession`) aus `.cap/learning/config.json` muss respektiert werden und ersetzt den Default von 3. |
+
+### F-072: Compute Two-Layer Fitness Score [planned]
+
+**Depends on:** F-070, F-071
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Das System muss einen Kurzfrist-Score (Override-Rate der letzten Session) pro Pattern berechnen und in `.cap/learning/fitness/<P-NNN>.json` persistieren. |
+| AC-2 | pending | Das System muss einen Langfrist-Score `(Memory-Ref × 1 + Decision-Regret × 2) / norm` berechnen, sobald n ≥ 5 Sessions mit dem Pattern aktiv waren. |
+| AC-3 | pending | Die Fitness-History muss Rolling-30-Sessions und Lifetime-Aggregate gleichzeitig persistieren und per `getFitness(P-ID)` abrufbar sein. |
+| AC-4 | pending | Patterns ohne Nutzung über 20 Sessions müssen automatisch als `expired:true` markiert werden. |
+| AC-5 | pending | Das Datenmodell für den Langfrist-Score muss ab Tag 1 geschrieben werden, auch wenn die Anzeige erst ab n ≥ 5 erfolgt. |
+| AC-6 | pending | Das System muss einen Fitness-Snapshot zum Zeitpunkt jedes Patch-Applies erzeugen, damit Auto-Rückzug (F-074) Vergleichswerte hat. |
+| AC-7 | pending | Die Score-Berechnung muss zero-deps und deterministisch sein (gleiche Inputs → gleicher Output). |
+
+### F-074: Enable Pattern Unlearn and Auto-Retract [planned]
+
+**Depends on:** F-072
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Das System muss bei jedem Pattern-Apply einen Audit-Record in `.cap/learning/applied/P-NNN.json` (before/after-Diff, Ziel-Dateien, Feature-Ref, Fitness-Snapshot) persistieren. |
+| AC-2 | pending | Das System muss jedes Apply als Git-Commit `learn: apply P-NNN (F-XXX)` committen, sodass der Patch per Commit-Hash rückverfolgbar ist. |
+| AC-3 | pending | Der Command `/cap:learn unlearn <P-ID>` muss einen Reverse-Patch erzeugen, ihn anwenden und als Git-Commit `learn: unlearn P-NNN` persistieren. |
+| AC-4 | pending | Das System muss einen Audit-Eintrag in `.cap/learning/unlearned/P-NNN.json` mit Grund (manual | auto-retract) und Zeitstempel schreiben. |
+| AC-5 | pending | Das System muss 5 Sessions nach jedem Apply prüfen, ob die Override-Rate schlechter als der Pre-Apply-Fitness-Snapshot ist, und dann den Patch in der Retract-Liste markieren. |
+| AC-6 | pending | Ist ein Patch für Rückzug markiert, muss das Learn-Review-Board (F-073) ihn mit Label „Rückzug empfohlen" und One-Click-Unlearn-Option anzeigen. |
+| AC-7 | pending | Unlearn muss idempotent sein: zweifacher Aufruf auf bereits zurückgenommenen P-ID darf keinen doppelten Commit erzeugen. |
+
+### F-073: Review Patterns via Learn Command [planned]
+
+**Depends on:** F-072, F-074
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Der Command `/cap:learn review` muss alle pending Pattern-Vorschläge aus `.cap/learning/candidates/` mit Fitness-Score, Confidence und Trigger-Begründung anzeigen. |
+| AC-2 | pending | Das Review-Board muss nur erscheinen, wenn `≥ 1 high-confidence (Langfrist ≥ 0.75 bei n≥5) ODER ≥ 3 beliebige Kandidaten` vorliegen. |
+| AC-3 | pending | Das System muss einen Stop-Hook registrieren, der nach dem `cap-memory`-Stop-Hook automatisch `/cap:learn review` auslöst (Memory-Pipeline → Learn-Pipeline → Review-Board). |
+| AC-4 | pending | Skip pro Session muss gespeichert werden (`.cap/learning/skipped-<session-id>.json`), aber keine persistente Mute-Regel erzeugen. |
+| AC-5 | pending | Patterns, die über 7 Sessions ungeprüft im Review-Board stehen, müssen automatisch in `.cap/learning/archive/` verschoben und aus dem Board entfernt werden. |
+| AC-6 | pending | Für jeden Pattern muss das Board die Optionen Approve (→ Apply via F-074), Reject, Skip und bei Rückzug-Empfehlung (F-074) zusätzlich Unlearn anbieten. |
+| AC-7 | pending | Approve muss die Learn-Pipeline (F-074 Apply) synchron triggern und den Exit-Code 0 nur bei erfolgreichem Commit zurückgeben. |
+
+### F-075: Provision Trust-Mode Configuration Slot [planned]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Die SESSION.json muss ein Feld `trustMode` mit den erlaubten Werten `A` | `B` | `C` und Default `A` aufnehmen. |
+| AC-2 | pending | Das System muss `trustMode` pro Projekt in `.cap/config.json` persistieren, sodass der Wert über Sessions hinweg stabil bleibt. |
+| AC-3 | pending | Im MVP muss das System jeden non-A-Wert beim Read ignorieren und auf `A` degradieren, mit Warnhinweis `trust-mode-not-implemented`. |
+| AC-4 | pending | Alle Learn-Pipeline-Writes (F-071, F-073, F-074) müssen in Mode A Human-in-the-Loop-Approval erzwingen (kein Auto-Apply). |
+| AC-5 | pending | Alle Learn-Pipeline-Reads müssen in Mode A deterministisch sein — gleiche Signal-Basis ergibt gleiche Vorschläge. |
+| AC-6 | pending | Das System muss einen Helper `getTrustMode()` exponieren, den alle Learn-Features konsumieren, statt Mode selbst zu lesen. |
+| AC-7 | pending | Ein zukünftiger Wechsel auf B/C darf ausschließlich den Helper-Return-Wert ändern, ohne Feature-Code zu patchen (Open-Closed). |
+
 ## Legend
 
 | State | Meaning |
@@ -1230,4 +1324,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-22T10:48:33.176Z*
+*Last updated: 2026-04-23T12:40:22.727Z*
