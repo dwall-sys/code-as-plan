@@ -879,14 +879,16 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     assert.strictEqual(ui.atomicWriteDesign, editor.atomicWriteDesign);
   });
 
-  it('module manifest is 74 after F-061 adds cap-telemetry.cjs (doctor contract)', () => {
+  it('module manifest is 75 after F-075 adds cap-trust-mode.cjs (doctor contract)', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added (Token Telemetry observability).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 74);
+    // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added (Trust-Mode Configuration Slot).
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 75);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-telemetry.cjs'));
+    assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-trust-mode.cjs'));
   });
 });
 

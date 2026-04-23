@@ -72,6 +72,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-thread-synthesis.cjs',
   'cap-thread-tracker.cjs',
   'cap-trace.cjs',
+  // @cap-feature(feature:F-075) Trust-Mode Configuration Slot — open-closed extension point for B/C activation.
+  'cap-trust-mode.cjs',
   // @cap-feature(feature:F-065) CAP-UI Core module entry.
   'cap-ui.cjs',
   // @cap-feature(feature:F-068) CAP-UI Design Editor (DESIGN.md-only edit surface).
