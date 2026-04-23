@@ -23,6 +23,7 @@ const path = require('node:path');
  * @property {string|null} step - Current workflow step
  * @property {string|null} startedAt - ISO timestamp of when session started
  * @property {string|null} activeDebugSession - Active debug session ID
+ * @property {'A'|'B'|'C'} trustMode - @cap-feature(feature:F-075) Trust-Mode slot — mirrored from .cap/config.json by cap-trust-mode.
  * @property {Object<string,string>} metadata - Extensible key-value metadata
  */
 
@@ -71,6 +72,11 @@ function getDefaultSession() {
     startedAt: null,
     activeDebugSession: null,
     activeThread: null,
+    // @cap-feature(feature:F-075) Trust-Mode slot — mirrored from .cap/config.json.
+    // @cap-todo(ac:F-075/AC-1) SESSION.json carries trustMode field with default 'A'.
+    // Sessions created before F-075 will land here via the { ...default, ...parsed } merge
+    // in loadSession(), so backfill is automatic on first read.
+    trustMode: 'A',
     metadata: {},
     // @cap-feature(feature:F-057) Checkpoint persistence fields — additive, null by default.
     // lastCheckpointAt = ISO timestamp of the most recent /cap:checkpoint that detected a breakpoint.

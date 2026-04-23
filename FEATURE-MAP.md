@@ -1302,17 +1302,17 @@
 | AC-6 | pending | Für jeden Pattern muss das Board die Optionen Approve (→ Apply via F-074), Reject, Skip und bei Rückzug-Empfehlung (F-074) zusätzlich Unlearn anbieten. |
 | AC-7 | pending | Approve muss die Learn-Pipeline (F-074 Apply) synchron triggern und den Exit-Code 0 nur bei erfolgreichem Commit zurückgeben. |
 
-### F-075: Provision Trust-Mode Configuration Slot [planned]
+### F-075: Provision Trust-Mode Configuration Slot [tested]
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Die SESSION.json muss ein Feld `trustMode` mit den erlaubten Werten `A` | `B` | `C` und Default `A` aufnehmen. |
-| AC-2 | pending | Das System muss `trustMode` pro Projekt in `.cap/config.json` persistieren, sodass der Wert über Sessions hinweg stabil bleibt. |
-| AC-3 | pending | Im MVP muss das System jeden non-A-Wert beim Read ignorieren und auf `A` degradieren, mit Warnhinweis `trust-mode-not-implemented`. |
-| AC-4 | pending | Alle Learn-Pipeline-Writes (F-071, F-073, F-074) müssen in Mode A Human-in-the-Loop-Approval erzwingen (kein Auto-Apply). |
-| AC-5 | pending | Alle Learn-Pipeline-Reads müssen in Mode A deterministisch sein — gleiche Signal-Basis ergibt gleiche Vorschläge. |
-| AC-6 | pending | Das System muss einen Helper `getTrustMode()` exponieren, den alle Learn-Features konsumieren, statt Mode selbst zu lesen. |
-| AC-7 | pending | Ein zukünftiger Wechsel auf B/C darf ausschließlich den Helper-Return-Wert ändern, ohne Feature-Code zu patchen (Open-Closed). |
+| AC-1 | tested | Die SESSION.json muss ein Feld `trustMode` mit den erlaubten Werten `A` | `B` | `C` und Default `A` aufnehmen. |
+| AC-2 | tested | Das System muss `trustMode` pro Projekt in `.cap/config.json` persistieren, sodass der Wert über Sessions hinweg stabil bleibt. |
+| AC-3 | tested | Im MVP muss das System jeden non-A-Wert beim Read ignorieren und auf `A` degradieren, mit Warnhinweis `trust-mode-not-implemented`. |
+| AC-4 | tested | Alle Learn-Pipeline-Writes (F-071, F-073, F-074) müssen in Mode A Human-in-the-Loop-Approval erzwingen (kein Auto-Apply). |
+| AC-5 | tested | Alle Learn-Pipeline-Reads müssen in Mode A deterministisch sein — gleiche Signal-Basis ergibt gleiche Vorschläge. |
+| AC-6 | tested | Das System muss einen Helper `getTrustMode()` exponieren, den alle Learn-Features konsumieren, statt Mode selbst zu lesen. |
+| AC-7 | tested | Ein zukünftiger Wechsel auf B/C darf ausschließlich den Helper-Return-Wert ändern, ohne Feature-Code zu patchen (Open-Closed). |
 
 ## Legend
 
@@ -1324,4 +1324,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-23T13:01:39.850Z*
+*Last updated: 2026-04-23T13:22:02.792Z*
