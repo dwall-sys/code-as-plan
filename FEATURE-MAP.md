@@ -1299,7 +1299,7 @@
 | AC-6 | tested | Das System muss einen Fitness-Snapshot zum Zeitpunkt jedes Patch-Applies erzeugen, damit Auto-Rückzug (F-074) Vergleichswerte hat. |
 | AC-7 | tested | Die Score-Berechnung muss zero-deps und deterministisch sein (gleiche Inputs → gleicher Output). |
 
-### F-074: Enable Pattern Unlearn and Auto-Retract [tested]
+### F-074: Enable Pattern Unlearn and Auto-Retract [shipped]
 
 **Depends on:** F-072
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T22:20:37.931Z*
+*Last updated: 2026-05-05T23:11:49.877Z*
