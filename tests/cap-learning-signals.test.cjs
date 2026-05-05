@@ -496,3 +496,89 @@ describe('AC-7 — lazy-create and never-throw contract', () => {
     assert.equal(learning.recordRegret({ decisionId: 'd' }), null);
   });
 });
+
+// -----------------------------------------------------------------------------
+// AC-1 ledger: cross-subprocess editAfterWrite bridge
+// -----------------------------------------------------------------------------
+
+describe('AC-1 ledger — recordWriteIntoLedger / wasWrittenInSession', () => {
+  // @cap-todo(ac:F-070/AC-1) Persistent ledger lazy-creates the state directory and persists one
+  //                          {sessionId, targetFile, ts} per Write/Edit event.
+  it('first recordWriteIntoLedger lazy-creates .cap/learning/state/ and writes one line', () => {
+    const rec = learning.recordWriteIntoLedger(tmpDir, 'sess-1', '/abs/path/to/file.cjs');
+    assert.ok(rec, 'returned record');
+    assert.equal(rec.sessionId, 'sess-1');
+    assert.equal(rec.targetFile, '/abs/path/to/file.cjs');
+    assert.match(rec.ts, /^\d{4}-\d{2}-\d{2}T/);
+
+    const fp = learning.writtenFilesLedgerPath(tmpDir);
+    assert.equal(fs.existsSync(fp), true, 'ledger file created');
+    const lines = fs.readFileSync(fp, 'utf8').trim().split('\n');
+    assert.equal(lines.length, 1);
+    assert.equal(JSON.parse(lines[0]).targetFile, '/abs/path/to/file.cjs');
+  });
+
+  // @cap-todo(ac:F-070/AC-1) wasWrittenInSession matches by exact (sessionId, targetFile) tuple.
+  it('wasWrittenInSession returns true for a previously recorded (sessionId, targetFile) pair', () => {
+    learning.recordWriteIntoLedger(tmpDir, 'sess-A', '/abs/path/foo.cjs');
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess-A', '/abs/path/foo.cjs'), true);
+  });
+
+  // @cap-todo(ac:F-070/AC-1) Different sessionId → no match (per-session isolation).
+  it('wasWrittenInSession returns false when sessionId differs', () => {
+    learning.recordWriteIntoLedger(tmpDir, 'sess-A', '/abs/path/foo.cjs');
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess-B', '/abs/path/foo.cjs'), false);
+  });
+
+  // @cap-todo(ac:F-070/AC-1) Different targetFile → no match.
+  it('wasWrittenInSession returns false when targetFile differs', () => {
+    learning.recordWriteIntoLedger(tmpDir, 'sess-A', '/abs/path/foo.cjs');
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess-A', '/abs/path/bar.cjs'), false);
+  });
+
+  // @cap-todo(ac:F-070/AC-1) Missing ledger file → false (not an error).
+  it('wasWrittenInSession returns false when ledger file does not exist', () => {
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess-A', '/abs/path/foo.cjs'), false);
+  });
+
+  // @cap-todo(ac:F-070/AC-7) Both ledger functions never throw on bad inputs.
+  it('ledger helpers tolerate missing / non-string inputs gracefully', () => {
+    assert.equal(learning.recordWriteIntoLedger(null, 'sess', '/p'), null);
+    assert.equal(learning.recordWriteIntoLedger(tmpDir, null, '/p'), null);
+    assert.equal(learning.recordWriteIntoLedger(tmpDir, 'sess', null), null);
+    assert.equal(learning.recordWriteIntoLedger(tmpDir, 'sess', ''), null);
+
+    assert.equal(learning.wasWrittenInSession(null, 'sess', '/p'), false);
+    assert.equal(learning.wasWrittenInSession(tmpDir, null, '/p'), false);
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess', null), false);
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess', ''), false);
+
+    assert.doesNotThrow(() => learning.recordWriteIntoLedger(tmpDir, 'sess', '/p'));
+    assert.doesNotThrow(() => learning.wasWrittenInSession(tmpDir, 'sess', '/p'));
+  });
+
+  // @cap-todo(ac:F-070/AC-1) Multiple writes in the same session append, do not overwrite.
+  it('multiple recordWriteIntoLedger calls append (no overwrite)', () => {
+    learning.recordWriteIntoLedger(tmpDir, 'sess', '/p/a.cjs');
+    learning.recordWriteIntoLedger(tmpDir, 'sess', '/p/b.cjs');
+    learning.recordWriteIntoLedger(tmpDir, 'sess', '/p/c.cjs');
+
+    const fp = learning.writtenFilesLedgerPath(tmpDir);
+    const lines = fs.readFileSync(fp, 'utf8').trim().split('\n').filter(Boolean);
+    assert.equal(lines.length, 3);
+
+    // All three are findable by wasWrittenInSession.
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess', '/p/a.cjs'), true);
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess', '/p/b.cjs'), true);
+    assert.equal(learning.wasWrittenInSession(tmpDir, 'sess', '/p/c.cjs'), true);
+  });
+
+  // @cap-todo(ac:F-070/AC-1) sessionId / targetFile are length-capped before persistence.
+  it('ledger applies ID_MAX cap to sessionId and PATH_MAX cap to targetFile', () => {
+    const longSession = 'X'.repeat(500);
+    const longPath = '/p/' + 'Y'.repeat(2000);
+    const rec = learning.recordWriteIntoLedger(tmpDir, longSession, longPath);
+    assert.equal(rec.sessionId.length, 200, 'sessionId capped to ID_MAX (200)');
+    assert.ok(rec.targetFile.length <= 1024, 'targetFile capped to PATH_MAX (1024)');
+  });
+});

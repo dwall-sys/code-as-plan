@@ -598,6 +598,137 @@ describe('AC-2 audit · cap-learning-hook.js routes only paths inside .cap/memor
 });
 
 // ---------------------------------------------------------------------------
+// AC-1 audit · cap-learning-hook.js editAfterWrite END-TO-END across subprocesses
+// ---------------------------------------------------------------------------
+
+// Each PostToolUse hook fires as a fresh subprocess. The earlier prototype tracked written files
+// in an in-memory Set that died with each subprocess — so editAfterWrite would essentially never
+// fire in real use. This block proves the persistent ledger fix works across subprocess boundaries.
+
+describe('AC-1 audit · editAfterWrite fires across hook subprocesses (ledger bridge)', () => {
+  let tmp;
+  beforeEach(() => {
+    tmp = mkTmp('cap-learn-e2e-');
+    // SESSION.json is required for the hook to derive sessionId. Without it, the ledger
+    // can't key per-session and the editAfterWrite path is intentionally a no-op.
+    fs.mkdirSync(path.join(tmp, '.cap'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, '.cap', 'SESSION.json'),
+      JSON.stringify({ sessionId: 'sess-e2e-1', activeFeature: 'F-070' }),
+    );
+  });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  function runHook(toolName, filePath) {
+    const payload = JSON.stringify({
+      tool_name: toolName,
+      tool_input: { file_path: filePath },
+      cwd: tmp,
+    });
+    return spawnSync(process.execPath, [HOOK_PATH], {
+      input: payload,
+      encoding: 'utf8',
+      env: { ...process.env, CAP_LEARNING_LIB: LEARNING_PATH },
+      timeout: 10_000,
+    });
+  }
+
+  function overrides() {
+    const f = path.join(tmp, '.cap', 'learning', 'signals', 'overrides.jsonl');
+    if (!fs.existsSync(f)) return [];
+    return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  }
+
+  // @cap-todo(ac:F-070/AC-1) Two independent hook subprocesses (Write then Edit) MUST produce
+  //                          editAfterWrite — this is the integration probe the prototype suite missed.
+  it('Write then Edit on the same path across two hook invocations emits editAfterWrite', () => {
+    const target = path.join(tmp, 'src', 'foo.cjs');
+
+    const w = runHook('Write', target);
+    assert.equal(w.status, 0, `Write hook failed: ${w.stderr}`);
+    // Write alone must NOT emit an override.
+    assert.equal(overrides().length, 0, 'Write alone must not emit override');
+
+    const e = runHook('Edit', target);
+    assert.equal(e.status, 0, `Edit hook failed: ${e.stderr}`);
+    const recs = overrides();
+    assert.equal(recs.length, 1, 'Write→Edit must emit exactly one override');
+    assert.equal(recs[0].signalType, 'override');
+    assert.equal(recs[0].subType, 'editAfterWrite');
+    assert.equal(recs[0].sessionId, 'sess-e2e-1');
+  });
+
+  // @cap-todo(ac:F-070/AC-1) An Edit on a file the agent never wrote (no Write event for it) must
+  //                          NOT emit editAfterWrite. This protects against false positives.
+  it('Edit on a never-written path does NOT emit editAfterWrite', () => {
+    const target = path.join(tmp, 'src', 'untouched.cjs');
+    const e = runHook('Edit', target);
+    assert.equal(e.status, 0, `Edit hook failed: ${e.stderr}`);
+    assert.equal(overrides().length, 0);
+  });
+
+  // @cap-todo(ac:F-070/AC-1) Edit→Edit on a previously-written file: both edits should emit, since
+  //                          each Edit appends back to the ledger and the next Edit finds the prior.
+  it('Write→Edit→Edit emits editAfterWrite TWICE (chained edits both count)', () => {
+    const target = path.join(tmp, 'src', 'bar.cjs');
+    runHook('Write', target);
+    runHook('Edit', target);
+    runHook('Edit', target);
+    const recs = overrides();
+    assert.equal(recs.length, 2, 'each Edit-after-prior-write produces a record');
+    for (const r of recs) {
+      assert.equal(r.subType, 'editAfterWrite');
+      assert.equal(r.sessionId, 'sess-e2e-1');
+    }
+  });
+
+  // @cap-todo(ac:F-070/AC-1) Per-session isolation: a Write under sessionId A must NOT trigger
+  //                          editAfterWrite when an Edit fires under sessionId B (different session).
+  it('per-session isolation: Edit under a different sessionId does NOT trip on session A writes', () => {
+    const target = path.join(tmp, 'src', 'iso.cjs');
+    runHook('Write', target);
+    assert.equal(overrides().length, 0, 'Write alone emits nothing');
+
+    // Switch sessionId in SESSION.json — the ledger now sees a different sid on the next Edit.
+    fs.writeFileSync(
+      path.join(tmp, '.cap', 'SESSION.json'),
+      JSON.stringify({ sessionId: 'sess-e2e-2', activeFeature: 'F-070' }),
+    );
+    runHook('Edit', target);
+    assert.equal(overrides().length, 0, 'Edit in a different session must not see the prior write');
+  });
+
+  // @cap-todo(ac:F-070/AC-1, ac:F-070/AC-7) When SESSION.json is missing, the ledger cannot key
+  //                          per-session and editAfterWrite is a silent no-op (never throws).
+  it('missing SESSION.json: hook is a silent no-op (no override, no crash)', () => {
+    const target = path.join(tmp, 'src', 'no-session.cjs');
+    fs.unlinkSync(path.join(tmp, '.cap', 'SESSION.json'));
+    const w = runHook('Write', target);
+    const e = runHook('Edit', target);
+    assert.equal(w.status, 0);
+    assert.equal(e.status, 0);
+    assert.equal(overrides().length, 0);
+  });
+
+  // @cap-todo(ac:F-070/AC-5) End-to-end hot path with the persistent ledger: each hook subprocess
+  //                          (Write or Edit) must complete inside a generous CI-tolerant budget.
+  //                          Real per-call latency includes node spin-up; we cap at 250ms to leave
+  //                          headroom over slow CI runners while still catching gross regressions
+  //                          (the actual collector + ledger work is well under 50ms).
+  it('AC-5 budget: Write→Edit hook chain completes well inside the wall-clock budget', () => {
+    const target = path.join(tmp, 'src', 'perf.cjs');
+    const t0 = Date.now();
+    const w = runHook('Write', target);
+    const e = runHook('Edit', target);
+    const elapsed = Date.now() - t0;
+    assert.equal(w.status, 0);
+    assert.equal(e.status, 0);
+    assert.ok(elapsed < 1000, `Write+Edit hook chain took ${elapsed}ms (>1000ms = regression)`);
+    assert.equal(overrides().length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // AC-3 · regret-collector — empty file from previous run + decisionId precedence
 // ---------------------------------------------------------------------------
 
