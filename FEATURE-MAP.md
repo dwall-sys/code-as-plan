@@ -1271,19 +1271,19 @@
 - `tests/cap-learning-signals-adversarial.test.cjs`
 - `tests/cap-learning-signals.test.cjs`
 
-### F-071: Extract Patterns via Heuristics and LLM [prototyped]
+### F-071: Extract Patterns via Heuristics and LLM [shipped]
 
 **Depends on:** F-070
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Das System muss in Stufe 1 eine deterministische Heuristik-Engine (TF-IDF, RegEx-Cluster, Frequenz-Analyse) auf Signal-Records ausführen und Kandidaten-Signale mit Score in `.cap/learning/candidates/*.json` schreiben. |
-| AC-2 | pending | Das System muss in Stufe 2 einen LLM-Call triggern, sobald ein Kandidat die Schwelle `≥ 3 ähnliche Overrides ODER ≥ 1 Regret` erreicht. |
-| AC-3 | pending | Der LLM-Call darf ausschließlich aggregierte Kandidaten-Metadaten (keine Roh-Signale, keine User-Texte) als Prompt erhalten und muss einen konkreten Patch-Vorschlag (L1 Parameter, L2 Rule oder L3 Prompt-Template) zurückgeben. |
-| AC-4 | pending | Das System muss das LLM-Budget-Hard-Limit von 3 Calls pro Session durchsetzen; Overflow-Kandidaten müssen in `.cap/learning/queue/` mit `deferred:budget` markiert werden. |
-| AC-5 | pending | Bei LLM-Unverfügbarkeit muss die Heuristik-Stufe weiterlaufen und Vorschläge mit `degraded:true` ausgeben (Graceful-Degradation). |
-| AC-6 | pending | Jeder Pattern-Vorschlag muss als `P-NNN` (zero-padded, sequenziell, nie renumeriert) ID erhalten, mit Feature-Ref, Lern-Level (L1/L2/L3), Vorschlag-Payload und Confidence-Score. |
-| AC-7 | pending | Das Budget-Override (`llmBudgetPerSession`) aus `.cap/learning/config.json` muss respektiert werden und ersetzt den Default von 3. |
+| AC-1 | tested | Das System muss in Stufe 1 eine deterministische Heuristik-Engine (TF-IDF, RegEx-Cluster, Frequenz-Analyse) auf Signal-Records ausführen und Kandidaten-Signale mit Score in `.cap/learning/candidates/*.json` schreiben. |
+| AC-2 | tested | Das System muss in Stufe 2 einen LLM-Call triggern, sobald ein Kandidat die Schwelle `≥ 3 ähnliche Overrides ODER ≥ 1 Regret` erreicht. |
+| AC-3 | tested | Der LLM-Call darf ausschließlich aggregierte Kandidaten-Metadaten (keine Roh-Signale, keine User-Texte) als Prompt erhalten und muss einen konkreten Patch-Vorschlag (L1 Parameter, L2 Rule oder L3 Prompt-Template) zurückgeben. |
+| AC-4 | tested | Das System muss das LLM-Budget-Hard-Limit von 3 Calls pro Session durchsetzen; Overflow-Kandidaten müssen in `.cap/learning/queue/` mit `deferred:budget` markiert werden. |
+| AC-5 | tested | Bei LLM-Unverfügbarkeit muss die Heuristik-Stufe weiterlaufen und Vorschläge mit `degraded:true` ausgeben (Graceful-Degradation). |
+| AC-6 | tested | Jeder Pattern-Vorschlag muss als `P-NNN` (zero-padded, sequenziell, nie renumeriert) ID erhalten, mit Feature-Ref, Lern-Level (L1/L2/L3), Vorschlag-Payload und Confidence-Score. |
+| AC-7 | tested | Das Budget-Override (`llmBudgetPerSession`) aus `.cap/learning/config.json` muss respektiert werden und ersetzt den Default von 3. |
 
 ### F-072: Compute Two-Layer Fitness Score [planned]
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T18:09:39.608Z*
+*Last updated: 2026-05-05T19:09:32.624Z*
