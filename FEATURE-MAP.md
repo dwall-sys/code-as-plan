@@ -1251,19 +1251,19 @@
 - `tests/cap-telemetry-adversarial.test.cjs`
 - `tests/cap-telemetry.test.cjs`
 
-### F-070: Collect Learning Signals [prototyped]
+### F-070: Collect Learning Signals [tested]
 
 **Depends on:** F-061
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Das System muss einen Override-Collector bereitstellen, der User-Korrekturen an Agent-Vorschlägen (Edit-nach-Write, Reject-Approval) in `.cap/learning/signals/overrides.jsonl` erfasst. |
-| AC-2 | pending | Das System muss einen Memory-Reference-Collector bereitstellen, der Zugriffe auf `.cap/memory/*.md` pro Session zählt und in `.cap/learning/signals/memory-refs.jsonl` schreibt. |
-| AC-3 | pending | Das System muss einen Decision-Regret-Collector bereitstellen, der rückwirkend als `@cap-decision regret:true` markierte Entscheidungen erkennt und in `.cap/learning/signals/regrets.jsonl` erfasst. |
-| AC-4 | pending | Jeder Signal-Record muss Session-ID, Feature-ID, Timestamp, Signal-Typ und Kontext-Hash enthalten (keine Roh-Texte). |
-| AC-5 | pending | Die Collectors müssen via Claude-Code-Hooks (PreToolUse / Stop) getriggert werden, ohne Command-Laufzeit messbar zu verlangsamen (< 50ms Overhead pro Hook). |
-| AC-6 | pending | Das System muss eine `getSignals(type, range)`-API exponieren, die von Pattern-Pipeline (F-071) und Fitness-Score (F-072) konsumiert wird. |
-| AC-7 | pending | Bei fehlenden Signal-Files müssen Collectors self-initialisieren (Lazy-Create), ohne Fehler zu werfen. |
+| AC-1 | tested | Das System muss einen Override-Collector bereitstellen, der User-Korrekturen an Agent-Vorschlägen (Edit-nach-Write, Reject-Approval) in `.cap/learning/signals/overrides.jsonl` erfasst. |
+| AC-2 | tested | Das System muss einen Memory-Reference-Collector bereitstellen, der Zugriffe auf `.cap/memory/**/*.md` (rekursiv: Top-Level-Memories, `threads/`, `archive/`) pro Session zählt und in `.cap/learning/signals/memory-refs.jsonl` schreibt. |
+| AC-3 | tested | Das System muss einen Decision-Regret-Collector bereitstellen, der rückwirkend als `@cap-decision regret:true` markierte Entscheidungen erkennt und in `.cap/learning/signals/regrets.jsonl` erfasst. |
+| AC-4 | tested | Jeder Signal-Record muss Session-ID, Feature-ID, Timestamp, Signal-Typ und Kontext-Hash enthalten (keine Roh-Texte). |
+| AC-5 | tested | Die Collectors müssen via Claude-Code-Hooks (PreToolUse / Stop) getriggert werden, ohne Command-Laufzeit messbar zu verlangsamen (< 50ms Overhead pro Hook). |
+| AC-6 | tested | Das System muss eine `getSignals(type, range)`-API exponieren, die von Pattern-Pipeline (F-071) und Fitness-Score (F-072) konsumiert wird. |
+| AC-7 | tested | Bei fehlenden Signal-Files müssen Collectors self-initialisieren (Lazy-Create), ohne Fehler zu werfen. |
 
 **Files:**
 - `cap/bin/lib/cap-learning-signals.cjs`
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T14:18:58.109Z*
+*Last updated: 2026-05-05T15:10:29.947Z*
