@@ -467,6 +467,12 @@ function candidate(acc, token, recs, tfidfScore) {
   });
 }
 
+// @cap-risk(F-071/AC-1) L1 oscillation: each run raises threshold by `to = recs.length + 1`. Two
+//                       consecutive runs on a 4-record cluster with threshold 3 propose 4, then on a
+//                       4-record cluster with threshold 4 propose 5, … unbounded climb. The dampener
+//                       lives in F-072 (fitness scoring): a low-fitness pattern is auto-retracted by
+//                       F-074, breaking the loop. If F-072 is removed or skipped, this heuristic
+//                       becomes unstable. Do not loosen `to = recs.length + 1` without F-072 in place.
 /**
  * Build a heuristic-only L1 suggestion. The shape mirrors the L1 example in the F-071 brief:
  * { kind:'L1', target, from, to, rationale }.
@@ -756,13 +762,44 @@ function recordPatternSuggestion(projectRoot, pattern) {
  * Persist a heuristic-only PatternRecord (degraded path). Helper used by the orchestrator's
  * AC-5 fallback when an outer agent doesn't process the briefing in this session.
  *
+ * @cap-decision(F-071/D8) Clobber protection: if `patterns/<id>.json` already exists with
+ *   `source !== 'heuristic'` (i.e. an LLM stage actually produced a pattern for this id), the
+ *   degraded fallback MUST NOT overwrite it. Returns `{ written: false, reason: 'llm-pattern-exists' }`
+ *   so the orchestrator knows to log instead of silently clobbering. Without this guard, a slow
+ *   Stage-2 LLM result followed by a Step-5 fallback in the same session could silently lose the
+ *   higher-quality LLM pattern. Foot-gun for F-072/F-073 wirers — closed pre-ship per Stage-2 review.
+ * @cap-risk(F-071/AC-5) Two heuristic-only runs over the same id WILL overwrite (latest-wins is the
+ *   intended degraded contract). The guard only blocks heuristic-over-llm clobber, not heuristic-
+ *   over-heuristic refresh.
+ *
  * @param {string} projectRoot
  * @param {string} id - 'P-NNN'
  * @param {HeuristicCandidate} candidate
- * @returns {boolean}
+ * @returns {boolean | { written: boolean, reason?: string, prior?: { source: string, level: string } }}
+ *   - `true` when the degraded record was written (back-compat with prior boolean callers).
+ *   - `false` when the candidate was nullish or the write itself failed.
+ *   - `{ written: false, reason: 'llm-pattern-exists', prior }` when an LLM pattern was preserved.
  */
 function markDegraded(projectRoot, id, candidate) {
   if (!candidate) return false;
+
+  // Clobber-protection: read any existing pattern at this id and refuse to overwrite an LLM record.
+  try {
+    const existingPath = path.join(patternsDir(projectRoot), `${id}.json`);
+    if (fs.existsSync(existingPath)) {
+      const existing = JSON.parse(fs.readFileSync(existingPath, 'utf8'));
+      if (existing && existing.source && existing.source !== 'heuristic') {
+        return {
+          written: false,
+          reason: 'llm-pattern-exists',
+          prior: { source: existing.source, level: existing.level },
+        };
+      }
+    }
+  } catch (_e) {
+    // Read failure → fall through to write (latest-wins for malformed prior records).
+  }
+
   /** @type {PatternRecord} */
   const pattern = {
     id,

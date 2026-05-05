@@ -925,6 +925,50 @@ describe('AC-5 gap · markDegraded duplicate-call and overwrite contract', () =>
     assert.equal(list[0].suggestion.rationale, 'second');
   });
 
+  // @cap-todo(ac:F-071/AC-5) D8 clobber-protection: an LLM pattern at P-NNN must NOT be overwritten
+  //                          by a subsequent markDegraded call. Returns a structured refusal so the
+  //                          orchestrator can log instead of silently losing the higher-quality record.
+  it('LLM pattern then markDegraded for same P-NNN: degraded MUST NOT clobber (D8)', () => {
+    const cand = {
+      candidateId: 'eeee5555eeee5555',
+      signalType: 'override',
+      featureId: 'F-500',
+      count: 3,
+      score: 3,
+      byFeature: [{ featureId: 'F-500', count: 3 }],
+      topContextHashes: [],
+      suggestion: { kind: 'L1', target: 'F-500/threshold', from: 3, to: 4, rationale: 'fallback' },
+    };
+    const id = 'P-001';
+    // Stage 2: LLM produces a high-quality pattern.
+    pipeline.recordPatternSuggestion(tmpDir, {
+      id,
+      createdAt: '2026-05-05T00:00:00.000Z',
+      level: 'L3',
+      featureRef: 'F-500',
+      source: 'llm',
+      degraded: false,
+      confidence: 0.9,
+      suggestion: { kind: 'L3', target: 'cap-prototyper.md', section: "Don't", insert: 'no oscillation', rationale: 'r' },
+      evidence: { candidateId: cand.candidateId, signalType: 'override', count: 3, topContextHashes: [] },
+    });
+
+    // Step-5 fallback fires after the LLM step already wrote — the degraded marker MUST refuse.
+    const result = pipeline.markDegraded(tmpDir, id, cand);
+    assert.deepStrictEqual(
+      result,
+      { written: false, reason: 'llm-pattern-exists', prior: { source: 'llm', level: 'L3' } },
+      'markDegraded must refuse to clobber an existing LLM pattern and return the structured signal',
+    );
+
+    const list = pipeline.listPatterns(tmpDir);
+    assert.equal(list.length, 1);
+    assert.equal(list[0].source, 'llm', 'LLM record must be preserved');
+    assert.equal(list[0].level, 'L3');
+    assert.equal(list[0].confidence, 0.9);
+    assert.equal(list[0].degraded, false);
+  });
+
   it('markDegraded then recordPatternSuggestion for same P-NNN: latest write wins (pinned)', () => {
     const cand = {
       candidateId: 'cccc3333cccc3333',

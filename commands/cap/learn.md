@@ -98,6 +98,17 @@ console.log(JSON.stringify({
 
 Store as `stage1`. Log: `Stage 1: {stage1.candidates} candidates persisted to .cap/learning/candidates/`.
 
+**If `stage1.errors.length > 0`, ABORT promotion.** Stage 1 ran on a partial corpus (one or more `getSignals` collectors failed — overrides, memory-refs, or regrets). Promoting candidates against an incomplete signal set would burn the LLM budget on data we know is missing. Surface the error list to the user and stop:
+
+```
+Stage 1 produced errors — refusing to promote candidates to Stage 2.
+Errors: {stage1.errors}
+Re-run /cap:learn after fixing the underlying signal-collector failures, or
+inspect .cap/learning/signals/ to confirm the JSONL files are readable.
+```
+
+Skip Steps 3-7 in this case; the user resolves the I/O issue and re-runs.
+
 If `feature_filter` is set, the orchestrator filters the candidate set in Step 3 by intersecting `candidate.featureId` with the filter.
 
 ## Step 3: Determine Stage-2 promotions
