@@ -438,3 +438,614 @@ describe('robustness — pipeline never throws on edge inputs', () => {
     assert.equal(list[0].id, 'P-002');
   });
 });
+
+// ===========================================================================
+// GAP-CLOSING PROBES — added by the adversarial audit pass.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// AC-1 — TF-IDF edge cases (epsilon floor, universal token, frequency-arm
+//        behaviour with non-string featureId, topContextHashes cap, byFeature
+//        sort stability)
+// ---------------------------------------------------------------------------
+
+describe('AC-1 gap · TF-IDF epsilon floor on single-session corpora', () => {
+  // @cap-todo(ac:F-071/AC-1) IDF on a single-session corpus is log(1/1) = 0; the engine floors IDF
+  //                          at 0.01 so candidates remain sortable. Pin the floor — without it,
+  //                          single-session corpora would emit `score: 0` candidates and break any
+  //                          downstream sort that relies on positive scores.
+  it('single-session corpus produces candidates with score > 0 (epsilon floor)', () => {
+    for (let i = 0; i < 4; i++) {
+      learning.recordOverride({
+        projectRoot: tmpDir,
+        subType: 'editAfterWrite',
+        sessionId: 'only-one-session',
+        featureId: 'F-100',
+        targetFile: '/abs/path.cjs',
+      });
+    }
+    const { candidates } = pipeline.runHeuristicStage(tmpDir);
+    assert.ok(candidates.length >= 1, 'should produce a candidate from a single-session cluster');
+    const c = candidates[0];
+    // Pin: the epsilon floor (0.01) keeps score strictly positive even when log(1/1)=0.
+    assert.ok(c.score > 0, `expected score > 0 from epsilon floor, got ${c.score}`);
+    // TF=4, IDF floor=0.01 → score=0.04. Pin the magnitude so a regression on the floor surfaces.
+    assert.ok(c.score >= 0.04 - 1e-9 && c.score <= 0.04 + 1e-9,
+      `expected score ≈ 0.04 (TF=4 × IDF_floor=0.01), got ${c.score}`);
+  });
+});
+
+describe('AC-1 gap · universal-token corpus (every session contains the same token)', () => {
+  // @cap-todo(ac:F-071/AC-1) When every session contains the same token, IDF = log(N/N) = 0. The
+  //                          epsilon floor (0.01) keeps the token sortable, AND the frequency arm
+  //                          (count >= threshold) still selects it. Pin: the candidate IS produced.
+  it('universal token across 5 sessions still produces a candidate via frequency arm', () => {
+    // Same token in 5 distinct sessions, 1 record each → count = 5, IDF = log(5/5) = 0.
+    for (let s = 0; s < 5; s++) {
+      learning.recordOverride({
+        projectRoot: tmpDir,
+        subType: 'editAfterWrite',
+        sessionId: `session-${s}`,
+        featureId: 'F-100',
+        targetFile: '/abs/universal.cjs',
+      });
+    }
+    const { candidates } = pipeline.runHeuristicStage(tmpDir);
+    const c = candidates.find((x) => x.featureId === 'F-100');
+    assert.ok(c, 'frequency arm must surface the universal token (count=5 >= threshold)');
+    assert.equal(c.count, 5);
+    // Score floor still kicks in — TF in each session is 1, IDF floor=0.01 → max score = 0.01.
+    assert.ok(c.score > 0, 'epsilon floor keeps score strictly positive even when IDF=0');
+  });
+});
+
+describe('AC-1 gap · non-string featureId is dropped to null at record write, candidate.featureId reflects this', () => {
+  // @cap-todo(ac:F-071/AC-1) F-070's capId rejects non-strings → record.featureId = null. The
+  //                          pipeline groups null-featureId records under the 'unassigned' token.
+  //                          Pin: the cluster IS produced and candidate.featureId is null.
+  it('records with featureId=null produce a candidate with featureId=null (not dropped silently)', () => {
+    for (let i = 0; i < 4; i++) {
+      learning.recordOverride({
+        projectRoot: tmpDir,
+        subType: 'editAfterWrite',
+        sessionId: 's-null-fid',
+        featureId: 12345, // non-string — capId returns null
+        targetFile: '/abs/path.cjs',
+      });
+    }
+    const { candidates } = pipeline.runHeuristicStage(tmpDir);
+    assert.ok(candidates.length >= 1, 'null-featureId records must still cluster into a candidate');
+    const c = candidates[0];
+    assert.equal(c.featureId, null, 'dominantFeature must be null when records have no featureId');
+    assert.equal(c.count, 4);
+    // byFeature must contain a single null-keyed row.
+    assert.equal(c.byFeature.length, 1);
+    assert.equal(c.byFeature[0].featureId, null);
+    assert.equal(c.byFeature[0].count, 4);
+  });
+});
+
+describe('AC-1 gap · topContextHashes cap at 5', () => {
+  // @cap-todo(ac:F-071/AC-1) topContextHashes is sliced to length 5. A flood of >5 distinct hashes
+  //                          must not bypass the cap (would inflate briefing size and hand the LLM
+  //                          unbounded payload).
+  it('candidate with >5 distinct contextHashes still emits at most 5 entries', () => {
+    // Seed 8 distinct contextHashes for the same featureId+targetFile (so they collapse to one
+    // candidate via the tuple-token but expose 8 distinct hash values).
+    // contextHash is computed from contextDescription via hashContext, so vary that.
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 2; j++) {
+        learning.recordOverride({
+          projectRoot: tmpDir,
+          subType: 'editAfterWrite',
+          sessionId: 's-flood',
+          featureId: 'F-100',
+          targetFile: '/abs/path.cjs',
+          contextDescription: `unique-context-${i}`,
+        });
+      }
+    }
+    const { candidates } = pipeline.runHeuristicStage(tmpDir);
+    assert.ok(candidates.length >= 1);
+    const c = candidates[0];
+    assert.ok(c.topContextHashes.length <= 5,
+      `topContextHashes must cap at 5, got ${c.topContextHashes.length}`);
+  });
+});
+
+describe('AC-1 gap · byFeature sort stability on count ties', () => {
+  // @cap-todo(ac:F-071/AC-1) When two features tie on count, V8's Array.prototype.sort is stable
+  //                          (Node >= 12). Pin the contract — a regression to an unstable sort
+  //                          would make F-072 / F-073 ordering nondeterministic.
+  it('byFeature ordering is stable when two features tie on count', () => {
+    // Build a candidate where the same token has records from two different features with equal counts.
+    // The token includes featureId, so different features → different tokens → different candidates,
+    // not a single candidate with multiple features. To force a single candidate with byFeature ties,
+    // we need a candidate built from the underlying clustering — but the token construction guarantees
+    // one candidate per (signalType, featureId, contextKey). So byFeature.length is always 1 from the
+    // organic path. We hand-craft via buildBriefing to pin the SORT, since that's where ties matter
+    // for downstream consumers.
+    const evilCandidate = {
+      candidateId: 'deadbeef00000002',
+      signalType: 'override',
+      featureId: 'F-100',
+      count: 6,
+      score: 6,
+      // Insertion order: F-200 first, then F-100. Both count=3. Stable sort must keep F-200 first.
+      byFeature: [
+        { featureId: 'F-200', count: 3 },
+        { featureId: 'F-100', count: 3 },
+      ],
+      topContextHashes: [],
+      suggestion: { kind: 'L1', target: 'F-100/threshold', from: 3, to: 7, rationale: 'r' },
+    };
+    const result = pipeline.buildBriefing(evilCandidate, tmpDir);
+    assert.deepEqual(result.payload.byFeature, [
+      { featureId: 'F-200', count: 3 },
+      { featureId: 'F-100', count: 3 },
+    ], 'stable sort must preserve insertion order on count ties');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-2 — "similar" meaning + boundary probes
+// ---------------------------------------------------------------------------
+
+describe('AC-2 gap · "similar" means same (featureId, targetFile) tuple, not just signalType', () => {
+  // @cap-todo(ac:F-071/AC-2) The threshold ">=3 similar overrides" is interpreted via the
+  //                          tuple-token (signalType|featureId|contextKey). 3 overrides spread
+  //                          across 3 different featureIds DO NOT cluster — each is its own
+  //                          token with count=1, none meets threshold. Pin the contract.
+  it('3 overrides across 3 different featureIds do NOT cross threshold (no single similar cluster)', () => {
+    for (let i = 0; i < 3; i++) {
+      learning.recordOverride({
+        projectRoot: tmpDir,
+        subType: 'editAfterWrite',
+        sessionId: 's-split',
+        featureId: `F-10${i}`, // F-100, F-101, F-102 — three different features
+        targetFile: '/abs/path.cjs',
+      });
+    }
+    const { candidates } = pipeline.runHeuristicStage(tmpDir);
+    // Each token is count=1; checkThreshold rejects count<3 for overrides.
+    const promotable = candidates.filter((c) => pipeline.checkThreshold(c));
+    assert.equal(promotable.length, 0,
+      `3 overrides split across 3 features must NOT promote — got ${promotable.length} promotable`);
+  });
+
+  it('3 overrides split 2/1 across two featureIds — only the 2-cluster candidate exists, neither promotes', () => {
+    learning.recordOverride({
+      projectRoot: tmpDir, subType: 'editAfterWrite',
+      sessionId: 's-21', featureId: 'F-100', targetFile: '/abs/path.cjs',
+    });
+    learning.recordOverride({
+      projectRoot: tmpDir, subType: 'editAfterWrite',
+      sessionId: 's-21', featureId: 'F-100', targetFile: '/abs/path.cjs',
+    });
+    learning.recordOverride({
+      projectRoot: tmpDir, subType: 'editAfterWrite',
+      sessionId: 's-21', featureId: 'F-200', targetFile: '/abs/path.cjs',
+    });
+    const { candidates } = pipeline.runHeuristicStage(tmpDir);
+    // F-100 cluster has count=2, F-200 cluster has count=1. Neither meets threshold=3.
+    const promotable = candidates.filter((c) => pipeline.checkThreshold(c));
+    assert.equal(promotable.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-3 — Privacy probes on persisted candidate JSON + pattern JSON
+// ---------------------------------------------------------------------------
+
+function readAllCandidateBytes(root) {
+  const dir = path.join(root, '.cap', 'learning', 'candidates');
+  if (!fs.existsSync(dir)) return '';
+  let blob = '';
+  for (const f of fs.readdirSync(dir)) {
+    blob += fs.readFileSync(path.join(dir, f), 'utf8');
+  }
+  return blob;
+}
+
+describe('AC-3 gap · persisted candidate JSON files are byte-clean', () => {
+  // @cap-todo(ac:F-071/AC-3) Stage-1 persists .cap/learning/candidates/<id>.json. F-073 (review)
+  //                          will consume these. The same byte-level no-needle assertion as the
+  //                          briefing markdown applies — a future contributor adding a `description`
+  //                          or `rationale` field that echoes raw input would leak via this path.
+  it('SECRET_NEEDLE values injected into signal fields never appear in candidate JSONs', () => {
+    const secretFile = `/Users/${SECRET_NEEDLES[1]}/projects/${SECRET_NEEDLES[0]}.cjs`;
+    for (let i = 0; i < 5; i++) {
+      learning.recordOverride({
+        projectRoot: tmpDir,
+        subType: 'editAfterWrite',
+        sessionId: `s-${SECRET_NEEDLES[0]}`,
+        featureId: 'F-100',
+        targetFile: secretFile,
+      });
+    }
+    learning.recordRegret({
+      projectRoot: tmpDir,
+      sessionId: `s-${SECRET_NEEDLES[0]}`,
+      featureId: 'F-RX',
+      decisionId: `${SECRET_NEEDLES[2]}/D1`,
+    });
+    pipeline.runHeuristicStage(tmpDir); // persists by default
+
+    const raw = readAllCandidateBytes(tmpDir);
+    assert.ok(raw.length > 0, 'expected at least one candidate persisted');
+    assertNoNeedles(raw, 'persisted candidate JSON');
+    assert.ok(!raw.includes(secretFile),
+      'raw file path must not appear in any persisted candidate JSON');
+  });
+});
+
+describe('AC-3 gap · persisted pattern JSON files are byte-clean (degraded path)', () => {
+  // @cap-todo(ac:F-071/AC-3) The final P-NNN.json files are the most-consumed artifact (F-073 review,
+  //                          F-074 application). Byte-level no-needle assertion for the heuristic-
+  //                          source path is critical — degraded patterns ship without LLM review.
+  it('hand-crafted candidate carrying needles → markDegraded persists no needles in pattern JSON', () => {
+    // Force-feed a candidate with needles in the rationale field; degraded path will copy the
+    // suggestion object verbatim into the pattern record. This is the FOOTGUN — if a future change
+    // ever lets the rationale hold raw user text, it would leak via the degraded path.
+    const evilCandidate = {
+      candidateId: 'deadbeef00000003',
+      signalType: 'override',
+      featureId: 'F-100',
+      count: 4,
+      score: 4,
+      byFeature: [{ featureId: 'F-100', count: 4 }],
+      topContextHashes: [{ hash: 'abc123def4567890', count: 4 }],
+      // The rationale is structurally controlled by buildHeuristicSuggestion in the organic path,
+      // but a hostile caller could pass this in directly. Pin: even when the caller smuggles a
+      // needle here, it ends up in the pattern JSON — which is a KNOWN deficit.
+      suggestion: {
+        kind: 'L1',
+        target: 'F-100/threshold',
+        from: 3,
+        to: 5,
+        rationale: `Cluster description with ${SECRET_NEEDLES[5]} embedded.`,
+      },
+    };
+    const id = pipeline.allocatePatternId(tmpDir);
+    pipeline.markDegraded(tmpDir, id, evilCandidate);
+    const raw = readAllPatternBytes(tmpDir);
+    // PIN-DECISION (open): markDegraded copies candidate.suggestion verbatim into the pattern JSON.
+    // The organic heuristic path is safe because buildHeuristicSuggestion produces purely structural
+    // strings (count + featureId — no raw signal text). The only public producer of
+    // HeuristicCandidate is runHeuristicStage(), which is closed. So the practical privacy
+    // boundary holds. But there is NO defense-in-depth: a future contributor who exposes a new
+    // public producer of HeuristicCandidate, or who lets buildHeuristicSuggestion incorporate
+    // free-form input, would breach AC-3 via this path without any guard firing.
+    //
+    // This test pins the current contract: markDegraded TRUSTS candidate.suggestion. The user
+    // must confirm whether this trust is acceptable for ship, or whether markDegraded should
+    // re-build the suggestion from structurally-controlled fields only.
+    assert.ok(raw.includes(SECRET_NEEDLES[5]),
+      'pinned current contract: markDegraded copies candidate.suggestion verbatim. ' +
+      'If this assertion ever fails, defense-in-depth was added — update the pin.');
+    // The needles that probe the actual privacy boundary (signal fields, not the suggestion)
+    // must NEVER appear — those test that no path leaks input data.
+    for (const n of SECRET_NEEDLES.slice(0, 5)) {
+      assert.ok(!raw.includes(n),
+        `pattern JSON must not contain needle "${n}" — privacy boundary breach`);
+    }
+  });
+});
+
+describe('AC-3 gap · featureId regex is anchored — no smuggle via non-anchored match', () => {
+  // @cap-todo(ac:F-071/AC-3) The briefing's safeFeature gate uses /^F-\d{3,}$/. A non-anchored regex
+  //                          would let "F-001'); DROP TABLE patterns; --" pass because it starts
+  //                          with F-001. Pin: the anchor rejects ANY non-conforming string.
+  it('hand-crafted byFeature with smuggle attempt → featureId collapses to null in briefing', () => {
+    const evilCandidate = {
+      candidateId: 'deadbeef00000004',
+      signalType: 'override',
+      featureId: 'F-100',
+      count: 5,
+      score: 5,
+      byFeature: [
+        { featureId: 'F-100', count: 3 },
+        { featureId: "F-001'); DROP TABLE patterns; --", count: 2 },
+        { featureId: 'F-1', count: 1 }, // too few digits — must reject
+        { featureId: 'F-001 SECRET_NEEDLE_DELTA', count: 1 }, // trailing junk
+      ],
+      topContextHashes: [],
+      suggestion: { kind: 'L1', target: 'F-100/threshold', from: 3, to: 6, rationale: 'r' },
+    };
+    const result = pipeline.buildBriefing(evilCandidate, tmpDir);
+    const md = fs.readFileSync(result.briefingPath, 'utf8');
+
+    // Smuggle attempts must collapse to null in payload.
+    const smuggled = result.payload.byFeature.find(
+      (row) => typeof row.featureId === 'string' && row.featureId.includes('DROP'),
+    );
+    assert.equal(smuggled, undefined, 'smuggle attempt must not survive featureId regex gate');
+
+    // Markdown must not contain the smuggle bytes.
+    assert.ok(!md.includes('DROP TABLE'), 'briefing must not contain SQL-like smuggle');
+    assert.ok(!md.includes('SECRET_NEEDLE'), 'briefing must not contain trailing-junk smuggle');
+
+    // The legitimate F-100 row must still be present.
+    assert.ok(result.payload.byFeature.some((row) => row.featureId === 'F-100'));
+  });
+});
+
+describe('AC-3 gap · prototype-pollution probe via __proto__ in candidate', () => {
+  // @cap-todo(ac:F-071/AC-3) JSON.parse('{"__proto__":{...}}') sets the property on the parsed object
+  //                          (without polluting the global prototype in modern Node), but a hostile
+  //                          caller could still pass a hand-crafted object with __proto__ set via
+  //                          Object.defineProperty. The pipeline must not echo such fields.
+  it('candidate with __proto__-injected fields does not leak them into briefing', () => {
+    const evilProto = { polluted: SECRET_NEEDLES[0] };
+    const evilCandidate = {
+      candidateId: 'deadbeef00000005',
+      signalType: 'override',
+      featureId: 'F-100',
+      count: 4,
+      score: 4,
+      byFeature: [{ featureId: 'F-100', count: 4 }],
+      topContextHashes: [{ hash: 'abc123def4567890', count: 4 }],
+      suggestion: { kind: 'L1', target: 'F-100/threshold', from: 3, to: 5, rationale: 'r' },
+    };
+    Object.defineProperty(evilCandidate, '__proto__', {
+      value: evilProto,
+      enumerable: true,
+      configurable: true,
+    });
+
+    const result = pipeline.buildBriefing(evilCandidate, tmpDir);
+    assert.ok(result, 'buildBriefing must succeed even with __proto__ on the input');
+    const md = fs.readFileSync(result.briefingPath, 'utf8');
+    // The needle must not appear in the briefing.
+    assert.ok(!md.includes(SECRET_NEEDLES[0]),
+      '__proto__-injected fields must not leak into briefing');
+    // The payload must not carry the polluted property.
+    assert.equal(result.payload.polluted, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-4 — Orchestrator-style budget simulation
+// ---------------------------------------------------------------------------
+
+describe('AC-4 gap · orchestrator-style budget classification', () => {
+  // @cap-todo(ac:F-071/AC-4) The pipeline lib doesn't promote/defer itself — the orchestrator does.
+  //                          But we can simulate Step 4: pre-load N calls, run getSessionBudgetState,
+  //                          assert candidates split correctly into promote vs. defer.
+  it('budget=5, used=0, 5 promotable candidates → all 5 fit, 0 deferred', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.cap', 'learning', 'config.json'),
+      JSON.stringify({ llmBudgetPerSession: 5 }),
+    );
+    // 0 calls pre-loaded.
+    const state = pipeline.getSessionBudgetState(tmpDir, 's-fits');
+    assert.equal(state.budget, 5);
+    assert.equal(state.used, 0);
+    assert.equal(state.remaining, 5);
+    // 5 candidates → all 5 fit.
+    const candidates = Array.from({ length: 5 }, (_, i) => ({
+      signalType: 'override', count: 3, candidateId: `cand-${i}`,
+    }));
+    let promoted = 0;
+    let deferred = 0;
+    for (const c of candidates) {
+      if (promoted < state.remaining) promoted++;
+      else deferred++;
+      void c;
+    }
+    assert.equal(promoted, 5);
+    assert.equal(deferred, 0);
+  });
+
+  it('budget=0 → all candidates deferred', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.cap', 'learning', 'config.json'),
+      JSON.stringify({ llmBudgetPerSession: 0 }),
+    );
+    const state = pipeline.getSessionBudgetState(tmpDir, 's-zero');
+    assert.equal(state.remaining, 0);
+    const candidates = Array.from({ length: 4 }, (_, i) => ({
+      signalType: 'override', count: 3, candidateId: `cand-${i}`,
+    }));
+    let promoted = 0;
+    let deferred = 0;
+    for (const c of candidates) {
+      if (promoted < state.remaining) promoted++;
+      else deferred++;
+      void c;
+    }
+    assert.equal(promoted, 0);
+    assert.equal(deferred, 4);
+  });
+
+  it('budget=3, used=2, 4 candidates → 1 promoted, 3 deferred (partial fit)', () => {
+    // Default budget = 3. Pre-load 2 calls.
+    for (let i = 0; i < 2; i++) {
+      telemetry.recordLlmCall(tmpDir, {
+        model: 'm', promptTokens: 0, completionTokens: 0, durationMs: 0,
+        sessionId: 's-partial',
+        commandContext: { command: '/cap:learn', feature: 'F-071' },
+      });
+    }
+    const state = pipeline.getSessionBudgetState(tmpDir, 's-partial');
+    assert.equal(state.remaining, 1);
+
+    const candidates = Array.from({ length: 4 }, (_, i) => ({
+      signalType: 'override', count: 3, candidateId: `cand-${i}`,
+    }));
+    let promoted = 0;
+    let deferred = 0;
+    for (const c of candidates) {
+      if (promoted < state.remaining) promoted++;
+      else deferred++;
+      void c;
+    }
+    assert.equal(promoted, 1);
+    assert.equal(deferred, 3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-5 — markDegraded contract on duplicate persistence
+// ---------------------------------------------------------------------------
+
+describe('AC-5 gap · markDegraded duplicate-call and overwrite contract', () => {
+  // @cap-todo(ac:F-071/AC-5) Two calls to markDegraded for the same P-NNN: pin contract.
+  //                          Current behaviour: writeFileSync overwrites. PIN: latest call wins.
+  it('second markDegraded for the same P-NNN overwrites the first (pinned: latest wins)', () => {
+    const cand1 = {
+      candidateId: 'aaaa1111aaaa1111',
+      signalType: 'override',
+      featureId: 'F-100',
+      count: 3,
+      score: 3,
+      byFeature: [{ featureId: 'F-100', count: 3 }],
+      topContextHashes: [],
+      suggestion: { kind: 'L1', target: 'F-100/threshold', from: 3, to: 4, rationale: 'first' },
+    };
+    const cand2 = {
+      candidateId: 'bbbb2222bbbb2222',
+      signalType: 'override',
+      featureId: 'F-200',
+      count: 5,
+      score: 5,
+      byFeature: [{ featureId: 'F-200', count: 5 }],
+      topContextHashes: [],
+      suggestion: { kind: 'L1', target: 'F-200/threshold', from: 3, to: 6, rationale: 'second' },
+    };
+    const id = 'P-001';
+    assert.equal(pipeline.markDegraded(tmpDir, id, cand1), true);
+    assert.equal(pipeline.markDegraded(tmpDir, id, cand2), true);
+    const list = pipeline.listPatterns(tmpDir);
+    assert.equal(list.length, 1, 'still exactly one pattern record (overwrite, not append)');
+    // PIN: latest write wins — featureRef reflects cand2.
+    assert.equal(list[0].featureRef, 'F-200', 'second markDegraded must overwrite first');
+    assert.equal(list[0].suggestion.rationale, 'second');
+  });
+
+  it('markDegraded then recordPatternSuggestion for same P-NNN: latest write wins (pinned)', () => {
+    const cand = {
+      candidateId: 'cccc3333cccc3333',
+      signalType: 'override',
+      featureId: 'F-300',
+      count: 3,
+      score: 3,
+      byFeature: [{ featureId: 'F-300', count: 3 }],
+      topContextHashes: [],
+      suggestion: { kind: 'L1', target: 'F-300/threshold', from: 3, to: 4, rationale: 'r' },
+    };
+    const id = 'P-001';
+    pipeline.markDegraded(tmpDir, id, cand);
+    // Now upgrade to a non-degraded LLM record (typical Stage-2 finalisation).
+    const ok = pipeline.recordPatternSuggestion(tmpDir, {
+      id,
+      createdAt: '2026-05-05T00:00:00.000Z',
+      level: 'L2',
+      featureRef: 'F-300',
+      source: 'llm',
+      degraded: false,
+      confidence: 0.8,
+      suggestion: { kind: 'L2', target: 'F-300/rule', text: 'Use deterministic clustering' },
+      evidence: { candidateId: cand.candidateId, signalType: 'override', count: 3, topContextHashes: [] },
+    });
+    assert.equal(ok, true);
+    const list = pipeline.listPatterns(tmpDir);
+    assert.equal(list.length, 1);
+    // PIN: the LLM record overwrites the degraded record.
+    assert.equal(list[0].degraded, false);
+    assert.equal(list[0].source, 'llm');
+    assert.equal(list[0].level, 'L2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-6 — P-NNN allocation edge cases
+// ---------------------------------------------------------------------------
+
+describe('AC-6 gap · allocator edge cases', () => {
+  // @cap-todo(ac:F-071/AC-6) Allocator robustness against corrupt filenames + 999→1000 boundary.
+  it('malformed filename (P-XXX.json) does not crash allocatePatternId', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning', 'patterns'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'patterns', 'P-XXX.json'), '{}');
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'patterns', 'P-.json'), '{}');
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'patterns', 'P-001abc.json'), '{}');
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'patterns', 'P-002.json'), '{}');
+    // Valid id is P-002 → next = P-003.
+    assert.equal(pipeline.allocatePatternId(tmpDir), 'P-003');
+  });
+
+  it('same id in patterns/ and queue/ → not double-counted; allocator returns max+1 once', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning', 'patterns'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning', 'queue'), { recursive: true });
+    // P-005 exists in BOTH dirs (race condition: queue not cleaned up after promotion).
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'patterns', 'P-005.json'), '{}');
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'queue', 'P-005.md'), '---\nid: P-005\n---\n');
+    // Allocator must dedupe and return P-006, not P-007.
+    assert.equal(pipeline.allocatePatternId(tmpDir), 'P-006');
+  });
+
+  it('999 → 1000 boundary: padStart(3, "0") is a no-op for 4-digit ids; format remains P-NNNN', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning', 'patterns'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'patterns', 'P-999.json'), '{}');
+    const next = pipeline.allocatePatternId(tmpDir);
+    // PIN: padStart(3,'0') accepts strings already >= 3 chars unchanged → 'P-1000'.
+    assert.equal(next, 'P-1000', 'allocator must extend gracefully past 999 (padStart is a no-op when string is already >= 3 chars)');
+    // The new ID still matches the persistence regex /^P-\d+$/.
+    assert.match(next, /^P-\d+$/);
+    // recordPatternSuggestion must accept the 4-digit id.
+    const ok = pipeline.recordPatternSuggestion(tmpDir, {
+      id: next,
+      createdAt: '2026-05-05T00:00:00.000Z',
+      level: 'L1',
+      featureRef: 'F-100',
+      source: 'heuristic',
+      degraded: true,
+      confidence: 0.5,
+      suggestion: { kind: 'L1', target: 'F-100/threshold', from: 3, to: 5, rationale: 'r' },
+      evidence: { candidateId: 'x', signalType: 'override', count: 3, topContextHashes: [] },
+    });
+    assert.equal(ok, true, 'recordPatternSuggestion must accept 4-digit P-NNNN ids');
+    const list = pipeline.listPatterns(tmpDir);
+    assert.ok(list.find((p) => p.id === 'P-1000'), '4-digit ids must list correctly');
+  });
+
+  it('empty patterns dir AND empty queue dir → first ID is P-001', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning', 'patterns'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning', 'queue'), { recursive: true });
+    assert.equal(pipeline.allocatePatternId(tmpDir), 'P-001');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC-7 — Budget config edge cases (negative + string)
+// ---------------------------------------------------------------------------
+
+describe('AC-7 gap · config-value edge cases', () => {
+  // @cap-todo(ac:F-071/AC-7) readBudget contract: only `typeof === 'number' && >= 0` is honoured;
+  //                          everything else falls back to default.
+  it('llmBudgetPerSession: -1 → falls back to default 3 (negative number rejected)', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.cap', 'learning', 'config.json'),
+      JSON.stringify({ llmBudgetPerSession: -1 }),
+    );
+    const state = pipeline.getSessionBudgetState(tmpDir, 's');
+    // PIN: negative value is REJECTED by readBudget (>= 0 gate); falls back to default.
+    assert.equal(state.budget, telemetry.DEFAULT_LLM_BUDGET_PER_SESSION);
+    assert.equal(state.source, 'default');
+  });
+
+  it('llmBudgetPerSession: "3" (string) → falls back to default 3 (typeof !== number)', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, '.cap', 'learning', 'config.json'),
+      JSON.stringify({ llmBudgetPerSession: '3' }),
+    );
+    const state = pipeline.getSessionBudgetState(tmpDir, 's');
+    // PIN: string-typed value is REJECTED; readBudget requires typeof === 'number'.
+    assert.equal(state.budget, telemetry.DEFAULT_LLM_BUDGET_PER_SESSION);
+    assert.equal(state.source, 'default');
+  });
+});

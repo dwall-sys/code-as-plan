@@ -24,6 +24,18 @@
 //                 .cap/learning/patterns/P-*.json AND .cap/learning/queue/P-*.md (queue burns IDs too,
 //                 because a deferred candidate retains its assigned ID across sessions). No .next-id
 //                 file: that drifts when developers manually delete a pattern file or move things around.
+// @cap-decision(F-071/D7) "Similar overrides" means the same (signalType, featureId, contextKey) tuple
+//                 — i.e. SAME feature AND SAME target file (or decisionId for regret). 3 overrides spread
+//                 across 3 different featureIds do NOT trigger Stage 2; 3 edits across 3 different files
+//                 of the same feature do NOT trigger Stage 2. STRICT match.
+//                 Why: early-phase self-learning needs cluster cohesion — Stage 2's LLM can only distill
+//                 a meaningful L2/L3 pattern from semantically similar records. Loose (featureId-only)
+//                 matching would produce heterogeneous clusters that the LLM cannot synthesise honestly,
+//                 and would burn the 3-call budget on low-signal candidates. F-074 unlearn would then
+//                 auto-retract them, wasting the budget round-trip. F-072 fitness scoring + F-074 will
+//                 surface coverage gaps over time; if strict turns out to be too narrow, loose-mode is
+//                 an additive future change (a parallel candidate class), not a refactor.
+//                 Confirmed by user before ship — see PIN-2 in the F-071 test-audit report.
 // @cap-constraint Zero external dependencies: node:fs, node:path only. We re-use cap-telemetry.cjs for
 //                 hashContext (privacy primitive) and readBudget / getLlmUsage (budget primitive), and
 //                 cap-learning-signals.cjs#getSignals as the SOLE input source. We never read JSONL
