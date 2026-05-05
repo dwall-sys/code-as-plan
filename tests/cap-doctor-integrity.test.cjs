@@ -26,7 +26,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added (Token Telemetry observability).
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added (Trust-Mode Configuration Slot).
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added (Collect Learning Signals).
-    assert.equal(CAP_MODULE_MANIFEST.length, 76);
+    // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added (Heuristic + LLM-briefing pattern pipeline).
+    assert.equal(CAP_MODULE_MANIFEST.length, 77);
   });
 
   it('every entry ends with .cjs', () => {
@@ -57,7 +58,8 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added.
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added.
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added.
-    assert.equal(result.modulesTotal, 76);
+    // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
+    assert.equal(result.modulesTotal, 77);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -75,7 +77,8 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added.
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added.
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added.
-    assert.equal(result.modulesTotal, 76);
+    // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
+    assert.equal(result.modulesTotal, 77);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -201,7 +204,8 @@ describe('runDoctor includes module integrity', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added.
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added.
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added.
-    assert.equal(report.modulesTotal, 76);
+    // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
+    assert.equal(report.modulesTotal, 77);
   });
 
   it('report includes platformPaths', () => {
