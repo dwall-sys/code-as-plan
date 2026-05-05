@@ -1251,7 +1251,7 @@
 - `tests/cap-telemetry-adversarial.test.cjs`
 - `tests/cap-telemetry.test.cjs`
 
-### F-070: Collect Learning Signals [tested]
+### F-070: Collect Learning Signals [shipped]
 
 **Depends on:** F-061
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T15:10:29.947Z*
+*Last updated: 2026-05-05T17:27:23.704Z*
