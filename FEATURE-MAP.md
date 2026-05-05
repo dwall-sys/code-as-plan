@@ -1285,7 +1285,7 @@
 | AC-6 | tested | Jeder Pattern-Vorschlag muss als `P-NNN` (zero-padded, sequenziell, nie renumeriert) ID erhalten, mit Feature-Ref, Lern-Level (L1/L2/L3), Vorschlag-Payload und Confidence-Score. |
 | AC-7 | tested | Das Budget-Override (`llmBudgetPerSession`) aus `.cap/learning/config.json` muss respektiert werden und ersetzt den Default von 3. |
 
-### F-072: Compute Two-Layer Fitness Score [tested]
+### F-072: Compute Two-Layer Fitness Score [shipped]
 
 **Depends on:** F-070, F-071
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T19:40:17.498Z*
+*Last updated: 2026-05-05T20:11:30.251Z*
