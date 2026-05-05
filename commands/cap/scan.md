@@ -327,6 +327,24 @@ console.log(JSON.stringify({
 "
 ```
 
+## Step 5b: Record regret signals from @cap-decision regret:true tags (F-070/AC-3)
+
+<!-- @cap-todo(ac:F-070/AC-3) Decision-Regret collector runs from /cap:scan, not from a hook (regret detection is retrospective and would blow F-070/AC-5's hook-overhead budget if scanned per Stop). -->
+<!-- @cap-decision(F-070/D4) Trigger split — hooks fire override / memory-ref; tag-scanner enrichment fires regret. -->
+
+```bash
+node -e "
+const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
+const learning = require('./cap/bin/lib/cap-learning-signals.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+const tags = scanner.scanDirectory(process.cwd(), { projectRoot: process.cwd() });
+let sessionId = null;
+try { const s = session.loadSession(process.cwd()); sessionId = s && s.sessionId || null; } catch(_e){}
+const result = learning.recordRegretsFromScan(process.cwd(), tags, { sessionId });
+console.log(JSON.stringify(result));
+"
+```
+
 ## Step 6: Output results
 
 **Formatted report (default):**

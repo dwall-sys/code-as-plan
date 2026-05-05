@@ -45,6 +45,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-doctor.cjs',
   'cap-feature-map.cjs',
   'cap-impact-analysis.cjs',
+  // @cap-feature(feature:F-070) Collect Learning Signals — override/memory-ref/regret JSONL collectors + getSignals API.
+  'cap-learning-signals.cjs',
   'cap-loader.cjs',
   'cap-logger.cjs',
   'cap-memory-confidence.cjs',

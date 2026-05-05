@@ -1106,6 +1106,7 @@
 - `cap/bin/lib/cap-design.cjs`
 - `tests/cap-design.test.cjs`
 - `tests/cap-design-adversarial.test.cjs`
+- `cap/bin/lib/cap-design-families.cjs`
 
 ### F-063: Design-Feature Traceability (IDs + Tags + --scope) [shipped]
 
@@ -1132,6 +1133,7 @@
 - `commands/cap/trace.md`
 - `agents/cap-designer.md`
 - `tests/cap-design-traceability.test.cjs`
+- `tests/cap-design-traceability-adversarial.test.cjs`
 
 ### F-064: cap:design --review — Anti-Slop-Check [shipped]
 
@@ -1150,6 +1152,8 @@
 - `commands/cap/design.md`
 - `agents/cap-designer.md`
 - `tests/cap-design-review.test.cjs`
+- `cap/bin/lib/cap-design-families.cjs`
+- `tests/cap-design-review-adversarial.test.cjs`
 
 ### F-065: CAP-UI Core — Local Server + Static Export [shipped]
 
@@ -1166,6 +1170,8 @@
 - `cap/bin/lib/cap-ui.cjs`
 - `commands/cap/ui.md`
 - `tests/cap-ui.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-ui-adversarial.test.cjs`
 
 ### F-066: Tag Mind-Map Visualization [shipped]
 
@@ -1182,6 +1188,9 @@
 **Files:**
 - `cap/bin/lib/cap-ui.cjs`
 - `tests/cap-ui-mind-map.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-ui-mind-map.cjs`
+- `tests/cap-ui-mind-map-adversarial.test.cjs`
 
 ### F-067: Thread + Cluster Navigator [shipped]
 
@@ -1198,6 +1207,8 @@
 **Files:**
 - `cap/bin/lib/cap-ui.cjs`
 - `tests/cap-ui-thread-nav.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-ui-thread-nav.cjs`
 
 ### F-068: CAP-UI Visual Design Editor (DESIGN.md) [shipped]
 
@@ -1219,6 +1230,8 @@
 - `cap/bin/lib/cap-ui.cjs`
 - `commands/cap/ui.md`
 - `tests/cap-ui-design-editor.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-ui-design-editor-adversarial.test.cjs`
 
 ### F-061: Implement Token Telemetry [shipped]
 
@@ -1232,7 +1245,13 @@
 | AC-6 | tested | Bei deaktivierter Telemetrie (`.cap/config: telemetry.enabled=false`) müssen alle Writes no-op sein, ohne andere Commands zu brechen. |
 | AC-7 | tested | Die Telemetrie-Writes müssen zero-deps (nur `node:fs`, `node:path`, `node:crypto`) implementiert sein. |
 
-### F-070: Collect Learning Signals [planned]
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-telemetry.cjs`
+- `tests/cap-telemetry-adversarial.test.cjs`
+- `tests/cap-telemetry.test.cjs`
+
+### F-070: Collect Learning Signals [prototyped]
 
 **Depends on:** F-061
 
@@ -1245,6 +1264,12 @@
 | AC-5 | pending | Die Collectors müssen via Claude-Code-Hooks (PreToolUse / Stop) getriggert werden, ohne Command-Laufzeit messbar zu verlangsamen (< 50ms Overhead pro Hook). |
 | AC-6 | pending | Das System muss eine `getSignals(type, range)`-API exponieren, die von Pattern-Pipeline (F-071) und Fitness-Score (F-072) konsumiert wird. |
 | AC-7 | pending | Bei fehlenden Signal-Files müssen Collectors self-initialisieren (Lazy-Create), ohne Fehler zu werfen. |
+
+**Files:**
+- `cap/bin/lib/cap-learning-signals.cjs`
+- `hooks/cap-learning-hook.js`
+- `tests/cap-learning-signals-adversarial.test.cjs`
+- `tests/cap-learning-signals.test.cjs`
 
 ### F-071: Extract Patterns via Heuristics and LLM [planned]
 
@@ -1314,6 +1339,13 @@
 | AC-6 | tested | Das System muss einen Helper `getTrustMode()` exponieren, den alle Learn-Features konsumieren, statt Mode selbst zu lesen. |
 | AC-7 | tested | Ein zukünftiger Wechsel auf B/C darf ausschließlich den Helper-Return-Wert ändern, ohne Feature-Code zu patchen (Open-Closed). |
 
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-session.cjs`
+- `cap/bin/lib/cap-trust-mode.cjs`
+- `tests/cap-trust-mode-adversarial.test.cjs`
+- `tests/cap-trust-mode.test.cjs`
+
 ## Legend
 
 | State | Meaning |
@@ -1324,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-04-23T13:52:23.752Z*
+*Last updated: 2026-05-05T14:18:58.109Z*
