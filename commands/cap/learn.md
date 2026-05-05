@@ -215,6 +215,28 @@ pipeline.markDegraded(process.cwd(), id, candidate);
 
 Skip degraded persistence for candidates that are deferred to a future session — they're already represented by their queue entry.
 
+## Step 6.5: Refresh fitness scores (F-072 courtesy pass)
+
+<!-- @cap-decision(F-072/D7) /cap:learn auto-refreshes fitness as a courtesy. Additive step (Step 6.5) — does NOT refactor Steps 0–6/7. F-073 / F-074 will read these records, so keeping them fresh after every learn invocation reduces "stale fitness" foot-guns. Cost is bounded by the F-072 perf probe (<500ms for 100 patterns × 1000 signals). -->
+
+Run a fitness pass over every persisted pattern AND auto-mark expired ones (no usage over 20 sessions). The pass is idempotent: re-running yields the same per-pattern record (AC-7 determinism).
+
+```bash
+node -e "
+const fitness = require('./cap/bin/lib/cap-fitness-score.cjs');
+const root = process.cwd();
+const result = fitness.runFitnessPass(root);
+console.log(JSON.stringify({
+  recorded: result.recorded.length,
+  expired: result.expired.length,
+  expiredIds: result.expired,
+  errors: result.errors,
+}, null, 2));
+"
+```
+
+Surface in the Step 6 final report as `Fitness: {recorded} refreshed, {expired} marked expired`. Errors here are non-fatal — log them but do not fail the run; the pattern pipeline already wrote its outputs and the user shouldn't lose the run on a fitness-side hiccup.
+
 ## Step 6: Final report
 
 ```

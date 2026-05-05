@@ -1285,19 +1285,19 @@
 | AC-6 | tested | Jeder Pattern-Vorschlag muss als `P-NNN` (zero-padded, sequenziell, nie renumeriert) ID erhalten, mit Feature-Ref, Lern-Level (L1/L2/L3), Vorschlag-Payload und Confidence-Score. |
 | AC-7 | tested | Das Budget-Override (`llmBudgetPerSession`) aus `.cap/learning/config.json` muss respektiert werden und ersetzt den Default von 3. |
 
-### F-072: Compute Two-Layer Fitness Score [planned]
+### F-072: Compute Two-Layer Fitness Score [tested]
 
 **Depends on:** F-070, F-071
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Das System muss einen Kurzfrist-Score (Override-Rate der letzten Session) pro Pattern berechnen und in `.cap/learning/fitness/<P-NNN>.json` persistieren. |
-| AC-2 | pending | Das System muss einen Langfrist-Score `(Memory-Ref × 1 + Decision-Regret × 2) / norm` berechnen, sobald n ≥ 5 Sessions mit dem Pattern aktiv waren. |
-| AC-3 | pending | Die Fitness-History muss Rolling-30-Sessions und Lifetime-Aggregate gleichzeitig persistieren und per `getFitness(P-ID)` abrufbar sein. |
-| AC-4 | pending | Patterns ohne Nutzung über 20 Sessions müssen automatisch als `expired:true` markiert werden. |
-| AC-5 | pending | Das Datenmodell für den Langfrist-Score muss ab Tag 1 geschrieben werden, auch wenn die Anzeige erst ab n ≥ 5 erfolgt. |
-| AC-6 | pending | Das System muss einen Fitness-Snapshot zum Zeitpunkt jedes Patch-Applies erzeugen, damit Auto-Rückzug (F-074) Vergleichswerte hat. |
-| AC-7 | pending | Die Score-Berechnung muss zero-deps und deterministisch sein (gleiche Inputs → gleicher Output). |
+| AC-1 | tested | Das System muss einen Kurzfrist-Score (Override-Rate der letzten Session) pro Pattern berechnen und in `.cap/learning/fitness/<P-NNN>.json` persistieren. |
+| AC-2 | tested | Das System muss einen Langfrist-Score `(Memory-Ref × 1 + Decision-Regret × 2) / norm` berechnen, sobald n ≥ 5 Sessions mit dem Pattern aktiv waren. |
+| AC-3 | tested | Die Fitness-History muss Rolling-30-Sessions und Lifetime-Aggregate gleichzeitig persistieren und per `getFitness(P-ID)` abrufbar sein. |
+| AC-4 | tested | Patterns ohne Nutzung über 20 Sessions müssen automatisch als `expired:true` markiert werden. |
+| AC-5 | tested | Das Datenmodell für den Langfrist-Score muss ab Tag 1 geschrieben werden, auch wenn die Anzeige erst ab n ≥ 5 erfolgt. |
+| AC-6 | tested | Das System muss einen Fitness-Snapshot zum Zeitpunkt jedes Patch-Applies erzeugen, damit Auto-Rückzug (F-074) Vergleichswerte hat. |
+| AC-7 | tested | Die Score-Berechnung muss zero-deps und deterministisch sein (gleiche Inputs → gleicher Output). |
 
 ### F-074: Enable Pattern Unlearn and Auto-Retract [planned]
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T19:09:32.624Z*
+*Last updated: 2026-05-05T19:40:17.498Z*
