@@ -44,6 +44,9 @@ const CAP_MODULE_MANIFEST = [
   'cap-divergence-detector.cjs',
   'cap-doctor.cjs',
   'cap-feature-map.cjs',
+  // @cap-feature(feature:F-072) Compute Two-Layer Fitness Score — pure-compute scorer driving F-074 unlearn.
+  // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added (Two-Layer Fitness Score for Pattern Unlearn).
+  'cap-fitness-score.cjs',
   'cap-impact-analysis.cjs',
   // @cap-feature(feature:F-070) Collect Learning Signals — override/memory-ref/regret JSONL collectors + getSignals API.
   'cap-learning-signals.cjs',
