@@ -60,6 +60,9 @@ const CAP_MODULE_MANIFEST = [
   'cap-memory-prune.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',
+  // @cap-feature(feature:F-074) Enable Pattern Unlearn and Auto-Retract — apply audit + reverse patch + retract list.
+  // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added (F-074 closes the V5 self-learning loop).
+  'cap-pattern-apply.cjs',
   // @cap-feature(feature:F-071) Pattern Pipeline — heuristic Stage 1 + LLM-briefing Stage 2.
   // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
   'cap-pattern-pipeline.cjs',

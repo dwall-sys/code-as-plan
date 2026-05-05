@@ -28,7 +28,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added (Collect Learning Signals).
     // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added (Heuristic + LLM-briefing pattern pipeline).
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added (Two-Layer Fitness Score for Pattern Unlearn).
-    assert.equal(CAP_MODULE_MANIFEST.length, 78);
+    // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added (Enable Pattern Unlearn and Auto-Retract).
+    assert.equal(CAP_MODULE_MANIFEST.length, 79);
   });
 
   it('every entry ends with .cjs', () => {
@@ -61,7 +62,8 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added.
     // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added.
-    assert.equal(result.modulesTotal, 78);
+    // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added.
+    assert.equal(result.modulesTotal, 79);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -81,7 +83,8 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added.
     // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added.
-    assert.equal(result.modulesTotal, 78);
+    // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added.
+    assert.equal(result.modulesTotal, 79);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -209,7 +212,8 @@ describe('runDoctor includes module integrity', () => {
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added.
     // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added.
-    assert.equal(report.modulesTotal, 78);
+    // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added.
+    assert.equal(report.modulesTotal, 79);
   });
 
   it('report includes platformPaths', () => {
