@@ -270,9 +270,15 @@ function recordLlmCall(projectRoot, input) {
 
   // @cap-risk(F-061/AC-5) Length-cap the model string so an attacker cannot use it
   //                       as a prompt-smuggle channel. 200 chars matches the commandContext cap.
-  const MODEL_MAX = 200;
+  const ID_MAX = 200;
   const rawModel = typeof safeInput.model === 'string' ? safeInput.model : 'unknown';
-  const model = rawModel.slice(0, MODEL_MAX);
+  const model = rawModel.slice(0, ID_MAX);
+  // @cap-risk(F-061/AC-5) sessionId and featureId become part of the trust boundary in F-070
+  //                       (external user events). Apply the same type-check + length-cap as `model`
+  //                       so a non-string or huge payload cannot reach disk via these fields.
+  const capId = (v) => (typeof v === 'string' && v.length > 0 ? v.slice(0, ID_MAX) : null);
+  const sessionId = capId(safeInput.sessionId);
+  const featureId = capId(safeInput.featureId);
 
   /** @type {LlmCallRecord} */
   const record = {
@@ -283,8 +289,8 @@ function recordLlmCall(projectRoot, input) {
     completionTokens,
     totalTokens,
     durationMs: toFiniteNonNeg(safeInput.durationMs),
-    sessionId: safeInput.sessionId || null,
-    featureId: safeInput.featureId || null,
+    sessionId,
+    featureId,
     commandContext: sanitizeCommandContext(safeInput.commandContext),
   };
   if (typeof safeInput.contextHash === 'string' && safeInput.contextHash.length > 0) {

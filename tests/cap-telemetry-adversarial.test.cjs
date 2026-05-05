@@ -152,6 +152,59 @@ describe('AC-5 adversarial · direct smuggle attempts at top-level input', () =>
       `length cap bypassed: ${occurrences} needle copies persisted`
     );
   });
+
+  // @cap-todo(ac:F-061/AC-5) sessionId is length-capped so it cannot be used as a smuggle channel
+  it('length-caps sessionId so a huge payload cannot pass through', () => {
+    const huge = 'SECRET_LONG_THETA'.repeat(2000);
+    telemetry.recordLlmCall(tmp, {
+      model: 'm', promptTokens: 1, completionTokens: 1, durationMs: 1,
+      sessionId: huge, featureId: 'F-061',
+    });
+    const raw = readJsonl(tmp);
+    const parsed = JSON.parse(raw.trim());
+    assert.ok(
+      parsed.sessionId.length <= 200,
+      `sessionId must be length-capped to <= 200 chars, got ${parsed.sessionId.length}`
+    );
+    const occurrences = (raw.match(/SECRET_LONG_THETA/g) || []).length;
+    assert.ok(
+      occurrences <= 12,
+      `sessionId length cap bypassed: ${occurrences} needle copies persisted`
+    );
+  });
+
+  // @cap-todo(ac:F-061/AC-5) featureId is length-capped and non-string values collapse to null
+  it('length-caps featureId and rejects non-string types', () => {
+    const huge = 'SECRET_LONG_THETA'.repeat(2000);
+    telemetry.recordLlmCall(tmp, {
+      model: 'm', promptTokens: 1, completionTokens: 1, durationMs: 1,
+      sessionId: 's', featureId: huge,
+    });
+    const rawHuge = readJsonl(tmp);
+    const parsedHuge = JSON.parse(rawHuge.trim());
+    assert.ok(
+      parsedHuge.featureId.length <= 200,
+      `featureId must be length-capped to <= 200 chars, got ${parsedHuge.featureId.length}`
+    );
+
+    // Non-string types (object pretending to be an id) must collapse to null,
+    // not be JSON-stringified into the record.
+    const tmp2 = mkTmp('cap-tel-adv-');
+    try {
+      telemetry.recordLlmCall(tmp2, {
+        model: 'm', promptTokens: 1, completionTokens: 1, durationMs: 1,
+        sessionId: { toString: () => 'SECRET_NEEDLE_xyz' },
+        featureId: ['SECRET_NEEDLE_xyz'],
+      });
+      const raw2 = readJsonl(tmp2);
+      assertNoNeedles(raw2, 'non-string id smuggle');
+      const parsed2 = JSON.parse(raw2.trim());
+      assert.equal(parsed2.sessionId, null, 'non-string sessionId must collapse to null');
+      assert.equal(parsed2.featureId, null, 'non-string featureId must collapse to null');
+    } finally {
+      fs.rmSync(tmp2, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

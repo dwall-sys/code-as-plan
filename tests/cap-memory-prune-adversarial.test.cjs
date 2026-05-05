@@ -746,20 +746,28 @@ describe('/cap:memory prune subcommand integration (AC-1)', () => {
     assert.ok(md.includes('--apply'), '--apply flag not documented');
   });
 
+  // Inline script for spawnSync. Reads --now=<ISO> and --apply from argv so the
+  // subprocess uses the test's frozen `now` instead of the wall clock — otherwise
+  // the archive filename drifts with the calendar month and the test goes red on
+  // the first of each month.
+  const PRUNE_SCRIPT = `
+    const prune = require('${path.resolve(__dirname, '..', 'cap', 'bin', 'lib', 'cap-memory-prune.cjs').replace(/\\/g, '\\\\')}');
+    const args = process.argv.slice(1);
+    const applyFlag = args.includes('--apply');
+    const nowArg = args.find(a => a.startsWith('--now='));
+    const now = nowArg ? new Date(nowArg.slice('--now='.length)) : new Date();
+    const result = prune.prune(process.cwd(), { apply: applyFlag, now });
+    console.log(prune.formatReport(result));
+    process.exit(result.errors && result.errors.length > 0 ? 1 : 0);
+  `;
+
   it('spawned node -e with the prune script (no --apply): dry-run report, no files written, exit 0', () => {
     // Seed memory so dry-run has something to count.
     writeMemoryDirectory(tmpDir, [
       makeEntry({ content: 'cli-dry-run-target', metadata: { confidence: 0.1, last_seen: daysAgo(now, 400).toISOString() } }),
     ]);
 
-    const script = `
-      const prune = require('${path.resolve(__dirname, '..', 'cap', 'bin', 'lib', 'cap-memory-prune.cjs').replace(/\\/g, '\\\\')}');
-      const applyFlag = process.argv.slice(1).includes('--apply');
-      const result = prune.prune(process.cwd(), { apply: applyFlag });
-      console.log(prune.formatReport(result));
-      process.exit(result.errors && result.errors.length > 0 ? 1 : 0);
-    `;
-    const r = spawnSync(process.execPath, ['-e', script, '--'], {
+    const r = spawnSync(process.execPath, ['-e', PRUNE_SCRIPT, '--', `--now=${now.toISOString()}`], {
       cwd: tmpDir,
       encoding: 'utf8',
     });
@@ -773,14 +781,7 @@ describe('/cap:memory prune subcommand integration (AC-1)', () => {
     writeMemoryDirectory(tmpDir, [
       makeEntry({ content: 'cli-apply-target', metadata: { confidence: 0.1, last_seen: daysAgo(now, 400).toISOString() } }),
     ]);
-    const script = `
-      const prune = require('${path.resolve(__dirname, '..', 'cap', 'bin', 'lib', 'cap-memory-prune.cjs').replace(/\\/g, '\\\\')}');
-      const applyFlag = process.argv.slice(1).includes('--apply');
-      const result = prune.prune(process.cwd(), { apply: applyFlag });
-      console.log(prune.formatReport(result));
-      process.exit(result.errors && result.errors.length > 0 ? 1 : 0);
-    `;
-    const r = spawnSync(process.execPath, ['-e', script, '--', '--apply'], {
+    const r = spawnSync(process.execPath, ['-e', PRUNE_SCRIPT, '--', '--apply', `--now=${now.toISOString()}`], {
       cwd: tmpDir,
       encoding: 'utf8',
     });

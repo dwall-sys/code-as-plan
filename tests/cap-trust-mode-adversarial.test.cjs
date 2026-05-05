@@ -269,6 +269,23 @@ describe('F-075/AC-7 adversarial — VALID_MODES is tamper-proof', () => {
     assert.ok(set.has('B'));
     assert.ok(set.has('C'));
   });
+
+  // Documentation tests for the eventual B/C activation. They are intentionally
+  // skipped — the MVP hard-caps to A, so asserting these now would fail. They
+  // exist to pin the *expected* shape so a future contributor flipping the cap
+  // sees the contract before they break it.
+  it.skip('when B is activated, getTrustMode({trustMode:"B"}) returns {mode:"B", source:"config"} without degraded', () => {
+    writeConfig(tmpRoot, { trustMode: 'B' });
+    const r = trustMode.getTrustMode(tmpRoot);
+    assert.strictEqual(r.mode, 'B');
+    assert.strictEqual(r.source, 'config');
+    assert.strictEqual(r.degraded, undefined);
+  });
+
+  it.skip('when C is activated, requireApproval returns false', () => {
+    writeConfig(tmpRoot, { trustMode: 'C' });
+    assert.strictEqual(trustMode.requireApproval(tmpRoot), false);
+  });
 });
 
 // =============================================================================
