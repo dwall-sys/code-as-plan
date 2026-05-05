@@ -1,7 +1,7 @@
 ---
 name: cap:learn
-description: "Extract patterns from F-070 learning signals — Stage 1 deterministic heuristics + Stage 2 LLM-briefing pattern (counts + hashes only). Promotes candidates that hit the threshold (>=3 overrides OR >=1 regret) within the per-session LLM budget."
-argument-hint: "[--features F-NNN] [--dry-run] [--budget N] [--session SID]"
+description: "Extract patterns from F-070 learning signals — Stage 1 deterministic heuristics + Stage 2 LLM-briefing pattern (counts + hashes only). Promotes candidates that hit the threshold (>=3 overrides OR >=1 regret) within the per-session LLM budget. Subcommands: --unlearn P-NNN reverses an applied pattern; --retract-check runs the 5-session post-apply check."
+argument-hint: "[--features F-NNN] [--dry-run] [--budget N] [--session SID] [--unlearn P-NNN] [--retract-check]"
 allowed-tools:
   - Read
   - Write
@@ -273,3 +273,61 @@ session.updateSession(process.cwd(), {
 ```
 
 </process>
+
+## Subcommand: `/cap:learn --unlearn P-NNN`
+
+<!-- @cap-feature(feature:F-074) Pattern Unlearn — reverses an applied pattern, writes the unlearn audit, creates a `learn: unlearn P-NNN` commit. -->
+<!-- @cap-todo(ac:F-074/AC-3) `/cap:learn unlearn <P-ID>` generates a reverse patch, applies it, and commits as `learn: unlearn P-NNN`. -->
+<!-- @cap-todo(ac:F-074/AC-4) Writes the unlearn audit at .cap/learning/unlearned/P-NNN.json with reason + ts + commitHash. -->
+<!-- @cap-todo(ac:F-074/AC-7) Idempotent — second invocation on already-unlearned P-NNN is a no-op. -->
+
+When `$ARGUMENTS` contains `--unlearn P-NNN`, skip Steps 1–7 above and run this subcommand instead. The unlearn path is independent of Stage 1 / Stage 2 / fitness — it only reverses an already-applied pattern.
+
+**Steps:**
+
+1. Parse the P-NNN id from `--unlearn P-NNN`. Validate it matches `^P-\d+$`. If not, abort with `invalid pattern id`.
+2. Call `unlearnPattern`:
+
+```bash
+node -e "
+const apply = require('./cap/bin/lib/cap-pattern-apply.cjs');
+const id = process.argv[1];
+const result = apply.unlearnPattern(process.cwd(), id, { reason: 'manual' });
+console.log(JSON.stringify(result, null, 2));
+" '<P_NNN>'
+```
+
+3. Report the outcome:
+   - `{ unlearned: true, commitHash, audit }` → log: `Unlearned P-NNN. Commit: <commitHash>. Audit: .cap/learning/unlearned/P-NNN.json`
+   - `{ unlearned: false, reason: 'already-unlearned', priorRecord }` → log: `P-NNN was already unlearned at <priorRecord.unlearnedAt>. No action.` (Idempotent — AC-7.)
+   - `{ unlearned: false, reason: 'l3-drift', commitHashToRevert }` → log: `Refusing to unlearn P-NNN — the L3 target file has drifted since apply. Resolve manually with: git revert <commitHashToRevert>`. Surface this prominently — the user must intervene.
+   - `{ unlearned: false, reason: 'apply-not-found' }` → log: `P-NNN was never applied. Nothing to unlearn.`
+   - `{ unlearned: false, reason: 'pending-hook-fail', error }` → log: `Pre-commit hook failed: <error>. The reverse patch is staged. Resolve and retry.`
+4. Update session (same as Step 7 above), but with `lastCommand: '/cap:learn --unlearn'`.
+
+**Privacy contract — no signal data flows through this path.** Unlearn is pure git + file ops; F-074 never reads override / memory-ref / regret JSONLs during unlearn.
+
+## Subcommand: `/cap:learn --retract-check`
+
+<!-- @cap-feature(feature:F-074) 5-session post-apply check — auto-flags patches whose Layer-1 override-rate worsens. -->
+<!-- @cap-todo(ac:F-074/AC-5) For each applied pattern: when post-apply session count crosses 5, compare current Layer-1 to snapshot. If worse, append to retract-recommendations.jsonl. -->
+<!-- @cap-todo(ac:F-074/AC-6) F-073 (review board, future) reads listRetractRecommended() and labels patterns "Rückzug empfohlen". -->
+
+When `$ARGUMENTS` contains `--retract-check`, run the 5-session post-apply check:
+
+```bash
+node -e "
+const apply = require('./cap/bin/lib/cap-pattern-apply.cjs');
+const result = apply.runRetractCheck(process.cwd());
+console.log(JSON.stringify({
+  checked: result.checked.length,
+  recommended: result.recommended,
+  errors: result.errors,
+}, null, 2));
+"
+```
+
+Surface in a final report:
+- `Retract check: {checked} applied patterns scrutinised, {recommended.length} flagged for retraction.`
+- For each recommended id: `  - <P-NNN> — Layer-1 worse than snapshot (see .cap/learning/retract-recommendations.jsonl).`
+- Errors are non-fatal — log them but exit 0.

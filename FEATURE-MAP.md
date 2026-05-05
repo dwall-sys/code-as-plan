@@ -1299,19 +1299,19 @@
 | AC-6 | tested | Das System muss einen Fitness-Snapshot zum Zeitpunkt jedes Patch-Applies erzeugen, damit Auto-Rückzug (F-074) Vergleichswerte hat. |
 | AC-7 | tested | Die Score-Berechnung muss zero-deps und deterministisch sein (gleiche Inputs → gleicher Output). |
 
-### F-074: Enable Pattern Unlearn and Auto-Retract [planned]
+### F-074: Enable Pattern Unlearn and Auto-Retract [tested]
 
 **Depends on:** F-072
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Das System muss bei jedem Pattern-Apply einen Audit-Record in `.cap/learning/applied/P-NNN.json` (before/after-Diff, Ziel-Dateien, Feature-Ref, Fitness-Snapshot) persistieren. |
-| AC-2 | pending | Das System muss jedes Apply als Git-Commit `learn: apply P-NNN (F-XXX)` committen, sodass der Patch per Commit-Hash rückverfolgbar ist. |
-| AC-3 | pending | Der Command `/cap:learn unlearn <P-ID>` muss einen Reverse-Patch erzeugen, ihn anwenden und als Git-Commit `learn: unlearn P-NNN` persistieren. |
-| AC-4 | pending | Das System muss einen Audit-Eintrag in `.cap/learning/unlearned/P-NNN.json` mit Grund (manual | auto-retract) und Zeitstempel schreiben. |
-| AC-5 | pending | Das System muss 5 Sessions nach jedem Apply prüfen, ob die Override-Rate schlechter als der Pre-Apply-Fitness-Snapshot ist, und dann den Patch in der Retract-Liste markieren. |
-| AC-6 | pending | Ist ein Patch für Rückzug markiert, muss das Learn-Review-Board (F-073) ihn mit Label „Rückzug empfohlen" und One-Click-Unlearn-Option anzeigen. |
-| AC-7 | pending | Unlearn muss idempotent sein: zweifacher Aufruf auf bereits zurückgenommenen P-ID darf keinen doppelten Commit erzeugen. |
+| AC-1 | tested | Das System muss bei jedem Pattern-Apply einen Audit-Record in `.cap/learning/applied/P-NNN.json` (before/after-Diff, Ziel-Dateien, Feature-Ref, Fitness-Snapshot) persistieren. |
+| AC-2 | tested | Das System muss jedes Apply als Git-Commit `learn: apply P-NNN (F-XXX)` committen, sodass der Patch per Commit-Hash rückverfolgbar ist. |
+| AC-3 | tested | Der Command `/cap:learn unlearn <P-ID>` muss einen Reverse-Patch erzeugen, ihn anwenden und als Git-Commit `learn: unlearn P-NNN` persistieren. |
+| AC-4 | tested | Das System muss einen Audit-Eintrag in `.cap/learning/unlearned/P-NNN.json` mit Grund (manual | auto-retract) und Zeitstempel schreiben. |
+| AC-5 | tested | Das System muss 5 Sessions nach jedem Apply prüfen, ob die Override-Rate schlechter als der Pre-Apply-Fitness-Snapshot ist, und dann den Patch in der Retract-Liste markieren. |
+| AC-6 | tested | Ist ein Patch für Rückzug markiert, muss das Learn-Review-Board (F-073) ihn mit Label „Rückzug empfohlen" und One-Click-Unlearn-Option anzeigen. |
+| AC-7 | tested | Unlearn muss idempotent sein: zweifacher Aufruf auf bereits zurückgenommenen P-ID darf keinen doppelten Commit erzeugen. |
 
 ### F-073: Review Patterns via Learn Command [planned]
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T20:11:30.251Z*
+*Last updated: 2026-05-05T22:20:37.931Z*
