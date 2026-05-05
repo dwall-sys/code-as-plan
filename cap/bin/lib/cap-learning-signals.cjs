@@ -6,9 +6,16 @@
 //                 append, O(n) streaming read. Reading is reserved for the cold path (getSignals), never the
 //                 hot path (recordX). Steals the writeJsonlLine pattern from cap-telemetry.cjs#writeJsonlLine.
 // @cap-decision(F-070/D2) Hot-path collectors (recordOverride / recordMemoryRef) are SYNCHRONOUS and never
-//                 read existing data. AC-5 caps hook overhead at <50ms; the only way to keep that bound under
-//                 a growing JSONL is to never read it during a hook. Regret detection is the deliberate
-//                 exception (AC-3) and runs from /cap:scan, where reads are fine because the scan path is cold.
+//                 read **signal** JSONLs. AC-5 caps hook overhead at <50ms; the only way to keep that bound
+//                 under a growing signal volume is to never read overrides.jsonl / memory-refs.jsonl during a
+//                 hook. Regret detection is the deliberate exception (AC-3) and runs from /cap:scan.
+//                 The state ledger (written-files.jsonl) is a separate concern from signals: hooks DO read
+//                 it, but the file stays per-session-small (<100 entries typical) so the read is bounded.
+// @cap-decision(F-070/D11) `subType` (not `kind`) discriminates override flavours. F-061 uses `kind` for a
+//                 single discriminator; F-070 needs TWO nested discriminators (`signalType` for the broad
+//                 type — override / memory-ref / regret — and `subType` for override-internal flavours
+//                 — editAfterWrite / rejectApproval). `kind=override` would be redundant to signalType.
+//                 F-071/F-072 readers will see both discriminators and route accordingly.
 // @cap-decision(F-070/D3) Record schema is fixed: { id, ts, sessionId, featureId, signalType, subType?,
 //                 contextHash, ...typeSpecific }. AC-4 forbids raw text on disk — every free-text field must
 //                 be hashed via cap-telemetry.cjs#hashContext (re-used, not duplicated). New keys added in
@@ -48,11 +55,21 @@ const telemetry = require('./cap-telemetry.cjs');
 const CAP_DIR = '.cap';
 const LEARNING_DIR = 'learning';
 const SIGNALS_DIR = 'signals';
+const STATE_DIR = 'state';
 
 // File names per signal type. Kept as constants so tests and consumers (F-071) reference one place.
 const OVERRIDES_FILE = 'overrides.jsonl';
 const MEMORY_REFS_FILE = 'memory-refs.jsonl';
 const REGRETS_FILE = 'regrets.jsonl';
+
+// Per-session ledger: which files the agent wrote in this session. Read by the editAfterWrite
+// hook to determine whether an Edit follows a Write of the same file. Hooks fire as fresh
+// subprocesses, so an in-memory Set cannot persist across events — the ledger is the bridge.
+const WRITTEN_FILES_LEDGER = 'written-files.jsonl';
+
+// Cap on the persisted file path so a hostile or accidental long path doesn't bloat the ledger.
+// Real paths in this codebase are <500 chars; 1024 is a generous cap.
+const PATH_MAX = 1024;
 
 // Length cap for any string field that lands on disk. Matches cap-telemetry.cjs#ID_MAX so a hostile
 // caller can't use sessionId / featureId as a smuggle channel even if the privacy gate above slips.
@@ -188,6 +205,88 @@ function signalsFilePath(projectRoot, type) {
   const file = typeToFile(type);
   if (!file) return null;
   return path.join(projectRoot, CAP_DIR, LEARNING_DIR, SIGNALS_DIR, file);
+}
+
+/**
+ * Resolve the absolute path for the per-session written-files ledger.
+ * @param {string} projectRoot
+ * @returns {string}
+ */
+function writtenFilesLedgerPath(projectRoot) {
+  return path.join(projectRoot, CAP_DIR, LEARNING_DIR, STATE_DIR, WRITTEN_FILES_LEDGER);
+}
+
+// -----------------------------------------------------------------------------
+// State ledger — bridges Write→Edit events across subprocess hook invocations.
+// -----------------------------------------------------------------------------
+
+// @cap-todo(ac:F-070/AC-1) Persistent ledger replaces the broken in-memory Set in
+//                          hooks/cap-learning-hook.js. Subprocess hooks cannot share a Set;
+//                          they share the file system. Append on Write, check on Edit.
+/**
+ * Record that the agent wrote `targetFile` in `sessionId`. Called from PostToolUse on
+ * Write / MultiEdit / NotebookEdit. Lazy-creates `.cap/learning/state/written-files.jsonl`.
+ * Never throws — AC-7 contract.
+ * @param {string} projectRoot
+ * @param {string} sessionId
+ * @param {string} targetFile
+ * @returns {{sessionId:string, targetFile:string, ts:string}|null}
+ */
+function recordWriteIntoLedger(projectRoot, sessionId, targetFile) {
+  try {
+    if (!projectRoot || typeof projectRoot !== 'string') return null;
+    const sid = capId(sessionId);
+    if (!sid) return null;
+    if (typeof targetFile !== 'string' || targetFile.length === 0) return null;
+    const record = {
+      sessionId: sid,
+      targetFile: targetFile.slice(0, PATH_MAX),
+      ts: new Date().toISOString(),
+    };
+    appendJsonlLine(writtenFilesLedgerPath(projectRoot), record);
+    return record;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
+ * Check whether `targetFile` was previously recorded as written by `sessionId`.
+ * Reads the ledger filtered by sessionId. Returns false on any error or missing file.
+ *
+ * Hot-path read, but bounded: ledger entries are scoped per session and the file is
+ * cold-started fresh each project. AC-5's <50ms budget is preserved because (a) we only
+ * read this single small file, never the signal JSONLs, and (b) typical sessions have
+ * <100 writes. Adversarial test bracket-confirms the bound.
+ *
+ * @param {string} projectRoot
+ * @param {string} sessionId
+ * @param {string} targetFile
+ * @returns {boolean}
+ */
+function wasWrittenInSession(projectRoot, sessionId, targetFile) {
+  try {
+    if (!projectRoot || typeof projectRoot !== 'string') return false;
+    const sid = capId(sessionId);
+    if (!sid) return false;
+    if (typeof targetFile !== 'string' || targetFile.length === 0) return false;
+    const fp = writtenFilesLedgerPath(projectRoot);
+    if (!fs.existsSync(fp)) return false;
+    const raw = fs.readFileSync(fp, 'utf8');
+    const target = targetFile.slice(0, PATH_MAX);
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      try {
+        const r = JSON.parse(line);
+        if (r && r.sessionId === sid && r.targetFile === target) return true;
+      } catch (_e) {
+        // Malformed line — skip, keep scanning. AC-7 forbids throwing.
+      }
+    }
+    return false;
+  } catch (_e) {
+    return false;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -506,9 +605,11 @@ module.exports = {
   CAP_DIR,
   LEARNING_DIR,
   SIGNALS_DIR,
+  STATE_DIR,
   OVERRIDES_FILE,
   MEMORY_REFS_FILE,
   REGRETS_FILE,
+  WRITTEN_FILES_LEDGER,
   VALID_TYPES,
   VALID_OVERRIDE_SUBTYPES,
   // public API — collectors
@@ -519,4 +620,8 @@ module.exports = {
   getSignals,
   // tag-scanner integration
   recordRegretsFromScan,
+  // hook integration — persistent state ledger for editAfterWrite detection
+  recordWriteIntoLedger,
+  wasWrittenInSession,
+  writtenFilesLedgerPath,
 };

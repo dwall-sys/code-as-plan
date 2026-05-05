@@ -6,12 +6,15 @@
 // signals into .cap/learning/signals/<type>.jsonl via the cap-learning-signals.cjs collector.
 //
 // Two responsibilities:
-//   1. Track files that the agent has WRITTEN this hook-process lifetime (in-memory Set, NOT persisted).
-//      When a subsequent Edit targets a tracked file, emit recordOverride({subType:'editAfterWrite'}).
-//   2. When a Read targets any path under .cap/memory/*.md, emit recordMemoryRef.
+//   1. Cross-event editAfterWrite detection via a per-session persistent ledger
+//      (.cap/learning/signals/../state/written-files.jsonl). Hooks fire as fresh subprocesses, so an
+//      in-memory Set cannot bridge a Write event and a later Edit event — the ledger is the bridge.
+//      Write / MultiEdit / NotebookEdit append to the ledger; Edit checks the ledger and emits
+//      recordOverride({subType:'editAfterWrite'}) when there is a match for the same sessionId.
+//   2. When a Read targets any path under .cap/memory/**/*.md (recursive), emit recordMemoryRef.
 //
-// AC-5 budget: <50ms per hook. The collector itself is sync JSONL append; this glue does no IO except
-// reading the in-memory Set and forwarding to the collector. NEVER reads the existing JSONL.
+// AC-5 budget: <50ms per hook. The collector is sync JSONL append. The ledger read happens here, but
+// the ledger is per-session (typical <100 lines) and we never read the signal JSONLs.
 //
 // Skip via CAP_SKIP_LEARNING_HOOK=1.
 // Never exits non-zero: a failure here must not block the edit/read tool.
@@ -31,22 +34,13 @@ if (process.env.CAP_SKIP_LEARNING_HOOK === '1') {
   process.exit(0);
 }
 
-const OBSERVED_WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+// Edit handled separately from Write/MultiEdit/NotebookEdit: only the latter three "create new content"
+// in the file from the agent's perspective. An Edit is the user's correction. Both groups append to
+// the ledger so a chain Edit→Edit on a previously-written file still trips editAfterWrite.
+const WRITE_TOOLS = new Set(['Write', 'MultiEdit', 'NotebookEdit']);
+const EDIT_TOOL = 'Edit';
+const OBSERVED_WRITE_TOOLS = new Set([EDIT_TOOL, ...WRITE_TOOLS]);
 const OBSERVED_READ_TOOLS = new Set(['Read']);
-
-// In-memory per-process tracking of files this hook saw a Write/Edit/MultiEdit on. Keyed by absolute
-// path. NOT persisted: a fresh hook process means a fresh Set. This is the right granularity per the
-// agent's prompt — "session-written files in-memory ... per-process state, not persisted".
-//
-// Note: Each PostToolUse hook invocation is a fresh subprocess in Claude Code's hook model, so this
-// Set is effectively single-event scope. That changes the AC-1 semantics from "edit-after-write within
-// session" to "edit-on-this-event"; in practice the editAfterWrite signal is recorded only when an Edit
-// arrives on a path that this same hook invocation has not seen yet but a previous run wrote.
-//
-// To make per-session tracking work across hook invocations we'd need a small persisted ledger. That's
-// a deliberate non-goal for this prototype — the prompt explicitly says "Track session-written files
-// in-memory ... this is per-process state, not persisted". Promotion to persisted ledger is a follow-up.
-const writtenThisProcess = new Set();
 
 let input = '';
 const stdinTimeout = setTimeout(() => process.exit(0), 3000);
@@ -115,14 +109,18 @@ function run(raw) {
     const collector = resolveCollectorModule();
     if (!collector) process.exit(0); // library not installed — silent no-op, mirrors cap-memory.js
 
-    // @cap-todo(ac:F-070/AC-1) editAfterWrite detection: an Edit on a file that this hook tracked as
-    //                          previously written → emit recordOverride. Write/MultiEdit/NotebookEdit
-    //                          ALSO mark the file as written-this-process so a subsequent Edit triggers.
+    // @cap-todo(ac:F-070/AC-1) editAfterWrite detection across subprocess boundaries: the per-session
+    //                          ledger bridges what a single hook process cannot. Edit checks the ledger;
+    //                          all four tools append to the ledger so a subsequent Edit on the same path
+    //                          (this session) emits the override.
     if (OBSERVED_WRITE_TOOLS.has(toolName)) {
       const ctx = readSessionContext(cwd);
-      if (toolName === 'Edit' && writtenThisProcess.has(absPath)) {
-        // @cap-risk(F-070/AC-5) recordOverride is sync JSONL append, never reads existing data.
-        //                       Performance budget is enforced by the adversarial test suite.
+      if (toolName === EDIT_TOOL && ctx.sessionId
+          && collector.wasWrittenInSession(cwd, ctx.sessionId, absPath)) {
+        // @cap-risk(F-070/AC-5) recordOverride is sync JSONL append, never reads signal JSONLs.
+        //                       The ledger read above IS in the hot path but stays bounded
+        //                       (per-session file, typical <100 entries). The performance suite
+        //                       brackets the full hook to confirm the 50ms budget holds.
         collector.recordOverride({
           projectRoot: cwd,
           subType: 'editAfterWrite',
@@ -131,9 +129,12 @@ function run(raw) {
           targetFile: absPath, // collector hashes; never persisted raw
         });
       }
-      // Always update the tracking Set — including for Edit (an edit also "writes" a new state, so a
-      // following second Edit in the same hook process should still count as edit-after-write).
-      writtenThisProcess.add(absPath);
+      // Append to the persistent ledger so future Edit events in this session can detect the chain.
+      // We append for ALL four tools (Edit included) so Edit→Edit on a previously-written file still
+      // produces an override on the second Edit.
+      if (ctx.sessionId) {
+        collector.recordWriteIntoLedger(cwd, ctx.sessionId, absPath);
+      }
       process.exit(0);
     }
 
@@ -185,6 +186,7 @@ function run(raw) {
 //   tests cover that shape. Whoever wires the rejection signal later (whether via a distinct hook
 //   matcher or a stdin payload field we haven't seen yet) just needs to call the collector — no schema
 //   work, no module refactor. This keeps the gap honest: tested code path, undefined call site.
-// @cap-risk(F-070/AC-1) The editAfterWrite half of AC-1 is fully wired and tested. The rejectApproval
-//   half is collector-tested but has NO hook call site. /cap:test against AC-1 should fail until the
-//   rejection signal is wired.
+// @cap-risk(F-070/AC-1) The editAfterWrite half of AC-1 is fully wired across subprocess boundaries
+//   via the per-session ledger (cap-learning-signals#recordWriteIntoLedger / wasWrittenInSession) and
+//   covered by an end-to-end spawnSync test that drives Write→Edit through this hook. The rejectApproval
+//   half is collector-tested but has NO hook call site (D10).
