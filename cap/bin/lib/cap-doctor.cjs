@@ -57,6 +57,9 @@ const CAP_MODULE_MANIFEST = [
   'cap-memory-prune.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',
+  // @cap-feature(feature:F-071) Pattern Pipeline — heuristic Stage 1 + LLM-briefing Stage 2.
+  // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added.
+  'cap-pattern-pipeline.cjs',
   'cap-plugin-manifest.cjs',
   'cap-realtime-affinity.cjs',
   'cap-reconcile.cjs',

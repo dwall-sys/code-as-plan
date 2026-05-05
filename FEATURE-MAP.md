@@ -1271,7 +1271,7 @@
 - `tests/cap-learning-signals-adversarial.test.cjs`
 - `tests/cap-learning-signals.test.cjs`
 
-### F-071: Extract Patterns via Heuristics and LLM [planned]
+### F-071: Extract Patterns via Heuristics and LLM [prototyped]
 
 **Depends on:** F-070
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T17:27:23.704Z*
+*Last updated: 2026-05-05T18:09:39.608Z*
