@@ -52,7 +52,12 @@ Check `$ARGUMENTS` for:
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const session = require('./cap/bin/lib/cap-session.cjs');
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: test load — duplicate feature ID detected, target list uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const s = session.loadSession(process.cwd());
 console.log(JSON.stringify({
   activeFeature: s.activeFeature,
@@ -243,7 +248,12 @@ Tests failing: {tests_failing}
 ```bash
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: test AC-table — duplicate feature ID detected, table uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const targetIds = {JSON.stringify(target_feature_ids)};
 for (const id of targetIds) {
   const f = featureMap.features.find(feat => feat.id === id);

@@ -44,7 +44,23 @@ const MEMORY_FEATURES_DIR = '.cap/memory/features';
 // @cap-decision(F-076/D3) Feature ID regex enforces F-NNN with at least 3 digits (matches FEATURE-MAP.md zero-pad
 // convention and is forward-compat with F-1000+ when the project crosses 1000 features). Anchored on both sides to
 // reject substring matches like "FF-076x" or "F-076-suffix".
-const FEATURE_ID_RE = /^F-\d{3,}$/;
+// @cap-feature(feature:F-081) Union form: legacy F-NNN OR long-form F-LONGFORM (uppercase-led).
+// @cap-todo(ac:F-081/AC-5) Schema validator accepts the union ID format so long-form IDs (e.g. F-DEPLOY,
+//   F-HUB-AUTH) participate in V6 per-feature memory file naming. The second branch deliberately requires
+//   an UPPERCASE leading char so digit-leading suffixes like `076-suffix` cannot match — the F-076-suffix
+//   rejection invariant from the original F-076 schema tests is preserved.
+// @cap-risk(reason:regex-test-coverage) FEATURE_ID_RE is exported and consumed by getFeaturePath() and
+//   validateFeatureMemoryFile(); widening it changes both surfaces simultaneously. Existing tests at
+//   tests/cap-memory-schema.test.cjs:91-96 still hold under the union; new long-form test cases are
+//   added to cap-feature-map-bullet.test.cjs to cover the F-081 expansion.
+// @cap-todo(ac:F-081/iter1) Stage-2 #5 fix: de-duplicate the regex by importing the canonical
+//   pattern from cap-feature-map.cjs (which defines `FEATURE_ID_PATTERN`). cap-feature-map.cjs
+//   does NOT require cap-memory-schema.cjs (verified: no circular dep), so a one-way import is safe.
+//   Source-of-truth lives next to the parser that uses it most heavily.
+// @cap-decision(F-081/iter1) Local alias `FEATURE_ID_RE` preserved so the rest of this module
+//   (validators, getFeaturePath) reads naturally and downstream code/tests that destructured
+//   the local name continue to work without code-churn.
+const { FEATURE_ID_PATTERN: FEATURE_ID_RE } = require('./cap-feature-map.cjs');
 
 // @cap-decision(F-076/D4) Topic slug enforces kebab-case alphanumerics-and-dashes only — same shape as filenames in
 // `cap/bin/lib/cap-*.cjs`. Excludes leading/trailing dashes and consecutive dashes to keep filenames clean.
@@ -605,7 +621,8 @@ function _validateContent(content, result) {
     result.errors.push('front-matter: `feature` is required');
   } else if (!FEATURE_ID_RE.test(fm.feature)) {
     result.valid = false;
-    result.errors.push(`front-matter: \`feature\` must match /^F-\\d{3,}$/ (got "${fm.feature}")`);
+    // @cap-todo(ac:F-081/AC-5) Error message reflects union ID format — F-NNN | F-LONGFORM.
+    result.errors.push(`front-matter: \`feature\` must match /^F-(?:\\d{3,}|[A-Z][A-Z0-9_-]*)$/ (got "${fm.feature}")`);
   }
   if (!fm.topic || typeof fm.topic !== 'string') {
     result.valid = false;
@@ -767,7 +784,8 @@ function getFeaturePath(projectRoot, featureId, topic) {
     throw new TypeError('getFeaturePath: projectRoot must be a non-empty string');
   }
   if (!FEATURE_ID_RE.test(featureId)) {
-    throw new TypeError(`getFeaturePath: featureId must match /^F-\\d{3,}$/ (got "${featureId}")`);
+    // @cap-todo(ac:F-081/AC-5) Error message reflects union ID format — F-NNN | F-LONGFORM.
+    throw new TypeError(`getFeaturePath: featureId must match /^F-(?:\\d{3,}|[A-Z][A-Z0-9_-]*)$/ (got "${featureId}")`);
   }
   if (!TOPIC_RE.test(topic)) {
     throw new TypeError(`getFeaturePath: topic must be kebab-case (got "${topic}")`);

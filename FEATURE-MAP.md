@@ -1387,6 +1387,7 @@
 **Files:**
 - `cap/bin/lib/cap-memory-schema.cjs`
 - `tests/cap-memory-schema.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
 
 ### F-077: Build V6 Memory Migration Tool [prototyped]
 
@@ -1406,6 +1407,7 @@
 - `cap/bin/lib/cap-memory-migrate.cjs`
 - `tests/cap-memory-migrate.test.cjs`
 - `commands/cap/memory.md`
+- `cap/bin/lib/cap-doctor.cjs`
 
 ### F-078: Implement Platform-Bucket for Cross-Cutting Decisions [planned]
 
@@ -1446,6 +1448,42 @@
 | AC-5 | pending | Surface-Output muss auf max. 5 Bullets pro Run begrenzt sein, priorisiert nach: activeFeature direkt → related_features aus Per-Feature-File → letzte 2 globale Einträge. |
 | AC-6 | pending | Tests müssen mit Fixture-Claude-native-MEMORY.md verifizieren: Parse, Cache-Invalidierung, graceful-skip bei missing dir, Surface-Limitierung. |
 
+### F-081: Extend Feature Map Parser for Multi-Format Support [shipped]
+
+**Depends on:** F-002
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Parser SHALL accept long-form feature IDs matching `/^F-(\d{3,}|[A-Z][A-Z0-9_-]*)$/` in addition to the existing F-NNN format |
+| AC-2 | tested | Parser SHALL detect bullet-style acceptance criteria (`- [ ] AC-N: <description>`) per-block when no pipe-table rows are present |
+| AC-3 | tested | Parser SHALL respect explicit override via `.cap/config.json:featureMapStyle` ("table" | "bullet" | "auto"), default "auto" |
+| AC-4 | tested | Parser SHALL emit a loud, positioned error on duplicate-after-normalization feature IDs (no silent dedup) |
+| AC-5 | tested | F-076 schema validator SHALL accept the union ID format for per-feature memory file naming (so long-form IDs get memory files) |
+| AC-6 | tested | All existing CAP features SHALL parse unchanged after F-081 merge (existing `cap-feature-map.test.cjs` remains green; table-style stays fast-path) |
+| AC-7 | tested | Config-loader infrastructure (`readCapConfig(projectRoot)` with graceful defaults) SHALL be available in `cap-feature-map.cjs` for F-082 reuse |
+| AC-8 | tested | New test file `cap-feature-map-bullet.test.cjs` SHALL cover bullet-style parsing, format-detection, long-form IDs, mixed-ID-projects, and duplicate-detection |
+
+**Files:**
+- `cap/bin/lib/cap-feature-map.cjs`
+- `cap/bin/lib/cap-memory-schema.cjs`
+- `tests/cap-feature-map-bullet.test.cjs`
+- `tests/cap-feature-map-adversarial.test.cjs`
+
+### F-082: Aggregate Feature Maps Across Monorepo Sub-Apps [planned]
+
+**Depends on:** F-081, F-077
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | `readFeatureMap` SHALL detect the "Rescoped Feature Maps" header in the root FEATURE-MAP.md and aggregate referenced sub-app maps transparently (existing API unchanged) |
+| AC-2 | pending | Each aggregated feature object SHALL carry runtime-only `metadata.subApp` (not persisted to FEATURE-MAP.md, source-of-truth remains the Rescoped-Table) |
+| AC-3 | pending | Opt-in directory-walk SHALL load `apps/*/FEATURE-MAP.md` when `cap.config.json:featureMaps.discover === "auto"` (default "table-only") |
+| AC-4 | pending | F-077 path-heuristik SHALL boost match-score for features whose `metadata.subApp` matches the file's `apps/<subApp>/...` prefix |
+| AC-5 | pending | Synthetic test fixture `tests/fixtures/v61-monorepo/` SHALL provide 3 sub-apps (`apps/web/`, `apps/api/`, `packages/shared/`) with ~30 entries each, mixed long-form + numeric IDs, mixed bullet + table format |
+| AC-6 | pending | Synthetic-fixture dry-run SHALL produce ≥80 % feature-routed entries (asserted in test) |
+| AC-7 | pending | Duplicate IDs across aggregated sub-app maps SHALL emit a loud, positioned error (no silent dedup) |
+| AC-8 | pending | Round-trip write of root FEATURE-MAP.md SHALL be idempotent — runtime-only `metadata.subApp` is never written back |
+
 ## Legend
 
 | State | Meaning |
@@ -1456,4 +1494,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-06T11:02:50.873Z*
+*Last updated: 2026-05-06T15:11:07.450Z*

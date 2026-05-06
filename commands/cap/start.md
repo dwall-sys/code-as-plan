@@ -205,7 +205,12 @@ Store as `session`.
 ```bash
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: start — duplicate feature ID detected, summary uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const status = fm.getStatus(featureMap);
 console.log(JSON.stringify({
   features: featureMap.features.map(f => ({ id: f.id, title: f.title, state: f.state, acCount: f.acs.length })),

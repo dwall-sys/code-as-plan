@@ -111,7 +111,12 @@ Store as `session_state`.
 ```bash
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: status — duplicate feature ID detected, summary uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const status = fm.getStatus(featureMap);
 const byState = { planned: 0, prototyped: 0, tested: 0, shipped: 0 };
 for (const f of featureMap.features) {
@@ -265,7 +270,12 @@ node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const d = require('./cap/bin/lib/cap-design.cjs');
 const trace = require('./cap/bin/lib/cap-trace.cjs');
-const map = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const map = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (map && map.parseError) {
+  console.warn('cap: status design-usage — duplicate feature ID detected, listing uses partial map: ' + String(map.parseError.message).trim());
+}
 const design = d.readDesignMd(process.cwd());
 const designIdx = design ? d.parseDesignIds(design) : { byToken: {}, byComponent: {} };
 for (const f of map.features) {

@@ -117,7 +117,12 @@ if (!/^F-\\d{3}$/.test(fid)) {
   console.error('Invalid feature ID. Expected format F-NNN.');
   process.exit(2);
 }
-const map = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const map = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (map && map.parseError) {
+  console.warn('cap: design --scope — duplicate feature ID detected, lookup uses partial map: ' + String(map.parseError.message).trim());
+}
 const f = map.features.find(x => x.id === fid);
 if (!f) {
   console.error('Feature ' + fid + ' not found in FEATURE-MAP.md.');

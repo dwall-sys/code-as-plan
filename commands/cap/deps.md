@@ -49,7 +49,12 @@ if (!/^(DT-\\d{3,}|DC-\\d{3,})$/.test(designId)) {
   console.error('Invalid --design ID. Expected DT-NNN or DC-NNN.');
   process.exit(2);
 }
-const map = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const map = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (map && map.parseError) {
+  console.warn('cap: deps --design — duplicate feature ID detected, report uses partial map: ' + String(map.parseError.message).trim());
+}
 const using = deps.findFeaturesUsingDesignId(map, designId);
 console.log(deps.formatDesignImpactReport(designId, using));
 " '<DESIGN_ID>'
@@ -94,7 +99,12 @@ const deps = require('./cap/bin/lib/cap-deps.cjs');
 
 const root = process.cwd();
 const tags = scanner.scanDirectory(root);
-const featureMap = fm.readFeatureMap(root);
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(root, undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: deps — duplicate feature ID detected, diff uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const inferred = deps.inferFeatureDeps(tags, root);
 const diff = deps.diffDeclaredVsInferred(featureMap, inferred);
 
@@ -133,7 +143,12 @@ const deps = require('./cap/bin/lib/cap-deps.cjs');
 
 const root = process.cwd();
 const tags = scanner.scanDirectory(root);
-const featureMap = fm.readFeatureMap(root);
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(root, undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: deps --auto-fix — duplicate feature ID detected, diff uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const inferred = deps.inferFeatureDeps(tags, root);
 const diff = deps.diffDeclaredVsInferred(featureMap, inferred);
 const removeExtraneous = process.argv[1] === 'true';

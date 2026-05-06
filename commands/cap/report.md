@@ -52,7 +52,12 @@ Store `activeApp` (may be null for single-repo projects).
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const activeApp = process.argv[1] === 'null' ? null : process.argv[1];
-const featureMap = fm.readFeatureMap(process.cwd(), activeApp);
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), activeApp, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: report — duplicate feature ID detected, report uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const features = featureMap.features.map(f => ({
   id: f.id,
   title: f.title,

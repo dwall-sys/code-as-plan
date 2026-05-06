@@ -190,7 +190,12 @@ function detectTestFileForImpl(projectRoot, implPath) {
  * @returns {ReconciliationPlan}
  */
 function planReconciliation(projectRoot, appPath) {
-  const fm = featureMap.readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  const fm = featureMap.readFeatureMap(projectRoot, appPath, { safe: true });
+  if (fm && fm.parseError) {
+    console.warn('cap: reconcile — duplicate feature ID detected, plan uses partial map: ' + String(fm.parseError.message).trim());
+  }
   const drift = featureMap.detectDrift(projectRoot, appPath);
 
   // Phase 1: AC-status promotions for shipped/tested features that still have pending ACs.

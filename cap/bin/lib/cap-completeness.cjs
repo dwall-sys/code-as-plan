@@ -308,7 +308,12 @@ function buildContext(projectRoot, injected) {
   const fm = (injected && injected.featureMapModule) || require('./cap-feature-map.cjs');
   const deps = require('./cap-deps.cjs');
 
-  const featureMap = (injected && injected.featureMap) || fm.readFeatureMap(projectRoot);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  let featureMap = (injected && injected.featureMap) || fm.readFeatureMap(projectRoot, undefined, { safe: true });
+  if (featureMap && featureMap.parseError) {
+    console.warn('cap: completeness — duplicate feature ID detected, scoring uses partial map: ' + String(featureMap.parseError.message).trim());
+  }
   const tags = (injected && injected.tags) || scanner.scanDirectory(projectRoot);
   const acFileMap = scanner.buildAcFileMap(tags);
   const fileToFeature = deps.buildFileToFeatureMap(tags, projectRoot);

@@ -322,7 +322,12 @@ node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const session = require('./cap/bin/lib/cap-session.cjs');
 const s = session.loadSession(process.cwd());
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: debug — duplicate feature ID detected, file list uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 const feature = s.activeFeature ? featureMap.features.find(f => f.id === s.activeFeature) : null;
 console.log(JSON.stringify({
   files: feature ? feature.files : [],

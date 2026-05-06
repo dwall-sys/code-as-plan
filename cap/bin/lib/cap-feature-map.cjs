@@ -7,11 +7,21 @@
 'use strict';
 
 // @cap-feature(feature:F-002) Feature Map Management — read/write/enrich FEATURE-MAP.md as single source of truth
+// @cap-feature(feature:F-081) Multi-Format Feature Map Parser — Union ID regex (F-NNN | F-LONGFORM), bullet-style ACs, config-driven format selection
 
 const fs = require('node:fs');
 const path = require('node:path');
 
 const FEATURE_MAP_FILE = 'FEATURE-MAP.md';
+
+// @cap-feature(feature:F-081) Union Feature-ID pattern: legacy F-NNN (3+ digits) OR long-form F-UPPERCASE
+// @cap-decision(F-081/AC-1) The pattern is intentionally anchored on both ends; the second branch
+//   `[A-Z][A-Z0-9_-]*` requires uppercase first char so digit-leading slugs like `F-076-suffix`
+//   continue to be REJECTED — preserves the F-076 schema invariant proven by cap-memory-schema tests.
+// @cap-risk(reason:regex-asymmetry) The narrow header regex `featureHeaderRE` historically used `\d{3}`;
+//   widening it to the union must NOT also widen `getNextFeatureId`'s sequence detection (which only
+//   considers numeric IDs for next-id allocation). Long-form IDs are user-named and never auto-generated.
+const FEATURE_ID_PATTERN = /^F-(?:\d{3,}|[A-Z][A-Z0-9_-]*)$/;
 
 // @cap-todo(ref:AC-9) Feature state lifecycle: planned -> prototyped -> tested -> shipped
 const VALID_STATES = ['planned', 'prototyped', 'tested', 'shipped'];
@@ -84,9 +94,13 @@ function generateTemplate() {
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {string|null} [appPath=null] - Relative app path (e.g., "apps/flow"). If null, reads from projectRoot.
+ * @param {{ safe?: boolean }} [options] - F-081/iter1: when `safe:true`, duplicate-id detection
+ *   returns `{features, lastScan, parseError}` instead of throwing. Default false (legacy throw
+ *   preserved — pinned by adversarial regression test "duplicate-on-disk causes readFeatureMap
+ *   to throw with positioned error").
  * @returns {FeatureMap}
  */
-function readFeatureMap(projectRoot, appPath) {
+function readFeatureMap(projectRoot, appPath, options) {
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
   const filePath = path.join(baseDir, FEATURE_MAP_FILE);
   if (!fs.existsSync(filePath)) {
@@ -94,7 +108,26 @@ function readFeatureMap(projectRoot, appPath) {
   }
 
   const content = fs.readFileSync(filePath, 'utf8');
-  return parseFeatureMapContent(content);
+  // @cap-todo(ac:F-081/AC-7) Forward projectRoot so parseFeatureMapContent can pick up
+  //   .cap/config.json:featureMapStyle without each call site having to pre-load config.
+  // @cap-todo(ac:F-081/iter1 fix:3) Forward `safe` opt-in. Default-strict preserves the existing
+  //   adversarial test contract that `readFeatureMap` throws on duplicate; tooling that wants
+  //   non-throwing semantics calls `readFeatureMap(root, app, { safe: true })`.
+  // @cap-decision(F-081/iter1) Stage-2 #3 PARTIAL: API surface for safe-mode added; default
+  //   remains strict (throw) so the pinned adversarial regression test continues to assert the
+  //   original throw contract. Iter-2 (below) migrates the bare call sites to opt-in.
+  // @cap-decision(F-081/iter2) Stage-2 #3 COMPLETE: All 17 internal library call sites and 21
+  //   command-script call sites migrated to `{safe: true}` with parseError handling. Write-back
+  //   functions (addFeature, updateFeatureState, setAcStatus, enrichFromTags, enrichFromDesignTags,
+  //   setFeatureUsesDesign, rescopeFeatures, cap-migrate, cap-memory-migrate) bail on parseError
+  //   to prevent persisting partial enrichment. Read-only consumers (detectDrift, cap-checkpoint,
+  //   cap-completeness, cap-reconcile, cap-impact-analysis, cap-memory-graph, cap-thread-synthesis,
+  //   commands/cap/*.md) warn-and-continue with the partial map.
+  // @cap-risk(reason:user-controlled-id-in-warn-message) parseError.message includes the duplicate
+  //   feature ID. The ID regex `[A-Z0-9_-]*` rejects ANSI escape characters, but each console.warn
+  //   call still wraps the message in `String(...).trim()` as defense in depth. F-076/F-077 lesson.
+  const safe = Boolean(options && options.safe === true);
+  return parseFeatureMapContent(content, { projectRoot, safe });
 }
 
 // @cap-todo(ref:AC-8) Each feature entry contains: feature ID, title, state, ACs, and file references
@@ -102,18 +135,84 @@ function readFeatureMap(projectRoot, appPath) {
 // @cap-feature(feature:F-041) Fix Feature Map Parser Roundtrip Symmetry — parser is the read half of a
 // symmetric pair with serializeFeatureMap. Parser must accept every format the serializer can write,
 // without dropping ACs or transforming status case beyond what the serializer can re-emit.
+
+/**
+ * @typedef {Object} CapConfig
+ * @property {('table'|'bullet'|'auto')=} featureMapStyle - explicit AC format selection (default "auto")
+ */
+
+/**
+ * @typedef {Object} ParseOptions
+ * @property {string=} projectRoot - Absolute path to project root for config loading
+ * @property {('table'|'bullet'|'auto')=} featureMapStyle - explicit override (takes precedence over config)
+ * @property {boolean=} safe - F-081/iter1: when true, return `{features, lastScan, parseError}`
+ *   on duplicate-feature-id detection instead of throwing. Default false (legacy throw behavior
+ *   preserved for direct parseFeatureMapContent callers and existing tests). readFeatureMap
+ *   passes safe:true by default so the 24 bare CLI/library call sites no longer crash on a
+ *   hand-edited duplicate.
+ */
+
+/**
+ * @typedef {Object} ParseError
+ * @property {string} code - Stable error code (currently only 'CAP_DUPLICATE_FEATURE_ID')
+ * @property {string} message - Human-readable error message
+ * @property {string} duplicateId - Normalized feature ID that collided
+ * @property {number} firstLine - Line number of the first occurrence (1-based)
+ * @property {number} duplicateLine - Line number of the duplicate occurrence (1-based)
+ */
+
+// @cap-feature(feature:F-081) readCapConfig — graceful loader for .cap/config.json
+// @cap-todo(ac:F-081/AC-7) Config-loader infrastructure available in cap-feature-map.cjs for F-082 reuse.
+// @cap-decision(F-081/AC-7) Returns {} on every error path (missing file, malformed JSON, read errors).
+//   Rationale: parser must remain robust — config is an enhancement, never a hard dependency. Throwing
+//   here would make a malformed config file silently break every Feature-Map read across all CAP commands.
+/**
+ * Read .cap/config.json from a project root with graceful defaults on every error path.
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {CapConfig} - Parsed config, or empty object on missing/malformed/read-error
+ */
+function readCapConfig(projectRoot) {
+  if (typeof projectRoot !== 'string' || projectRoot.length === 0) return {};
+  const configPath = path.join(projectRoot, '.cap', 'config.json');
+  if (!fs.existsSync(configPath)) return {};
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch (_e) {
+    return {};
+  }
+}
+
 /**
  * Parse FEATURE-MAP.md content into structured data.
  * @param {string} content - Raw markdown content
+ * @param {ParseOptions=} options - Optional parser options (projectRoot for config, featureMapStyle override)
  * @returns {FeatureMap}
  */
-function parseFeatureMapContent(content) {
+function parseFeatureMapContent(content, options) {
   const features = [];
   const lines = content.split('\n');
 
+  // @cap-todo(ac:F-081/AC-3) Resolve format style: explicit option > config > "auto" default.
+  let formatStyle = 'auto';
+  if (options && typeof options.featureMapStyle === 'string') {
+    formatStyle = options.featureMapStyle;
+  } else if (options && options.projectRoot) {
+    const cfg = readCapConfig(options.projectRoot);
+    if (cfg && typeof cfg.featureMapStyle === 'string') {
+      formatStyle = cfg.featureMapStyle;
+    }
+  }
+  if (formatStyle !== 'table' && formatStyle !== 'bullet' && formatStyle !== 'auto') {
+    formatStyle = 'auto';
+  }
+
   // Match feature headers: ### F-001: Title text [state]
   // Also accepts:          ### F-001: Title text          (no [state] — state comes from separate line)
-  const featureHeaderRE = /^###\s+(F-\d{3}):\s+(.+?)\s*$/;
+  // @cap-todo(ac:F-081/AC-1) Union Feature-ID regex accepts F-NNN AND F-LONGFORM (uppercase-led).
+  const featureHeaderRE = /^###\s+(F-(?:\d{3,}|[A-Z][A-Z0-9_-]*)):\s+(.+?)\s*$/;
   // Match AC rows: | AC-N | status | description |
   // End-anchor (\s*$) forces the non-greedy description group to expand up to the
   // trailing pipe of the row, not the first internal pipe. Without the anchor an AC
@@ -128,6 +227,28 @@ function parseFeatureMapContent(content) {
   const acTableHeaderRE = /^\|\s*AC\s*\|\s*Status\s*\|\s*Description\s*\|/i;
   // Match AC checkboxes: - [x] description  or  - [ ] description
   const acCheckboxRE = /^[\s]*-\s+\[(x| )\]\s+(.+)/;
+  // @cap-todo(ac:F-081/AC-2) Bullet-style AC with EXPLICIT AC-N prefix.
+  // @cap-decision(F-081/AC-2) Prefix-bearing format `- [ ] AC-N: description` is the canonical bullet
+  //   shape; this differs from the legacy `- **AC:**`-section anonymous checkboxes which auto-number.
+  //   Explicit AC-IDs let bullet-style maps survive AC reordering / partial AC additions without
+  //   silently re-numbering downstream entries — a pitfall observed in early CAP brainstorms.
+  // @cap-risk(reason:asterisk-bullet-marker) Markdown allows `*` and `-` as bullet markers; we accept
+  //   both for parser robustness (some editors auto-rewrite). The serializer always emits `-` to keep
+  //   roundtrip output stable.
+  // @cap-todo(ac:F-081/AC-2 iter:1) Description capture widened from `(.+?)` to `(.*?)` so an
+  //   empty-description bullet (`- [ ] AC-1:` with EOL) is recognized as a legitimate AC instead
+  //   of falling through to the legacy anonymous-checkbox branch (which would silently swallow
+  //   the AC-N: prefix as the description and block all subsequent bullets via inAcCheckboxes=true).
+  // @cap-decision(F-081/iter1) Stage-2 #1 fix: empty-desc bullet is a legitimate parse outcome —
+  //   downstream code should treat `description: ''` as missing-text, never as missing-AC.
+  const bulletAcRE = /^[\s]*[-*]\s+\[([ x])\]\s+(AC-\d+):\s*(.*?)\s*$/i;
+  // @cap-decision(F-081/iter1) Shape-only detector is SEPARATE from the value-extraction regex.
+  //   The shape detector matches the prefix `- [ ] AC-N:` regardless of description content (empty
+  //   or non-empty) so `isExplicitBulletShape` (below) gates the legacy branch correctly even when
+  //   the value-extraction regex would have matched anyway. Keeping the two regexes separate also
+  //   means future loosening of the value regex (e.g. multi-line continuation) cannot accidentally
+  //   re-introduce the silent-swallow bug fixed here.
+  const bulletAcShapeRE = /^[\s]*[-*]\s+\[[ xX]\]\s+AC-\d+:/;
   // Match file refs: - `path/to/file`
   const fileRefRE = /^-\s+`(.+?)`/;
   // Match dependencies: **Depends on:** F-001, F-002  or  - **Dependencies:** F-001
@@ -149,8 +270,16 @@ function parseFeatureMapContent(content) {
   let inFileRefs = false;
   let acCounter = 0;
   let lastScan = null;
+  // @cap-todo(ac:F-081/AC-4) Track per-feature header line for positioned duplicate-error messages.
+  /** @type {Array<{id: string, line: number}>} */
+  const featureLineOrigins = [];
+  // @cap-todo(ac:F-081/AC-2) Track table-row presence per feature; "auto" only enables bullet-AC
+  //   detection when zero table rows have been seen — matches the AC-2 contract and keeps the
+  //   table fast-path for AC-6 unchanged.
+  let sawTableRow = false;
 
-  for (const line of lines) {
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
     const headerMatch = line.match(featureHeaderRE);
     if (headerMatch) {
       if (currentFeature) features.push(currentFeature);
@@ -172,10 +301,12 @@ function parseFeatureMapContent(content) {
         usesDesign: [], // @cap-todo(ac:F-063/AC-3) F-063: default-empty DT/DC IDs list.
         metadata: {},
       };
+      featureLineOrigins.push({ id: headerMatch[1], line: lineIdx + 1 });
       inAcTable = false;
       inAcCheckboxes = false;
       inFileRefs = false;
       acCounter = 0;
+      sawTableRow = false;
       continue;
     }
 
@@ -216,6 +347,11 @@ function parseFeatureMapContent(content) {
         description: acMatch[3].trim(),
         status: acMatch[2],
       });
+      sawTableRow = true; // @cap-todo(ac:F-081/AC-2) Block bullet detection once any table row exists.
+      // @cap-todo(ac:F-081/iter1) Mark this feature's AC origin format as 'table' so the
+      //   serializer can preserve it on round-trip. Once any table row is seen, the feature
+      //   sticks to 'table' even if a stray bullet appears later (matches sawTableRow gate).
+      currentFeature._inputFormat = 'table';
       continue;
     }
 
@@ -227,8 +363,57 @@ function parseFeatureMapContent(content) {
       continue;
     }
 
+    // @cap-todo(ac:F-081/AC-2) Bullet-style AC detection — must precede the legacy anonymous-checkbox
+    //   branch because the legacy branch's regex is broader and would swallow `AC-N:` prefixes verbatim
+    //   into the description, breaking AC-ID round-trips.
+    // @cap-decision(F-081/AC-3) Format-style gate:
+    //   - "table"  : never run bullet branch (caller declared table-only)
+    //   - "bullet" : always run bullet branch when no `- **AC:**` section is active
+    //   - "auto"   : only run bullet branch when no table rows have been seen for this feature yet
+    const bulletAcMatch = line.match(bulletAcRE);
+    if (
+      bulletAcMatch &&
+      formatStyle !== 'table' &&
+      !inAcCheckboxes &&
+      !inFileRefs &&
+      (formatStyle === 'bullet' || (formatStyle === 'auto' && !sawTableRow))
+    ) {
+      const checked = bulletAcMatch[1].toLowerCase() === 'x';
+      currentFeature.acs.push({
+        id: bulletAcMatch[2],
+        description: bulletAcMatch[3].trim(),
+        status: checked ? 'tested' : 'pending',
+      });
+      inAcTable = false;
+      inFileRefs = false;
+      // @cap-todo(ac:F-081/iter1) Mark this feature's AC origin format as 'bullet' so the
+      //   serializer preserves bullet format on the next write — fixes Stage-2 #2 (round-trip
+      //   asymmetry) where every writeFeatureMap call after readFeatureMap silently rewrote
+      //   bullet input to table form.
+      // @cap-decision(F-081/iter1) `_inputFormat` is in-memory metadata (underscore prefix
+      //   marks it as runtime-only, never persisted as a separate front-matter field).
+      //   Source-of-truth on subsequent reads is the AC line shape itself; this field is a
+      //   hint for the serializer between read and write within the same process. Mirrors
+      //   the F-082 `metadata.subApp` runtime-hint pattern.
+      // @cap-risk(reason:proto-pollution) `_inputFormat` is set from parser branch detection,
+      //   never from raw user input. A malicious FEATURE-MAP cannot inject this field through
+      //   parsed content (no attacker-controlled key path reaches here).
+      currentFeature._inputFormat = 'bullet';
+      continue;
+    }
+
     // AC checkboxes: - [x] description  or  - [ ] description
-    const checkboxMatch = line.match(acCheckboxRE);
+    // @cap-decision(F-081/AC-2) Lines that match the explicit `AC-N:` bullet shape are NEVER routed
+    //   through the legacy anonymous-checkbox branch — even if the bullet branch above declined them
+    //   (e.g. format="table" or table rows already seen). Anonymous auto-numbering of `AC-N:`-prefixed
+    //   text would silently rewrite the AC ID to a counter and dump the prefix into the description,
+    //   which is exactly the silent-corruption mode AC-2/AC-4 are written to prevent.
+    // @cap-todo(ac:F-081/AC-2 iter:1) Use shape-only detector here (independent of the value
+    //   regex's description capture) so empty-description bullets `- [ ] AC-1:` are also gated
+    //   away from the legacy branch. Without this, the legacy branch would set inAcCheckboxes=true
+    //   and block all subsequent bullets in the same feature.
+    const isExplicitBulletShape = bulletAcShapeRE.test(line);
+    const checkboxMatch = isExplicitBulletShape ? null : line.match(acCheckboxRE);
     if (checkboxMatch && (inAcCheckboxes || !inFileRefs)) {
       acCounter++;
       const checked = checkboxMatch[1] === 'x';
@@ -297,6 +482,54 @@ function parseFeatureMapContent(content) {
 
   if (currentFeature) features.push(currentFeature);
 
+  // @cap-todo(ac:F-081/AC-4) Duplicate-after-normalization detection — HARD error, no silent dedup.
+  // @cap-decision(F-081/AC-4) Throws synchronously rather than returning a soft result. Rationale:
+  //   silent dedup is exactly the failure mode the AC was written to prevent — a user who rename-collides
+  //   two features (e.g. typoed `F-DEPLOY` vs `F-deploy`) would have one half their map disappear with
+  //   no signal. Throwing forces visibility. The error message includes both line numbers so the user
+  //   can navigate directly to the conflict in their editor.
+  // @cap-decision(F-081/iter1) Stage-2 #3 fix: opt-in safe mode. When `options.safe === true`, attach
+  //   the structured error to `result.parseError` and return the partial map (features parsed up to
+  //   the first duplicate). Default behavior (no `safe` flag, or explicit `safe:false`) preserves
+  //   the throw — required by 18 existing duplicate-detection regression tests in cap-feature-map-bullet
+  //   and cap-feature-map-adversarial, and by tooling that wants hard-fail semantics.
+  // @cap-risk(reason:partial-map-on-error) In safe mode the caller receives the features parsed up
+  //   to (but not including) the duplicate header. This matches the "fail-fast at first collision"
+  //   semantics of the throw path and gives downstream tooling a useful (if incomplete) view. CLI
+  //   surfaces should always check `result.parseError` and surface a warning when present.
+  const safe = Boolean(options && options.safe === true);
+  const seenIds = new Map();
+  let parseError;
+  for (const origin of featureLineOrigins) {
+    const normalized = String(origin.id).toUpperCase().trim();
+    if (seenIds.has(normalized)) {
+      const firstLine = seenIds.get(normalized);
+      const message = `Duplicate feature ID after normalization: ${origin.id} (line ${origin.line}) collides with ${origin.id} (line ${firstLine})`;
+      if (safe) {
+        parseError = {
+          code: 'CAP_DUPLICATE_FEATURE_ID',
+          message,
+          duplicateId: normalized,
+          firstLine,
+          duplicateLine: origin.line,
+        };
+        break;
+      }
+      const err = new Error(message);
+      err.code = 'CAP_DUPLICATE_FEATURE_ID';
+      err.duplicateId = normalized;
+      err.firstLine = firstLine;
+      err.duplicateLine = origin.line;
+      throw err;
+    }
+    seenIds.set(normalized, origin.line);
+  }
+
+  // @cap-todo(ac:F-081/iter1) parseError is only present when set — keeps the result shape minimal
+  //   for the happy path (zero new property on the 99.9% case).
+  if (parseError) {
+    return { features, lastScan, parseError };
+  }
   return { features, lastScan };
 }
 
@@ -319,17 +552,28 @@ function writeFeatureMap(projectRoot, featureMap, appPath, options) {
 // It must preserve every status value the parser accepted (AC-1) and offer a legacy
 // **Status:** line emission mode (AC-6) so the legacy non-table input format is not
 // forcibly upgraded to bracketed-header format on the first roundtrip.
+// @cap-feature(feature:F-081) Bullet/table-aware serializer — preserves the AC format
+// the parser saw on the way in (Stage-2 #2 fix).
 /**
  * Serialize FeatureMap to markdown string.
  * @param {FeatureMap} featureMap
- * @param {{ legacyStatusLine?: boolean }} [options]
+ * @param {{ legacyStatusLine?: boolean, featureMapStyle?: ('table'|'bullet') }} [options]
  *   - legacyStatusLine: when true, emit `### F-NNN: Title` followed by `- **Status:** state`
  *     instead of `### F-NNN: Title [state]`. Default false (canonical bracket-header form).
+ *   - featureMapStyle: F-081/iter1 — global override for AC format. Resolution order:
+ *     per-feature `_inputFormat` (set by parser) > options.featureMapStyle > 'table' default.
  * @returns {string}
  */
 function serializeFeatureMap(featureMap, options = {}) {
   // @cap-todo(ac:F-041/AC-6) Optional legacy emission keeps non-table input shape stable.
   const legacyStatusLine = Boolean(options && options.legacyStatusLine);
+  // @cap-todo(ac:F-081/iter1) Resolve global format style from options. Default 'table' preserves
+  //   pre-iter1 behavior — features without _inputFormat (e.g. created via addFeature on a fresh
+  //   project) keep emitting tables unless the project explicitly opts into bullets via the option.
+  const globalStyle =
+    options && (options.featureMapStyle === 'bullet' || options.featureMapStyle === 'table')
+      ? options.featureMapStyle
+      : null;
   const lines = [
     '# Feature Map',
     '',
@@ -365,13 +609,48 @@ function serializeFeatureMap(featureMap, options = {}) {
     }
 
     if (feature.acs.length > 0) {
-      lines.push('| AC | Status | Description |');
-      lines.push('|----|--------|-------------|');
-      for (const ac of feature.acs) {
-        // @cap-todo(ac:F-041/AC-1) ac.status emitted verbatim for lossless roundtrip.
-        lines.push(`| ${ac.id} | ${ac.status} | ${ac.description} |`);
+      // @cap-todo(ac:F-081/iter1) Per-feature format resolution: feature._inputFormat (from parser)
+      //   > options.featureMapStyle (caller override) > 'table' (legacy default).
+      // @cap-decision(F-081/iter1) Per-feature wins over global option: if a single mixed-format
+      //   FEATURE-MAP.md has some bullet features and some table features (e.g. mid-migration),
+      //   round-tripping must preserve each one independently.
+      const featureStyle =
+        feature && feature._inputFormat === 'bullet'
+          ? 'bullet'
+          : feature && feature._inputFormat === 'table'
+            ? 'table'
+            : globalStyle || 'table';
+
+      if (featureStyle === 'bullet') {
+        // @cap-todo(ac:F-081/iter1) Bullet emission: `- [x] AC-N: description` for tested,
+        //   `- [ ] AC-N: description` otherwise. Mirrors the canonical bullet shape the parser
+        //   accepts at line ~217 (bulletAcRE).
+        // @cap-risk(reason:status-bullet-mapping) Bullet form has only two checkbox states
+        //   ([ ] / [x]) but the AC schema has 4 statuses (pending/prototyped/tested/implemented).
+        //   We map: tested -> [x]; everything else -> [ ]. This is lossy: a 'prototyped' or
+        //   'implemented' AC round-trips as 'pending' through bullet-only storage. The intermediate
+        //   states are runtime/transitional in canonical CAP usage, so the loss is acceptable for
+        //   now. If this becomes user-visible, switch the bullet emitter to honor a `[?]` token
+        //   for 'prototyped' or fall back to table form on mixed-status features.
+        // @cap-todo(ref:future-feature) Stage-2 #8 follow-up: enrichFromScan writes 'implemented'
+        //   status which has no faithful bullet representation. Defer to a follow-up feature that
+        //   defines a richer bullet token set or a hybrid emission policy.
+        for (const ac of feature.acs) {
+          const checked = ac.status === 'tested' ? 'x' : ' ';
+          // Empty descriptions emit no trailing space — matches the parser's empty-desc shape.
+          const desc = ac.description ? ` ${ac.description}` : '';
+          lines.push(`- [${checked}] ${ac.id}:${desc}`);
+        }
+        lines.push('');
+      } else {
+        lines.push('| AC | Status | Description |');
+        lines.push('|----|--------|-------------|');
+        for (const ac of feature.acs) {
+          // @cap-todo(ac:F-041/AC-1) ac.status emitted verbatim for lossless roundtrip.
+          lines.push(`| ${ac.id} | ${ac.status} | ${ac.description} |`);
+        }
+        lines.push('');
       }
-      lines.push('');
     }
 
     if (feature.files.length > 0) {
@@ -412,8 +691,27 @@ function serializeFeatureMap(featureMap, options = {}) {
  * @returns {Feature} - The added feature with generated ID
  */
 function addFeature(projectRoot, feature, appPath) {
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: addFeature aborted — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+    return null;
+  }
   const id = getNextFeatureId(featureMap.features);
+  // @cap-todo(ac:F-081/iter1) Inherit dominant AC format from existing features so a bullet-style
+  //   FEATURE-MAP.md does not get a stray table-style entry on addFeature. If existing features
+  //   are mostly bullets, new feature defaults to bullets. Pure-table or empty maps keep table.
+  // @cap-decision(F-081/iter1) Use simple majority on existing features. Ties break toward
+  //   'table' (the legacy default). Empty maps return 'table' (no signal to flip the default).
+  let inheritedFormat = 'table';
+  let bulletCount = 0;
+  let tableCount = 0;
+  for (const f of featureMap.features) {
+    if (f._inputFormat === 'bullet') bulletCount++;
+    else if (f._inputFormat === 'table') tableCount++;
+  }
+  if (bulletCount > tableCount) inheritedFormat = 'bullet';
   const newFeature = {
     id,
     title: feature.title,
@@ -423,6 +721,7 @@ function addFeature(projectRoot, feature, appPath) {
     dependencies: feature.dependencies || [],
     usesDesign: feature.usesDesign || [], // F-063: default-empty DT/DC IDs list.
     metadata: feature.metadata || {},
+    _inputFormat: inheritedFormat,
   };
   featureMap.features.push(newFeature);
   writeFeatureMap(projectRoot, featureMap, appPath);
@@ -456,7 +755,13 @@ const AC_VALID_STATUSES = ['pending', 'prototyped', 'tested'];
 function updateFeatureState(projectRoot, featureId, newState, appPath) {
   if (!VALID_STATES.includes(newState)) return false;
 
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: updateFeatureState aborted — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+    return false;
+  }
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
 
@@ -542,7 +847,13 @@ function transitionWithReason(projectRoot, featureId, newState, appPath) {
 function setAcStatus(projectRoot, featureId, acId, newStatus, appPath) {
   if (!AC_VALID_STATUSES.includes(newStatus)) return false;
 
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: setAcStatus aborted — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+    return false;
+  }
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
 
@@ -580,7 +891,12 @@ function setAcStatus(projectRoot, featureId, acId, newStatus, appPath) {
  * @returns {DriftReport}
  */
 function detectDrift(projectRoot, appPath) {
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: detectDrift — duplicate feature ID detected, drift report uses partial map: ' + String(featureMap.parseError.message).trim());
+  }
   const driftFeatures = [];
 
   for (const f of featureMap.features) {
@@ -642,7 +958,13 @@ function formatDriftReport(report) {
  * @returns {FeatureMap}
  */
 function enrichFromTags(projectRoot, scanResults, appPath) {
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: skipping enrichFromTags — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+    return featureMap;
+  }
 
   for (const tag of scanResults) {
     if (tag.type !== 'feature') continue;
@@ -676,7 +998,13 @@ function enrichFromTags(projectRoot, scanResults, appPath) {
  * @returns {FeatureMap}
  */
 function enrichFromDesignTags(projectRoot, scanResults, appPath) {
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: skipping enrichFromDesignTags — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+    return featureMap;
+  }
 
   // Build file -> featureId map (first @cap-feature wins, matches F-049 convention).
   const fileToFeature = new Map();
@@ -720,7 +1048,13 @@ function enrichFromDesignTags(projectRoot, scanResults, appPath) {
  * @returns {boolean} - true if the feature existed and was updated
  */
 function setFeatureUsesDesign(projectRoot, featureId, designIds, appPath) {
-  const featureMap = readFeatureMap(projectRoot, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
+  if (featureMap.parseError) {
+    console.warn('cap: setFeatureUsesDesign aborted — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+    return false;
+  }
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
   const cleaned = (Array.isArray(designIds) ? designIds : [])
@@ -945,7 +1279,13 @@ function listAppFeatureMaps(projectRoot) {
  * @returns {{ appsCreated: number, featuresDistributed: number, featuresKeptAtRoot: number, distribution: Object }}
  */
 function rescopeFeatures(projectRoot, appPaths, options = {}) {
-  const rootMap = readFeatureMap(projectRoot);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  const rootMap = readFeatureMap(projectRoot, undefined, { safe: true });
+  if (rootMap.parseError) {
+    console.warn('cap: rescopeFeatures aborted — duplicate feature ID detected: ' + String(rootMap.parseError.message).trim());
+    return { appsCreated: 0, featuresDistributed: 0, featuresKeptAtRoot: 0, distribution: {}, parseError: rootMap.parseError };
+  }
   if (!rootMap.features || rootMap.features.length === 0) {
     return { appsCreated: 0, featuresDistributed: 0, featuresKeptAtRoot: 0, distribution: {} };
   }
@@ -1012,7 +1352,13 @@ function rescopeFeatures(projectRoot, appPaths, options = {}) {
     if (!fs.existsSync(appDir)) continue;
 
     // Read existing app Feature Map (or create new)
-    const existingMap = readFeatureMap(projectRoot, appPath);
+    // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+    // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+    const existingMap = readFeatureMap(projectRoot, appPath, { safe: true });
+    if (existingMap.parseError) {
+      console.warn('cap: rescopeFeatures skipping app "' + appPath + '" — duplicate feature ID detected: ' + String(existingMap.parseError.message).trim());
+      continue;
+    }
     const existingIds = new Set(existingMap.features.map(f => f.id));
 
     // Re-number features for the app (F-001, F-002, ...)
@@ -1057,11 +1403,13 @@ function rescopeFeatures(projectRoot, appPaths, options = {}) {
 
 module.exports = {
   FEATURE_MAP_FILE,
+  FEATURE_ID_PATTERN, // F-081
   VALID_STATES,
   STATE_TRANSITIONS,
   AC_VALID_STATUSES,
   generateTemplate,
   readFeatureMap,
+  readCapConfig, // F-081
   writeFeatureMap,
   parseFeatureMapContent,
   serializeFeatureMap,

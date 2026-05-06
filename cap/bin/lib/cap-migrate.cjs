@@ -301,7 +301,13 @@ function migrateArtifacts(projectRoot, options = {}) {
     // Merge into existing Feature Map
     const capFeatureMap = require('./cap-feature-map.cjs');
     if (!dryRun) {
-      const existing = capFeatureMap.readFeatureMap(projectRoot);
+      // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+      // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+      const existing = capFeatureMap.readFeatureMap(projectRoot, undefined, { safe: true });
+      if (existing && existing.parseError) {
+        console.warn('cap: migrate aborted — duplicate feature ID detected: ' + String(existing.parseError.message).trim());
+        return result;
+      }
       const existingTitles = new Set(existing.features.map(f => f.title.toLowerCase()));
 
       for (const feature of features) {

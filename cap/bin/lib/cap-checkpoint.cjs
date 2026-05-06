@@ -382,7 +382,12 @@ function analyzeAndApply(projectRoot, opts = {}) {
   const readFeatureMap = opts.readFeatureMap || capFeatureMap.readFeatureMap;
 
   const session = loadSession(projectRoot);
-  const featureMap = readFeatureMap(projectRoot);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  const featureMap = readFeatureMap(projectRoot, undefined, { safe: true });
+  if (featureMap && featureMap.parseError) {
+    console.warn('cap: checkpoint analyzeAndApply — duplicate feature ID detected, using partial map: ' + String(featureMap.parseError.message).trim());
+  }
   const result = analyze(session, featureMap);
 
   if (!result.breakpoint) {
