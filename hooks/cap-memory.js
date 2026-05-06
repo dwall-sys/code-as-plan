@@ -132,14 +132,23 @@ function run(options = {}) {
   }
 
   // --- Secondary source: Sessions (hotspots only — edit frequency) ---
-  const filesToProcess = sessionFiles.map(f => ({
+  // @cap-decision Hotspots are inherently cumulative (a "hotspot" requires >= minHotspot sessions
+  //                of edits to a single file). In incremental mode the new-session window is too
+  //                narrow — usually 1–2 sessions — so naive filtering produces zero hotspots, and
+  //                writeMemoryDirectory then overwrites hotspots.md with an empty stub. Real-world
+  //                evidence: GoetzeInvest had 61 hotspot nodes in graph.json from a prior init run,
+  //                but hotspots.md was a 202-byte "_No hotspots recorded yet._" header after every
+  //                incremental run. Compute hotspots from ALL sessions every run; the
+  //                filterNewSessions short-circuit above (early-return when sessionFiles is empty)
+  //                still gates whether we run at all, so we don't burn IO on no-op invocations.
+  const filesToProcess = allSessionFiles.map(f => ({
     path: f.path,
     isDebugSession: activeDebug,
   }));
 
   const sessionResult = engine.accumulateFromFiles(filesToProcess, { projectRoot: cwd });
 
-  // Merge: code-based decisions/pitfalls + session-based hotspots
+  // Merge: code-based decisions/pitfalls + session-based hotspots (full-history)
   const allEntries = [...codeEntries, ...sessionResult.newEntries];
 
   if (allEntries.length === 0 && sessionResult.staleEntries.length === 0) {

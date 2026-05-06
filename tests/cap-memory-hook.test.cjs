@@ -66,6 +66,24 @@ describe('cap-memory hook', () => {
     assert.ok(content.includes('writeLastRun'), 'Should have writeLastRun function');
   });
 
+  it('hotspot computation uses ALL sessions, not just the new-since-last-run slice', () => {
+    // V6 regression: the incremental run was filtering sessions to the new slice for ALL purposes,
+    // including hotspot computation. Hotspots are inherently cumulative (>= 2 sessions of edits to a
+    // single file), so a 1-2-session window almost never produces them, and writeMemoryDirectory then
+    // overwrote hotspots.md with an empty stub. Real-world evidence: GoetzeInvest had 61 hotspot
+    // nodes in graph.json from a prior init, but every incremental run zeroed hotspots.md.
+    // Pin this fix at the source-shape level so a future refactor doesn't silently regress.
+    const content = fs.readFileSync(HOOK_PATH, 'utf8');
+    // The full-history pass must be wired through allSessionFiles, not sessionFiles.
+    const filesToProcessAssign = content.match(/const filesToProcess = (\w+)\.map/);
+    assert.ok(filesToProcessAssign, 'Hook must declare filesToProcess from one of the session lists');
+    assert.strictEqual(
+      filesToProcessAssign[1],
+      'allSessionFiles',
+      'filesToProcess must derive from allSessionFiles so hotspot aggregation sees full history',
+    );
+  });
+
   it('should run the F-027 to F-029 pipeline (engine -> writer -> directory)', () => {
     const content = fs.readFileSync(HOOK_PATH, 'utf8');
     assert.ok(content.includes('cap-memory-engine'), 'Should load memory engine (F-027)');
