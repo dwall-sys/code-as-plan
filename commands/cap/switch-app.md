@@ -69,7 +69,12 @@ for (const app of apps) {
   const appDir = path.join(projectRoot, app);
   if (!fs.existsSync(appDir)) continue;
   const tags = scanner.scanDirectory(appDir, { projectRoot });
-  const featureMap = fm.readFeatureMap(projectRoot, app);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  const featureMap = fm.readFeatureMap(projectRoot, app, { safe: true });
+  if (featureMap && featureMap.parseError) {
+    console.warn('cap: switch-app probe — duplicate feature ID in app "' + app + '": ' + String(featureMap.parseError.message).trim());
+  }
   const status = fm.getStatus(featureMap);
   results.push({
     path: app,
@@ -135,7 +140,12 @@ If an app was selected (not root):
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const appPath = process.argv[1];
-const featureMap = fm.readFeatureMap(process.cwd(), appPath);
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), appPath, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: switch-app status — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+}
 const status = fm.getStatus(featureMap);
 console.log(JSON.stringify({
   features: featureMap.features.map(f => ({ id: f.id, title: f.title, state: f.state })),

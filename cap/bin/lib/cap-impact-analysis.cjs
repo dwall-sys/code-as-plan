@@ -608,7 +608,12 @@ function analyzeImpact(cwd, proposedFeature, options = {}) {
     minSharedKeywords,
   } = options;
 
-  const featureMap = readFeatureMap(cwd, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  const featureMap = readFeatureMap(cwd, appPath, { safe: true });
+  if (featureMap && featureMap.parseError) {
+    console.warn('cap: impact-analysis — duplicate feature ID detected, report uses partial map: ' + String(featureMap.parseError.message).trim());
+  }
   const existingFeatures = featureMap.features || [];
 
   const report = generateImpactReport(proposedFeature, existingFeatures, {

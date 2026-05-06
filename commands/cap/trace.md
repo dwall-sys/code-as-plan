@@ -106,7 +106,12 @@ const fm = require('./cap/bin/lib/cap-feature-map.cjs');
 const d = require('./cap/bin/lib/cap-design.cjs');
 const trace = require('./cap/bin/lib/cap-trace.cjs');
 const featureId = process.argv[1];
-const map = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const map = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (map && map.parseError) {
+  console.warn('cap: trace — duplicate feature ID detected, lookup uses partial map: ' + String(map.parseError.message).trim());
+}
 const feature = map.features.find(f => f.id === featureId);
 if (!feature) process.exit(0);
 const design = d.readDesignMd(process.cwd());

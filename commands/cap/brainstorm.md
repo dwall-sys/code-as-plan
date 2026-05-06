@@ -54,7 +54,12 @@ Read FEATURE-MAP.md:
 ```bash
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.warn('cap: brainstorm — duplicate feature ID detected, existing-features list uses partial map: ' + String(featureMap.parseError.message).trim());
+}
 console.log(JSON.stringify({
   featureCount: featureMap.features.length,
   existingIds: featureMap.features.map(f => f.id),
@@ -297,7 +302,13 @@ Use AskUserQuestion:
 ```bash
 node -e "
 const fm = require('./cap/bin/lib/cap-feature-map.cjs');
-const featureMap = fm.readFeatureMap(process.cwd());
+// @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+// @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment (write-back path).
+const featureMap = fm.readFeatureMap(process.cwd(), undefined, { safe: true });
+if (featureMap && featureMap.parseError) {
+  console.error('cap: brainstorm write aborted — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
+  process.exit(2);
+}
 const newFeatures = {JSON.stringify(parsed_features)};
 const updated = fm.addFeatures(featureMap, newFeatures);
 fm.writeFeatureMap(process.cwd(), updated);

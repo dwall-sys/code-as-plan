@@ -1075,7 +1075,13 @@ function _shortHash(s) {
  * @returns {ClassifierContext}
  */
 function buildClassifierContext(projectRoot) {
-  const map = readFeatureMap(projectRoot, null);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment (memory-migrate is a write-back path).
+  const map = readFeatureMap(projectRoot, null, { safe: true });
+  if (map && map.parseError) {
+    console.warn('cap: memory-migrate — duplicate feature ID detected, classifier context uses empty feature set: ' + String(map.parseError.message).trim());
+    return { features: [], fileToFeatureId: new Map(), featureState: new Map() };
+  }
   const features = (map.features || []).map((f) => ({ id: f.id, title: f.title, files: f.files || [] }));
   const fileToFeatureId = new Map();
   const featureState = new Map();

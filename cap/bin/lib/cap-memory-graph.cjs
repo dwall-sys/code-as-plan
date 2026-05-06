@@ -375,7 +375,12 @@ function buildFromMemory(cwd, options = {}) {
   // --- Load feature map ---
   // @cap-decision Lazy require to avoid circular dependencies — these modules are only needed during build/sync
   const { readFeatureMap } = require('./cap-feature-map.cjs');
-  const featureMap = readFeatureMap(cwd, appPath);
+  // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+  // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+  const featureMap = readFeatureMap(cwd, appPath, { safe: true });
+  if (featureMap && featureMap.parseError) {
+    console.warn('cap: memory-graph — duplicate feature ID detected, graph uses partial map: ' + String(featureMap.parseError.message).trim());
+  }
 
   for (const feature of featureMap.features || []) {
     const nodeId = `feature-${feature.id.toLowerCase().replace(/-/g, '')}`;

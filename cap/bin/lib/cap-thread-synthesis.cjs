@@ -507,7 +507,12 @@ function reconnect(cwd, matchResult, newPrompt, options = {}) {
   // Step 3: Detect AC conflicts (if new ACs provided)
   let conflicts = null;
   if (options.newACs && options.newACs.length > 0) {
-    const featureMap = readFeatureMap(cwd);
+    // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
+    // @cap-decision(F-081/iter2) Warn on parseError; continue with partial map for read-only display.
+    const featureMap = readFeatureMap(cwd, undefined, { safe: true });
+    if (featureMap && featureMap.parseError) {
+      console.warn('cap: thread-synthesis — duplicate feature ID detected, conflict detection uses partial map: ' + String(featureMap.parseError.message).trim());
+    }
     conflicts = detectACConflicts(
       oldThread.featureIds || [],
       options.newACs,
