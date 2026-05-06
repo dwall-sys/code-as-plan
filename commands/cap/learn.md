@@ -1,7 +1,7 @@
 ---
 name: cap:learn
 description: "Extract patterns from F-070 learning signals — Stage 1 deterministic heuristics + Stage 2 LLM-briefing pattern (counts + hashes only). Promotes candidates that hit the threshold (>=3 overrides OR >=1 regret) within the per-session LLM budget. Subcommands: --unlearn P-NNN reverses an applied pattern; --retract-check runs the 5-session post-apply check."
-argument-hint: "[--features F-NNN] [--dry-run] [--budget N] [--session SID] [--unlearn P-NNN] [--retract-check]"
+argument-hint: "[--features F-NNN] [--dry-run] [--budget N] [--session SID] [--unlearn P-NNN] [--retract-check] [review]"
 allowed-tools:
   - Read
   - Write
@@ -331,3 +331,129 @@ Surface in a final report:
 - `Retract check: {checked} applied patterns scrutinised, {recommended.length} flagged for retraction.`
 - For each recommended id: `  - <P-NNN> — Layer-1 worse than snapshot (see .cap/learning/retract-recommendations.jsonl).`
 - Errors are non-fatal — log them but exit 0.
+
+## Subcommand: `/cap:learn review`
+
+<!-- @cap-feature(feature:F-073) Pattern Review Board — gated user-facing review of pending patterns. -->
+<!-- @cap-decision(F-073/D2) Briefing-pattern review UX (mirrors F-071's LLM Skill-Briefing): the skill renders board.md and INSTRUCTS the outer agent to call applyPattern / unlearnPattern / skipPattern / rejectPattern per pattern. NO interactive CLI. -->
+<!-- @cap-decision(F-073/D4) Threshold gate: ≥1 high-confidence (layer2.ready=true AND value>=0.75 AND n>=5) OR ≥3 candidates of any kind. Below the gate, the skill exits 0 silently with "no review needed". -->
+<!-- @cap-todo(ac:F-073/AC-1) Review board lists pending patterns (persisted ∧ ¬applied ∧ ¬unlearned ∧ ¬archived ∧ ¬skipped/rejected this session). -->
+<!-- @cap-todo(ac:F-073/AC-2) Threshold gate: only show when high-confidence or any-kind threshold met. -->
+<!-- @cap-todo(ac:F-073/AC-5) Stale-archive sweep before building the board: patterns un-reviewed > 7 sessions move to archive/. -->
+<!-- @cap-todo(ac:F-073/AC-6) Per-pattern options: Approve / Reject / Skip [/ Unlearn when retract-recommended]. -->
+<!-- @cap-todo(ac:F-073/AC-7) Approve → applyPattern; exit 0 ONLY when every approve produced applied:true. Any apply failure → non-zero exit + failure description. -->
+
+When `$ARGUMENTS` contains `review` (and not `--unlearn` / `--retract-check`), run the review board flow. The review path is independent of Stage 1 / Stage 2 / fitness — it consumes already-persisted patterns + fitness + apply-state.
+
+**Steps:**
+
+1. Compute the gate first — bail early if there's nothing to review.
+
+   ```bash
+   node -e "
+   const review = require('./cap/bin/lib/cap-learn-review.cjs');
+   const should = review.shouldShowBoard(process.cwd());
+   console.log(JSON.stringify({ shouldShow: should }));
+   "
+   ```
+
+   If `shouldShow === false`: log `cap:learn review — no review needed (threshold not met).` and exit 0.
+
+2. Sweep stale patterns to archive/ BEFORE rendering the board. This keeps the board free of patterns the user has long since drifted past.
+
+   ```bash
+   node -e "
+   const review = require('./cap/bin/lib/cap-learn-review.cjs');
+   const result = review.archiveStalePatterns(process.cwd());
+   console.log(JSON.stringify({ archived: result.archived, errors: result.errors }, null, 2));
+   "
+   ```
+
+   Surface `Archived stale patterns: {archived.length}` and forward the ids in the final report. Errors are non-fatal — log them but continue.
+
+3. Build + render + write the board.
+
+   ```bash
+   node -e "
+   const review = require('./cap/bin/lib/cap-learn-review.cjs');
+   const root = process.cwd();
+   const board = review.buildReviewBoard(root);
+   const md = review.renderBoardMarkdown(board);
+   const ok = review.writeBoardFile(root, md);
+   console.log(JSON.stringify({
+     written: ok,
+     eligible: board.eligible.length,
+     thresholdMet: board.threshold.met,
+     thresholdReason: board.threshold.reason,
+   }, null, 2));
+   "
+   ```
+
+   Log: `Board written to .cap/learning/board.md ({eligible} patterns).`
+
+4. **Hand off to the outer agent.** Read `.cap/learning/board.md`. For each pattern listed there, decide ONE of approve / reject / skip / unlearn:
+
+   - **approve** → call `cap-pattern-apply.applyPattern(projectRoot, patternId)`. Capture `result.commitHash` and `result.applied`. **If `applied !== true`, the skill MUST surface the failure and exit non-zero (F-073/AC-7).** Do not retry silently. The failure reason is `result.reason` (e.g. `'pending-hook-fail'`, `'l3-target-not-allowed'`).
+   - **unlearn** → call `cap-pattern-apply.unlearnPattern(projectRoot, patternId, { reason: 'manual' })`. Surface drift / refusal cases as documented in `--unlearn` above.
+   - **skip** → call `cap-learn-review.skipPattern(projectRoot, patternId)`. Per-session only — a new session re-shows the pattern.
+   - **reject** → call `cap-learn-review.rejectPattern(projectRoot, patternId)`.
+
+   Example single-pattern call (the agent inlines these per pattern):
+
+   ```bash
+   node -e "
+   const apply = require('./cap/bin/lib/cap-pattern-apply.cjs');
+   const id = process.argv[1];
+   const result = apply.applyPattern(process.cwd(), id);
+   console.log(JSON.stringify(result, null, 2));
+   if (result.applied !== true) process.exit(1);
+   " '<P_NNN>'
+   ```
+
+   ```bash
+   node -e "
+   const review = require('./cap/bin/lib/cap-learn-review.cjs');
+   const id = process.argv[1];
+   const ok = review.skipPattern(process.cwd(), id);
+   console.log(JSON.stringify({ skipped: ok }));
+   " '<P_NNN>'
+   ```
+
+5. **Exit-code propagation (F-073/AC-7).** If ANY approve action returned `applied !== true`, exit non-zero with a structured report:
+
+   ```
+   cap:learn review — apply failures detected:
+     - P-001: applied=false, reason=pending-hook-fail
+     - P-007: applied=false, reason=l3-target-not-allowed
+   ```
+
+   Exit 0 only when every approve produced `applied:true`. Skip / reject / unlearn outcomes do NOT affect the exit code (they're not gated by AC-7).
+
+6. After the board has been processed, clear the pending flag.
+
+   ```bash
+   node -e "
+   const review = require('./cap/bin/lib/cap-learn-review.cjs');
+   review.clearBoardPendingFlag(process.cwd());
+   "
+   ```
+
+7. Final report:
+
+   ```
+   cap:learn review complete.
+
+   Eligible: {eligible}
+   Approved: {n} (commits: {hashes})
+   Skipped: {n}
+   Rejected: {n}
+   Unlearned: {n}
+   Archived (stale): {n}
+
+   {If any apply failed:}
+   ✗ Apply failures: {list}  (exit non-zero)
+   ```
+
+8. Update session (same as Step 7 in the main flow), but with `lastCommand: '/cap:learn review'`.
+
+**Privacy contract.** The board contains only structured metadata — counts, hashes, ids, fitness numbers. No raw paths, no decision text, no record verbatim. The Stop-hook (`hooks/cap-learn-review-hook.js`) flags pending reviews via `.cap/learning/board-pending.flag`; it never spawns the skill itself.

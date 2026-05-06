@@ -1313,19 +1313,19 @@
 | AC-6 | tested | Ist ein Patch für Rückzug markiert, muss das Learn-Review-Board (F-073) ihn mit Label „Rückzug empfohlen" und One-Click-Unlearn-Option anzeigen. |
 | AC-7 | tested | Unlearn muss idempotent sein: zweifacher Aufruf auf bereits zurückgenommenen P-ID darf keinen doppelten Commit erzeugen. |
 
-### F-073: Review Patterns via Learn Command [planned]
+### F-073: Review Patterns via Learn Command [tested]
 
 **Depends on:** F-072, F-074
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Der Command `/cap:learn review` muss alle pending Pattern-Vorschläge aus `.cap/learning/candidates/` mit Fitness-Score, Confidence und Trigger-Begründung anzeigen. |
-| AC-2 | pending | Das Review-Board muss nur erscheinen, wenn `≥ 1 high-confidence (Langfrist ≥ 0.75 bei n≥5) ODER ≥ 3 beliebige Kandidaten` vorliegen. |
-| AC-3 | pending | Das System muss einen Stop-Hook registrieren, der nach dem `cap-memory`-Stop-Hook automatisch `/cap:learn review` auslöst (Memory-Pipeline → Learn-Pipeline → Review-Board). |
-| AC-4 | pending | Skip pro Session muss gespeichert werden (`.cap/learning/skipped-<session-id>.json`), aber keine persistente Mute-Regel erzeugen. |
-| AC-5 | pending | Patterns, die über 7 Sessions ungeprüft im Review-Board stehen, müssen automatisch in `.cap/learning/archive/` verschoben und aus dem Board entfernt werden. |
-| AC-6 | pending | Für jeden Pattern muss das Board die Optionen Approve (→ Apply via F-074), Reject, Skip und bei Rückzug-Empfehlung (F-074) zusätzlich Unlearn anbieten. |
-| AC-7 | pending | Approve muss die Learn-Pipeline (F-074 Apply) synchron triggern und den Exit-Code 0 nur bei erfolgreichem Commit zurückgeben. |
+| AC-1 | tested | Der Command `/cap:learn review` muss alle pending Pattern-Vorschläge aus `.cap/learning/candidates/` mit Fitness-Score, Confidence und Trigger-Begründung anzeigen. |
+| AC-2 | tested | Das Review-Board muss nur erscheinen, wenn `≥ 1 high-confidence (Langfrist ≥ 0.75 bei n≥5) ODER ≥ 3 beliebige Kandidaten` vorliegen. |
+| AC-3 | tested | Das System muss einen Stop-Hook registrieren, der nach dem `cap-memory`-Stop-Hook automatisch `/cap:learn review` auslöst (Memory-Pipeline → Learn-Pipeline → Review-Board). |
+| AC-4 | tested | Skip pro Session muss gespeichert werden (`.cap/learning/skipped-<session-id>.json`), aber keine persistente Mute-Regel erzeugen. |
+| AC-5 | tested | Patterns, die über 7 Sessions ungeprüft im Review-Board stehen, müssen automatisch in `.cap/learning/archive/` verschoben und aus dem Board entfernt werden. |
+| AC-6 | tested | Für jeden Pattern muss das Board die Optionen Approve (→ Apply via F-074), Reject, Skip und bei Rückzug-Empfehlung (F-074) zusätzlich Unlearn anbieten. |
+| AC-7 | tested | Approve muss die Learn-Pipeline (F-074 Apply) synchron triggern und den Exit-Code 0 nur bei erfolgreichem Commit zurückgeben. |
 
 ### F-075: Provision Trust-Mode Configuration Slot [shipped]
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-05T23:11:49.877Z*
+*Last updated: 2026-05-06T07:47:14.771Z*
