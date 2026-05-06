@@ -7,6 +7,7 @@
 'use strict';
 
 // @cap-feature(feature:F-077, primary:true) V6 Memory Migration Tool — one-shot migration from V5 monolith to per-feature files (F-076 schema)
+// @cap-feature(feature:F-082) Sub-app prefix boost in classifyEntry — leverages F-082's runtime metadata.subApp to lift path-heuristik confidence on monorepo file paths.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -97,9 +98,11 @@ const TITLE_PREFIX_MIN_OCCURRENCES = 5;
 
 /**
  * @typedef {Object} ClassifierContext
- * @property {Array<{id: string, title: string, files: string[]}>} features - from FEATURE-MAP.md
+ * @property {Array<{id: string, title: string, files: string[], subApp?: string|null}>} features - from FEATURE-MAP.md
  * @property {Map<string, string>} fileToFeatureId - reverse-index: repo-relative path → F-NNN
  * @property {Map<string, {state: string, transitionAt: string|null}>} featureState - F-NNN → last-known state-transition info (for snapshot date heuristic)
+ * @property {Map<string, string>=} featureToSubApp - F-082: F-NNN → sub-app slug (e.g. "web", "api", "shared"). Empty when project is not a monorepo.
+ * @property {Map<string, number>=} titlePrefixCounts - F-077/D7: title-prefix slug → occurrence count
  */
 
 /**
@@ -466,39 +469,114 @@ function classifyEntry(entry, context) {
 
   // 3. Path heuristic — match relatedFiles against FEATURE-MAP key_files.
   const matches = new Map(); // featureId -> hit count
+  // @cap-todo(ac:F-082/AC-4) Track sub-app boosts separately so a strong file-list hit
+  //   (3+ files for one feature, no sub-app match) still wins over a sub-app-only nudge.
+  const subAppBoosts = new Map(); // featureId -> boost score (0..1)
+  /** @type {Set<string>} sub-apps inferred from this entry's files */
+  const entrySubApps = new Set();
   for (const f of entry.relatedFiles || []) {
     const normalized = _normalizeRepoPath(f);
     const fid = context.fileToFeatureId.get(normalized);
     if (fid) {
       matches.set(fid, (matches.get(fid) || 0) + 1);
     }
+    // @cap-decision(F-082/AC-4) Match `apps/<sub>/...` AND `packages/<sub>/...` prefixes.
+    //   Single-segment top-level paths (e.g. `web/foo.ts`) deliberately NOT matched — those
+    //   are too ambiguous to attribute without explicit user opt-in.
+    const segMatch = normalized.match(/^(?:apps|packages)\/([^/]+)\//);
+    if (segMatch) entrySubApps.add(segMatch[1]);
   }
-  if (matches.size === 1) {
-    const [fid] = matches.keys();
-    reasons.push(`path-match:${fid}`);
+  // @cap-todo(ac:F-082/AC-4) Sub-app prefix boost. For each feature with `metadata.subApp`
+  //   matching one of the inferred sub-apps from this entry's files, add a soft boost.
+  //   The boost is `+0.5` per matching feature/sub-app pair. The single-match calibration
+  //   below caps the resulting confidence at 0.55 when there is NO file-list hit — so a
+  //   subApp-only nudge stays below the auto-threshold and prompts the user. With at least
+  //   one file-list hit, the boost feeds into `0.7 + boost * 0.2` (capped at 0.95).
+  // @cap-decision(F-082/iter1 warn:4) Doc/code drift fix. Pre-iter1 comment claimed the boost
+  //   "caps at +0.3" but the code uses +0.5. Updated text to match actual behavior — the
+  //   confidence cap (0.55 for subApp-only) is what bounds the user-visible signal, not the
+  //   raw additive cap.
+  // @cap-decision(F-082/AC-4) Boost is additive to the file-list hit count (each matching
+  //   feature/sub-app pair adds 0.5 to the combined score), NOT a replacement. Real file-list
+  //   hits still dominate. A feature with 3 file-list hits scores 3 + boost; a feature with
+  //   0 file-list hits but a matching sub-app scores boost only and is calibrated to 0.55.
+  // @cap-risk(F-082/backward-compat) When `featureToSubApp` is empty (non-monorepo project),
+  //   this loop is a no-op. Existing behavior is unchanged. Test pinned in
+  //   cap-memory-migrate-monorepo.test.cjs ("no-boost when subApp metadata absent").
+  if (context.featureToSubApp && context.featureToSubApp.size > 0 && entrySubApps.size > 0) {
+    for (const [fid, sub] of context.featureToSubApp.entries()) {
+      if (entrySubApps.has(sub)) {
+        // Soft boost: half a file-list hit per matching feature/sub-app pair.
+        subAppBoosts.set(fid, (subAppBoosts.get(fid) || 0) + 0.5);
+        // Make the feature appear in `matches` even if no file-list hit, so the tie-breaker
+        //   below considers it. Use a tiny seed (0) so a real hit still beats subApp-only.
+        if (!matches.has(fid)) matches.set(fid, 0);
+      }
+    }
+  }
+  // Build a combined-score map for selection: file-hits + subApp-boost.
+  const combined = new Map();
+  for (const [fid, hits] of matches.entries()) {
+    combined.set(fid, hits + (subAppBoosts.get(fid) || 0));
+  }
+  if (combined.size === 1) {
+    const [fid] = combined.keys();
+    const fileHits = matches.get(fid) || 0;
+    const boost = subAppBoosts.get(fid) || 0;
+    // @cap-decision(F-082/AC-4) Confidence calibration:
+    //   - real file-list hit (fileHits >= 1) keeps the legacy 0.7 baseline + small boost.
+    //   - subApp-only match (fileHits === 0, boost > 0) yields 0.55 — below auto threshold
+    //     so the user is prompted, but well above the F-NNN-mention 0.5 fallback.
+    let confidence = fileHits >= 1 ? Math.min(0.95, 0.7 + boost * 0.2) : 0.55;
+    if (boost > 0 && fileHits >= 1) reasons.push(`path-match:${fid}+subapp-boost`);
+    else if (boost > 0) reasons.push(`subapp-boost:${fid}`);
+    else reasons.push(`path-match:${fid}`);
     return {
       destination: 'feature',
       featureId: fid,
       topic: _topicForFeature(fid, context),
-      confidence: 0.7,
+      confidence,
       reasons,
     };
   }
-  if (matches.size > 1) {
-    // Multiple feature matches — emit as ambiguous with top-3 candidates.
-    const sorted = [...matches.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (combined.size > 1) {
+    // Multiple feature matches — emit as ambiguous with top-3 candidates ranked by combined score.
+    const sorted = [...combined.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     reasons.push(`path-match-multi:${sorted.map((s) => s[0]).join(',')}`);
-    const candidates = sorted.map(([fid, count]) => ({
-      featureId: fid,
-      topic: _topicForFeature(fid, context),
-      confidence: 0.6 + 0.05 * count, // tie-break on hit count, capped below auto threshold
-      reason: `path-match (${count} hit${count === 1 ? '' : 's'})`,
-    }));
+    const topFid = sorted[0][0];
+    const topFileHits = matches.get(topFid) || 0;
+    const topBoost = subAppBoosts.get(topFid) || 0;
+    const candidates = sorted.map(([fid, score]) => {
+      const fHits = matches.get(fid) || 0;
+      const fBoost = subAppBoosts.get(fid) || 0;
+      const reasonParts = [];
+      if (fHits > 0) reasonParts.push(`path-match (${fHits} hit${fHits === 1 ? '' : 's'})`);
+      if (fBoost > 0) reasonParts.push(`subapp-boost`);
+      return {
+        featureId: fid,
+        topic: _topicForFeature(fid, context),
+        confidence: 0.6 + 0.05 * Math.min(score, 4),
+        reason: reasonParts.join(' + ') || 'path',
+      };
+    });
+    // @cap-decision(F-082/AC-4) When the runner-up has zero file-hits but the leader has a
+    //   strong file-hit lead AND matches a sub-app, promote to auto-confidence. This is the
+    //   key V6.1 lever: GoetzeInvest's `apps/web/src/auth/login.tsx` has both sub-app match
+    //   AND a file-list hit on F-WEB-AUTH; without the lift it would stay below threshold and
+    //   demand 1000+ user prompts.
+    let confidence = 0.6;
+    if (topFileHits >= 1 && topBoost > 0) {
+      const runnerUpScore = sorted[1] ? sorted[1][1] : 0;
+      const leadScore = sorted[0][1];
+      if (leadScore - runnerUpScore >= 0.5) {
+        confidence = Math.min(0.85, 0.7 + topBoost * 0.2);
+      }
+    }
     return {
       destination: 'feature',
       featureId: candidates[0].featureId,
       topic: candidates[0].topic,
-      confidence: 0.6, // below threshold → ambiguity
+      confidence,
       reasons,
       candidates,
     };
@@ -1080,21 +1158,71 @@ function buildClassifierContext(projectRoot) {
   const map = readFeatureMap(projectRoot, null, { safe: true });
   if (map && map.parseError) {
     console.warn('cap: memory-migrate — duplicate feature ID detected, classifier context uses empty feature set: ' + String(map.parseError.message).trim());
-    return { features: [], fileToFeatureId: new Map(), featureState: new Map() };
+    return { features: [], fileToFeatureId: new Map(), featureState: new Map(), featureToSubApp: new Map() };
   }
-  const features = (map.features || []).map((f) => ({ id: f.id, title: f.title, files: f.files || [] }));
+  // @cap-todo(ac:F-082/AC-4) Capture the runtime-only `metadata.subApp` propagated by the
+  //   F-082 aggregator. The path-heuristic boost below uses this to lift confidence when a
+  //   V5 entry's relatedFiles match a feature's sub-app prefix even if the explicit file
+  //   listing in the sub-app FEATURE-MAP doesn't include the file.
+  // @cap-todo(ac:F-082/AC-4) Build a sub-app prefix map so features from `apps/web/FEATURE-MAP.md`
+  //   whose file list uses sub-app-relative paths (`src/auth/login.tsx`) still match V5 entries
+  //   whose `relatedFiles` use repo-absolute paths (`apps/web/src/auth/login.tsx`).
+  // @cap-decision(F-082/AC-4) Need a reverse-index from (subApp slug) → (apps/web | packages/shared
+  //   prefix). The aggregator only carries the slug; we recover the full prefix from the Rescoped
+  //   Table (parseRescopedTable) so file-list paths can be re-anchored on read.
+  const featureMapModule = require('./cap-feature-map.cjs');
+  /** @type {Map<string, string>} subApp slug -> sub-app relative prefix (e.g. "web" -> "apps/web") */
+  const subAppPrefixes = new Map();
+  try {
+    const rootContent = fs.readFileSync(path.join(projectRoot, 'FEATURE-MAP.md'), 'utf8');
+    for (const entry of featureMapModule.parseRescopedTable(rootContent)) {
+      const slug = entry.appPath.split('/').pop();
+      if (slug) subAppPrefixes.set(slug, entry.appPath);
+    }
+  } catch (_e) {
+    // No root file or unreadable — sub-app prefixes empty; legacy file-list match still works.
+  }
+  // Also include opt-in directory-walk targets if config says discover=auto.
+  try {
+    const cfg = featureMapModule.readCapConfig(projectRoot);
+    if (cfg && cfg.featureMaps && cfg.featureMaps.discover === 'auto') {
+      for (const entry of featureMapModule.discoverSubAppFeatureMaps(projectRoot)) {
+        const slug = entry.appPath.split('/').pop();
+        if (slug && !subAppPrefixes.has(slug)) subAppPrefixes.set(slug, entry.appPath);
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  const features = (map.features || []).map((f) => ({
+    id: f.id,
+    title: f.title,
+    files: f.files || [],
+    subApp: f && f.metadata ? f.metadata.subApp || null : null,
+  }));
   const fileToFeatureId = new Map();
   const featureState = new Map();
+  /** @type {Map<string, string>} F-NNN -> subApp slug */
+  const featureToSubApp = new Map();
   for (const f of features) {
+    const prefix = f.subApp ? subAppPrefixes.get(f.subApp) : null;
     for (const file of f.files) {
-      fileToFeatureId.set(_normalizeRepoPath(file), f.id);
+      const normalized = _normalizeRepoPath(file);
+      fileToFeatureId.set(normalized, f.id);
+      // @cap-todo(ac:F-082/AC-4) When the feature comes from a sub-app and its file path is
+      //   sub-app-relative (does not start with "apps/" or "packages/"), also index the
+      //   prefixed version so V5 entries with repo-absolute paths still match.
+      if (prefix && !/^(apps|packages)\//.test(normalized)) {
+        const prefixed = `${prefix}/${normalized}`;
+        if (!fileToFeatureId.has(prefixed)) fileToFeatureId.set(prefixed, f.id);
+      }
     }
+    if (f.subApp) featureToSubApp.set(f.id, f.subApp);
     // featureState — use the lastScan as a proxy since FEATURE-MAP doesn't carry per-feature
     // transitionAt today. The date-proximity heuristic falls back to lastScan when no per-
     // feature timestamp is available.
     featureState.set(f.id, { state: /** @type {any} */ (map.features.find((m) => m.id === f.id) || {}).state || 'planned', transitionAt: map.lastScan || null });
   }
-  return { features, fileToFeatureId, featureState };
+  return { features, fileToFeatureId, featureState, featureToSubApp };
 }
 
 /**

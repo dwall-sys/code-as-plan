@@ -1468,21 +1468,34 @@
 - `cap/bin/lib/cap-memory-schema.cjs`
 - `tests/cap-feature-map-bullet.test.cjs`
 - `tests/cap-feature-map-adversarial.test.cjs`
+- `tests/cap-feature-map-iterate.test.cjs`
 
-### F-082: Aggregate Feature Maps Across Monorepo Sub-Apps [planned]
+### F-082: Aggregate Feature Maps Across Monorepo Sub-Apps [shipped]
 
 **Depends on:** F-081, F-077
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | `readFeatureMap` SHALL detect the "Rescoped Feature Maps" header in the root FEATURE-MAP.md and aggregate referenced sub-app maps transparently (existing API unchanged) |
-| AC-2 | pending | Each aggregated feature object SHALL carry runtime-only `metadata.subApp` (not persisted to FEATURE-MAP.md, source-of-truth remains the Rescoped-Table) |
-| AC-3 | pending | Opt-in directory-walk SHALL load `apps/*/FEATURE-MAP.md` when `cap.config.json:featureMaps.discover === "auto"` (default "table-only") |
-| AC-4 | pending | F-077 path-heuristik SHALL boost match-score for features whose `metadata.subApp` matches the file's `apps/<subApp>/...` prefix |
-| AC-5 | pending | Synthetic test fixture `tests/fixtures/v61-monorepo/` SHALL provide 3 sub-apps (`apps/web/`, `apps/api/`, `packages/shared/`) with ~30 entries each, mixed long-form + numeric IDs, mixed bullet + table format |
-| AC-6 | pending | Synthetic-fixture dry-run SHALL produce ≥80 % feature-routed entries (asserted in test) |
-| AC-7 | pending | Duplicate IDs across aggregated sub-app maps SHALL emit a loud, positioned error (no silent dedup) |
-| AC-8 | pending | Round-trip write of root FEATURE-MAP.md SHALL be idempotent — runtime-only `metadata.subApp` is never written back |
+| AC-1 | tested | `readFeatureMap` SHALL detect the "Rescoped Feature Maps" header in the root FEATURE-MAP.md and aggregate referenced sub-app maps transparently (existing API unchanged) |
+| AC-2 | tested | Each aggregated feature object SHALL carry runtime-only `metadata.subApp` (not persisted to FEATURE-MAP.md, source-of-truth remains the Rescoped-Table) |
+| AC-3 | tested | Opt-in directory-walk SHALL load `apps/*/FEATURE-MAP.md` when `cap.config.json:featureMaps.discover === "auto"` (default "table-only") |
+| AC-4 | tested | F-077 path-heuristik SHALL boost match-score for features whose `metadata.subApp` matches the file's `apps/<subApp>/...` prefix |
+| AC-5 | tested | Synthetic test fixture `tests/fixtures/v61-monorepo/` SHALL provide 3 sub-apps (`apps/web/`, `apps/api/`, `packages/shared/`) with ~30 entries each, mixed long-form + numeric IDs, mixed bullet + table format |
+| AC-6 | tested | Synthetic-fixture dry-run SHALL produce ≥80 % feature-routed entries (asserted in test) |
+| AC-7 | tested | Duplicate IDs across aggregated sub-app maps SHALL emit a loud, positioned error (no silent dedup) |
+| AC-8 | tested | Round-trip write of root FEATURE-MAP.md SHALL be idempotent — runtime-only `metadata.subApp` is never written back |
+
+**Files:**
+- `cap/bin/lib/cap-feature-map.cjs`
+- `cap/bin/lib/cap-memory-migrate.cjs`
+- `tests/cap-feature-map-monorepo.test.cjs`
+- `tests/cap-memory-migrate-monorepo.test.cjs`
+- `tests/fixtures/v61-monorepo/FEATURE-MAP.md`
+- `tests/fixtures/v61-monorepo/apps/web/FEATURE-MAP.md`
+- `tests/fixtures/v61-monorepo/apps/api/FEATURE-MAP.md`
+- `tests/fixtures/v61-monorepo/packages/shared/FEATURE-MAP.md`
+- `tests/cap-feature-map-monorepo-adversarial.test.cjs`
+- `tests/cap-memory-migrate-monorepo-adversarial.test.cjs`
 
 ## Legend
 
@@ -1494,4 +1507,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-06T15:11:07.450Z*
+*Last updated: 2026-05-06T20:10:42.133Z*
