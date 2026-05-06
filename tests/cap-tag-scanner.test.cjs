@@ -316,6 +316,32 @@ describe('scanDirectory', () => {
     assert.strictEqual(tags[0].file, 'app.js');
   });
 
+  it('excludes framework build caches that emit source-mapped JS', () => {
+    // Regression: a real-world GoetzeInvest scan surfaced 344 decisions sourced from
+    // `.next/dev/server/chunks/*.js` (~28 % of decisions.md). Build artifacts MUST never enter
+    // the memory pipeline. Pin Next.js, Turbo, Nx, Vercel, Svelte-Kit caches alongside the
+    // generic `dist`/`build`/`coverage`.
+    const buildArtifactDirs = [
+      ['.next', 'server', 'chunks'],
+      ['.turbo', 'cache'],
+      ['.nx', 'cache'],
+      ['.vercel', 'output'],
+      ['.svelte-kit'],
+      ['out'],
+      ['.cache'],
+      ['.parcel-cache'],
+    ];
+    for (const segs of buildArtifactDirs) {
+      const dir = path.join(tmpDir, ...segs);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'chunk.js'), '// @cap-decision This is build output and must be ignored\n');
+    }
+    fs.writeFileSync(path.join(tmpDir, 'app.js'), '// @cap-decision This is real source\n');
+    const tags = scanDirectory(tmpDir, { projectRoot: tmpDir });
+    assert.strictEqual(tags.length, 1, `expected only app.js to scan, got ${tags.length} tags`);
+    assert.strictEqual(tags[0].file, 'app.js');
+  });
+
   it('scans nested directories', () => {
     fs.mkdirSync(path.join(tmpDir, 'src', 'lib'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'src', 'lib', 'util.js'), '// @cap-todo Implement util\n');
@@ -1163,7 +1189,22 @@ describe('cap-tag-scanner export verification', () => {
     assert.ok(Array.isArray(mod.SUPPORTED_EXTENSIONS));
     assert.strictEqual(mod.SUPPORTED_EXTENSIONS.length, 18);
     assert.ok(Array.isArray(mod.DEFAULT_EXCLUDE));
-    assert.strictEqual(mod.DEFAULT_EXCLUDE.length, 7);
+    // Pin: the V6 memory-bloat fix expanded DEFAULT_EXCLUDE to cover Next.js / Turbo / Nx / Vercel
+    // caches that were silently leaking source-mapped JS into decisions.md (28 % of one real project).
+    // We assert the must-haves explicitly instead of length so a future legit addition doesn't break this.
+    const REQUIRED_EXCLUDES = [
+      '.git', '.cap', '.planning',
+      'node_modules', 'dist', 'build', 'coverage', 'out',
+      '.next', '.turbo', '.nx', '.cache', '.parcel-cache', '.vercel', '.svelte-kit',
+      '__pycache__', '.pytest_cache', 'venv', '.venv',
+      'target', '.gradle', 'Pods', '.expo',
+    ];
+    for (const dir of REQUIRED_EXCLUDES) {
+      assert.ok(
+        mod.DEFAULT_EXCLUDE.includes(dir),
+        `DEFAULT_EXCLUDE must include "${dir}" — build artifacts must never enter the memory pipeline`,
+      );
+    }
     assert.strictEqual(typeof mod.LEGACY_TAG_RE, 'object');
     assert.ok(Object.keys(mod.LEGACY_TAG_RE).length >= 0);
   });

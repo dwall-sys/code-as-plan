@@ -49,7 +49,23 @@ const CAP_DESIGN_TAG_TYPES = ['design-token', 'design-component'];
 // @cap-todo(ref:AC-26) Tag scanner is language-agnostic, operating on comment syntax patterns across JS, TS, Python, Ruby, Shell
 // @cap-decision F-046 leaves SUPPORTED_EXTENSIONS untouched to preserve AC-5 backward compatibility (existing test asserts list length === 18). The new polylingual scanner uses Object.keys(COMMENT_STYLES) as its default extension list, which DOES include HTML/CSS/SCSS/Markdown/YAML/TOML/Shell-zsh.
 const SUPPORTED_EXTENSIONS = ['.js', '.cjs', '.mjs', '.ts', '.tsx', '.jsx', '.py', '.rb', '.sh', '.bash', '.sql', '.go', '.rs', '.java', '.c', '.cpp', '.h', '.hpp'];
-const DEFAULT_EXCLUDE = ['node_modules', '.git', '.cap', 'dist', 'build', 'coverage', '.planning'];
+// @cap-decision DEFAULT_EXCLUDE covers (a) VCS + tooling metadata, (b) JS/TS build outputs, (c) framework
+//                 caches that emit source-mapped JS the scanner would otherwise mistake for real code.
+//                 The Next.js / Turbo / Nx caches were the worst offenders — a single GoetzeInvest scan
+//                 surfaced 344 decisions sourced from `.next/dev/server/chunks/*.js` (~28 % of the
+//                 decisions.md file). Build artifacts MUST never enter the memory pipeline; pre-existing
+//                 entries should be pruned via `cap:memory prune` after this constant lands.
+const DEFAULT_EXCLUDE = [
+  // VCS + CAP own metadata
+  '.git', '.cap', '.planning',
+  // Generic JS/TS build outputs
+  'node_modules', 'dist', 'build', 'coverage', 'out',
+  // Framework / monorepo caches that emit source-mapped JS
+  '.next', '.turbo', '.nx', '.cache', '.parcel-cache', '.vercel', '.svelte-kit',
+  // Other ecosystems (Python / Java / Rust / iOS / Android)
+  '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.tox', 'venv', '.venv',
+  'target', '.gradle', 'Pods', '.expo',
+];
 
 // @cap-todo(ref:AC-22) @cap-todo supports structured subtypes: risk:..., decision:...
 // @cap-decision Subtype detection uses prefix matching on the description text (e.g., "risk: memory leak" -> subtype: "risk")
