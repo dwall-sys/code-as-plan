@@ -24,6 +24,7 @@ const {
   serializeFeatureMap,
   addFeature,
   updateFeatureState,
+  enrichFromTags,
 } = require('../cap/bin/lib/cap-feature-map.cjs');
 
 let tmpDir;
@@ -1157,5 +1158,281 @@ describe('F-082 backward-compat hardening', () => {
     assert.ok(!/subApp/i.test(out), 'serializer must not emit subApp');
     // metadata is not currently serialized at all — pin.
     assert.ok(!/visible-key/.test(out), 'metadata is not currently serialized at all');
+  });
+});
+
+// =============================================================================
+// F-082 follow-ups (post-ship hardening) — FIX A / FIX B / FIX D
+// =============================================================================
+
+// Build a string with raw ANSI ESC + other control bytes WITHOUT putting literal
+// control bytes in the source file (avoids tooling that strips/normalizes them).
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const BS = String.fromCharCode(0x08);
+const NUL = String.fromCharCode(0x00);
+// eslint-disable-next-line no-unused-vars
+const DEL = String.fromCharCode(0x7f);
+// Pre-built regex of all C0 controls + DEL, constructed at runtime so the source file
+// itself stays free of any control byte.
+const CONTROL_BYTE_RE = new RegExp(
+  '[' +
+    Array.from({ length: 0x20 }, (_, i) => String.fromCharCode(i)).join('') +
+    String.fromCharCode(0x7f) +
+  ']'
+);
+
+// Helper: capture all console.warn output during fn.
+function captureWarn(fn) {
+  const captured = [];
+  const orig = console.warn;
+  console.warn = (...args) => { captured.push(args.map(String).join(' ')); };
+  try {
+    fn();
+  } finally {
+    console.warn = orig;
+  }
+  return captured.join('\n');
+}
+
+// =============================================================================
+// FIX A: ANSI-defense in console.warn paths
+// =============================================================================
+
+describe('F-082 follow-up FIX A: ANSI-defense in console.warn paths', () => {
+  it('legacy single-scope parseError warn contains no control bytes', () => {
+    // Force the legacy single-scope path. Duplicate-ID surfaces parseError; the warn
+    // line must run parseError.message through _safeForError and emit no control bytes.
+    writeFile(tmpDir, 'FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-001: One [planned]', '',
+      '### F-001: Dup [planned]', '',
+    ].join('\n'));
+    const captured = captureWarn(() => {
+      enrichFromTags(tmpDir, []);
+    });
+    assert.ok(captured.includes('F-001'), 'warn must mention the duplicate feature id');
+    assert.ok(!CONTROL_BYTE_RE.test(captured),
+      'warn must contain no control bytes, got: ' + JSON.stringify(captured));
+  });
+
+  it('per-scope parseError warn (aggregated path) sanitizes scope label + message', () => {
+    // 2 sub-apps; apps/web has duplicate-ID -> per-scope parseError. apps/api stays healthy.
+    // The warn for apps/web must name the scope and include the message; both must be
+    // free of control bytes.
+    writeFile(tmpDir, 'FEATURE-MAP.md', ROOT_RESCOPED(['apps/web', 'apps/api']));
+    writeFile(tmpDir, 'apps/web/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-WEB-AUTH: Web one [planned]', '',
+      '### F-WEB-AUTH: Web two [planned]', '',
+    ].join('\n'));
+    writeFile(tmpDir, 'apps/api/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-API-USERS: API users [planned]', '',
+    ].join('\n'));
+
+    const captured = captureWarn(() => {
+      enrichFromTags(tmpDir, [
+        { type: 'feature', file: 'apps/api/src/users.ts', metadata: { feature: 'F-API-USERS' } },
+      ]);
+    });
+    // Aggregator stores the sub-app SLUG as scope name (e.g. "web", not "apps/web").
+    assert.ok(/scope\s+"web"/.test(captured),
+      'per-scope warn must name failed scope by slug, got: ' + JSON.stringify(captured));
+    assert.ok(!CONTROL_BYTE_RE.test(captured),
+      'per-scope warn must contain no control bytes, got: ' + JSON.stringify(captured));
+  });
+
+  it('partial-write summary warn (FIX D path) sanitizes ANSI bytes from injected error message', () => {
+    // Mock fs.writeFileSync to throw an Error whose message embeds raw ANSI/BEL/BS/NUL
+    // bytes. The FIX D summary warn passes the error message through _safeForError; the
+    // captured warn must NOT contain any of these control bytes.
+    writeFile(tmpDir, 'FEATURE-MAP.md', ROOT_RESCOPED(['apps/web']));
+    writeFile(tmpDir, 'apps/web/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-WEB-AUTH: Web auth [planned]', '',
+    ].join('\n'));
+    const webPath = path.join(tmpDir, 'apps', 'web', 'FEATURE-MAP.md');
+    const origWriteFileSync = fs.writeFileSync;
+    fs.writeFileSync = function patched(p, data, opts) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(webPath)) {
+        // Inject raw control bytes into the error message via runtime-built strings.
+        const msg = ESC + '[31mEROFS' + ESC + '[0m mocked' + BEL + 'with' + BS + 'controls' + NUL;
+        throw new Error(msg);
+      }
+      return origWriteFileSync.call(fs, p, data, opts);
+    };
+    let captured = '';
+    try {
+      captured = captureWarn(() => {
+        enrichFromTags(tmpDir, [
+          { type: 'feature', file: 'apps/web/src/auth.ts', metadata: { feature: 'F-WEB-AUTH' } },
+        ]);
+      });
+    } finally {
+      fs.writeFileSync = origWriteFileSync;
+    }
+    assert.ok(/partial write/i.test(captured),
+      'summary warn must fire, got: ' + JSON.stringify(captured));
+    // Sanitized printable parts of the message must still surface.
+    assert.ok(captured.includes('EROFS'),
+      'summary warn must include sanitized error text, got: ' + JSON.stringify(captured));
+    // The injected control bytes MUST be stripped.
+    assert.ok(!CONTROL_BYTE_RE.test(captured),
+      'summary warn must contain no control bytes, got: ' + JSON.stringify(captured));
+  });
+});
+
+// =============================================================================
+// FIX B: Cross-sub-app blast radius — aggregated parseError must not block healthy scopes
+// =============================================================================
+
+describe('F-082 follow-up FIX B: aggregated parseError no longer blasts healthy scopes', () => {
+  it('enrichFromTags continues into per-scope loop when ONE sub-app has parseError; healthy sub-apps still get enriched', () => {
+    // 3 sub-apps: apps/web has duplicate-ID (parseError); apps/api + apps/admin are healthy.
+    // Pre-fix: aggregated parseError aborted enrichFromTags BEFORE any scope was written,
+    // so apps/api + apps/admin lost their file refs too. Post-fix: only apps/web is skipped.
+    writeFile(tmpDir, 'FEATURE-MAP.md', ROOT_RESCOPED(['apps/web', 'apps/api', 'apps/admin']));
+    writeFile(tmpDir, 'apps/web/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-WEB-AUTH: Web one [planned]', '',
+      '### F-WEB-AUTH: Web two [planned]', '',
+    ].join('\n'));
+    writeFile(tmpDir, 'apps/api/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-API-USERS: API users [planned]', '',
+    ].join('\n'));
+    writeFile(tmpDir, 'apps/admin/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-ADMIN-DASH: Admin dashboard [planned]', '',
+    ].join('\n'));
+
+    const scanResults = [
+      { type: 'feature', file: 'apps/api/src/users.ts', metadata: { feature: 'F-API-USERS' } },
+      { type: 'feature', file: 'apps/admin/src/dashboard.ts', metadata: { feature: 'F-ADMIN-DASH' } },
+      { type: 'feature', file: 'apps/web/src/auth.ts', metadata: { feature: 'F-WEB-AUTH' } },
+    ];
+
+    captureWarn(() => {
+      enrichFromTags(tmpDir, scanResults);
+    });
+
+    // apps/api + apps/admin must have their file refs persisted.
+    const apiMap = readFeatureMap(tmpDir, 'apps/api', { safe: true });
+    const apiFeature = apiMap.features.find((f) => f.id === 'F-API-USERS');
+    assert.ok(apiFeature, 'F-API-USERS must exist in apps/api');
+    assert.ok(apiFeature.files.includes('apps/api/src/users.ts'),
+      'apps/api enrichment must persist DESPITE apps/web parseError (FIX B)');
+
+    const adminMap = readFeatureMap(tmpDir, 'apps/admin', { safe: true });
+    const adminFeature = adminMap.features.find((f) => f.id === 'F-ADMIN-DASH');
+    assert.ok(adminFeature, 'F-ADMIN-DASH must exist in apps/admin');
+    assert.ok(adminFeature.files.includes('apps/admin/src/dashboard.ts'),
+      'apps/admin enrichment must persist DESPITE apps/web parseError (FIX B)');
+
+    // apps/web (broken scope) must remain unmutated.
+    const webContent = fs.readFileSync(path.join(tmpDir, 'apps', 'web', 'FEATURE-MAP.md'), 'utf8');
+    assert.ok(webContent.includes('F-WEB-AUTH: Web one'), 'apps/web must remain untouched');
+    assert.ok(webContent.includes('F-WEB-AUTH: Web two'), 'apps/web must remain untouched');
+  });
+
+  it('legacy single-scope (no Rescoped Table) STILL bails on parseError (legacy contract preserved)', () => {
+    // FIX B only relaxes the gate for the AGGREGATED branch. Single-scope reads keep the
+    // F-081/iter2 bail-on-parseError contract — preserve legacy behavior for non-monorepo projects.
+    writeFile(tmpDir, 'FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-001: One [planned]', '',
+      '### F-001: Dup [planned]', '',
+    ].join('\n'));
+    const before = fs.readFileSync(path.join(tmpDir, 'FEATURE-MAP.md'), 'utf8');
+    captureWarn(() => {
+      enrichFromTags(tmpDir, [
+        { type: 'feature', file: 'src/foo.ts', metadata: { feature: 'F-001' } },
+      ]);
+    });
+    const after = fs.readFileSync(path.join(tmpDir, 'FEATURE-MAP.md'), 'utf8');
+    assert.equal(after, before, 'single-scope parseError must still bail (legacy contract)');
+  });
+});
+
+// =============================================================================
+// FIX D: Best-effort batch-write logging on per-scope writes
+// =============================================================================
+
+describe('F-082 follow-up FIX D: best-effort batch-write logging', () => {
+  it('emits summary warn when per-scope writeFeatureMap throws; healthy scopes still persist', () => {
+    // 3 healthy sub-apps. Mock fs.writeFileSync to throw on the SECOND scope's path. Verify:
+    //   (a) function returns without throwing,
+    //   (b) the OTHER scopes' writes succeed (file content includes the new ref),
+    //   (c) summary warn names the failed scope and surfaces the error message.
+    writeFile(tmpDir, 'FEATURE-MAP.md', ROOT_RESCOPED(['apps/web', 'apps/api', 'apps/admin']));
+    writeFile(tmpDir, 'apps/web/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-WEB-AUTH: Web auth [planned]', '',
+    ].join('\n'));
+    writeFile(tmpDir, 'apps/api/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-API-USERS: API users [planned]', '',
+    ].join('\n'));
+    writeFile(tmpDir, 'apps/admin/FEATURE-MAP.md', [
+      '# Feature Map', '', '## Features', '',
+      '### F-ADMIN-DASH: Admin dashboard [planned]', '',
+    ].join('\n'));
+
+    const apiPath = path.join(tmpDir, 'apps', 'api', 'FEATURE-MAP.md');
+    const origWriteFileSync = fs.writeFileSync;
+    fs.writeFileSync = function patched(p, data, opts) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(apiPath)) {
+        const err = new Error('EROFS: read-only filesystem (mocked)');
+        err.code = 'EROFS';
+        throw err;
+      }
+      return origWriteFileSync.call(fs, p, data, opts);
+    };
+
+    let captured = '';
+    let returned;
+    try {
+      captured = captureWarn(() => {
+        returned = enrichFromTags(tmpDir, [
+          { type: 'feature', file: 'apps/web/src/auth.ts', metadata: { feature: 'F-WEB-AUTH' } },
+          { type: 'feature', file: 'apps/api/src/users.ts', metadata: { feature: 'F-API-USERS' } },
+          { type: 'feature', file: 'apps/admin/src/dashboard.ts', metadata: { feature: 'F-ADMIN-DASH' } },
+        ]);
+      });
+    } finally {
+      fs.writeFileSync = origWriteFileSync;
+    }
+
+    // (a) function returned without throwing.
+    assert.ok(returned, 'enrichFromTags must return without throwing on per-scope write failure');
+
+    // (b) apps/web + apps/admin still persisted.
+    const webMap = readFeatureMap(tmpDir, 'apps/web', { safe: true });
+    const webFeature = webMap.features.find((f) => f.id === 'F-WEB-AUTH');
+    assert.ok(webFeature.files.includes('apps/web/src/auth.ts'),
+      'apps/web write must succeed even though apps/api write failed');
+    const adminMap = readFeatureMap(tmpDir, 'apps/admin', { safe: true });
+    const adminFeature = adminMap.features.find((f) => f.id === 'F-ADMIN-DASH');
+    assert.ok(adminFeature.files.includes('apps/admin/src/dashboard.ts'),
+      'apps/admin write must succeed even though apps/api write failed');
+
+    // apps/api on disk must not have the new file ref (write was rejected).
+    const apiContent = fs.readFileSync(apiPath, 'utf8');
+    assert.ok(!apiContent.includes('apps/api/src/users.ts'),
+      'apps/api FEATURE-MAP.md must not have the new file ref (write threw)');
+
+    // (c) summary warn was emitted naming the failed scope.
+    assert.ok(/partial write/i.test(captured),
+      'must emit "partial write" summary warn, got: ' + JSON.stringify(captured));
+    // Aggregator stores the sub-app SLUG as scope name (e.g. "api", not "apps/api").
+    assert.ok(/"api"/.test(captured),
+      'summary warn must name the failed scope by slug ("api"), got: ' + JSON.stringify(captured));
+    assert.ok(captured.includes('EROFS'),
+      'summary warn must surface the error message, got: ' + JSON.stringify(captured));
+
+    // Defense-in-depth: summary warn must be control-byte-clean too.
+    assert.ok(!CONTROL_BYTE_RE.test(captured),
+      'summary warn must contain no control bytes, got: ' + JSON.stringify(captured));
   });
 });

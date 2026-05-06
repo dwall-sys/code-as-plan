@@ -1047,6 +1047,38 @@ function writeFeatureMap(projectRoot, featureMap, appPath, options) {
 // @cap-risk(F-082/iter1) Recursion-loop guard: only triggers when `appPath` is null/undefined,
 //   AND the recursion always passes a resolved appPath, so the recursive call cannot re-enter
 //   this branch. F-077 lesson on infinite-loop guards applied.
+// @cap-feature(feature:F-082) _safeForError — sanitize a user-controlled value before
+//   interpolating it into a console.warn / console.error string. Defends against ANSI
+//   escapes, control chars, and very long values. Mirrors the F-076/F-077/F-081 doctrine
+//   already applied to parseError.message at L1297/L1361/L1591 etc.
+// @cap-decision(F-082/followup) Strip ANY non-printable byte (anything below 0x20 or 0x7f),
+//   not just ESC (\x1b). This blocks ANSI CSI sequences (\x1b[31m), bell (\x07), backspace
+//   (\x08), and any other control char a malicious sub-app slug could inject. Also enforce
+//   a hard length cap (256) so a very long path cannot dominate the warn line.
+// @cap-risk(F-082/followup) The slug regex `^[a-z0-9_/-]+$` is enforced as an additional
+//   gate downstream where appropriate; here we only sanitize. Callers that already validate
+//   inputs (e.g. _maybeRedirectToSubApp's recursion path) still benefit — defense in depth.
+/**
+ * @param {*} value - any user-controlled value to be interpolated into a warn message
+ * @param {number} [maxLen=256] - max output length before truncation
+ * @returns {string}
+ */
+function _safeForError(value, maxLen = 256) {
+  let s;
+  try {
+    s = String(value);
+  } catch (_e) {
+    s = '<unprintable>';
+  }
+  // Strip any non-printable byte (incl. ESC, BEL, BS, NUL). Keep printable ASCII + multibyte UTF-8
+  // (codepoints >= 0x20). This neutralizes ANSI CSI sequences regardless of how they're wrapped.
+  // eslint-disable-next-line no-control-regex
+  s = s.replace(/[\x00-\x1f\x7f]/g, '');
+  s = s.trim();
+  if (s.length > maxLen) s = s.slice(0, maxLen) + '…';
+  return s;
+}
+
 const _NO_REDIRECT = Symbol('cap-feature-map._NO_REDIRECT');
 
 /**
@@ -1072,9 +1104,13 @@ function _maybeRedirectToSubApp(projectRoot, featureMap, feature, appPath, fnNam
     return recurse(resolvedAppPath);
   }
   // No prefix resolution available → loud structured rejection (defense-in-depth path).
+  // @cap-decision(F-082/followup) ANSI-defense: subApp is a path-derived slug from
+  //   metadata.subApp; while the parser's slug-regex rejects controls today, we still wrap
+  //   in _safeForError as defense-in-depth (mirrors F-076/F-081 doctrine).
   console.warn(
-    'cap: ' + fnName + '("' + feature.id + '") skipped — feature lives in sub-app "' +
-    subApp + '" but no sub-app path could be resolved; pass appPath explicitly to persist.'
+    'cap: ' + _safeForError(fnName) + '("' + _safeForError(feature.id) +
+    '") skipped — feature lives in sub-app "' + _safeForError(subApp) +
+    '" but no sub-app path could be resolved; pass appPath explicitly to persist.'
   );
   return false;
 }
@@ -1283,6 +1319,13 @@ function serializeFeatureMap(featureMap, options = {}) {
 }
 
 // @cap-api addFeature(projectRoot, feature, appPath) -- Add a new feature entry to FEATURE-MAP.md.
+// @cap-decision(F-082/asymmetry) addFeature does NOT auto-redirect to a sub-app via
+//   _maybeRedirectToSubApp, unlike updateFeatureState/setAcStatus/setFeatureUsesDesign.
+//   Reasoning: a NEW feature has no metadata.subApp yet, so there is nothing to redirect
+//   FROM. Sub-app placement is determined at write-time by the caller passing `appPath`
+//   explicitly. This asymmetry is INTENTIONAL — do not "fix" it without first considering
+//   where new features should land in a monorepo (currently always the scope named by
+//   `appPath`, defaulting to root; opt-in to a sub-app via explicit `appPath`).
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {{ title: string, acs?: AcceptanceCriterion[], dependencies?: string[], metadata?: Object }} feature - Feature data (ID auto-generated)
@@ -1585,12 +1628,7 @@ function formatDriftReport(report) {
  */
 function enrichFromTags(projectRoot, scanResults, appPath) {
   // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
-  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
   const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
-  if (featureMap.parseError) {
-    console.warn('cap: skipping enrichFromTags — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
-    return featureMap;
-  }
 
   // @cap-todo(ac:F-082/iter1 fix:1) Monorepo-aware enrichment. Stage-2 #1 found that on a
   //   monorepo project (Rescoped Table present), the legacy bare `enrichFromTags(root, tags)`
@@ -1606,8 +1644,20 @@ function enrichFromTags(projectRoot, scanResults, appPath) {
   // @cap-risk(F-082/iter1 fix:1) The same scanResults are applied to every per-scope write —
   //   each enrichment loop re-filters tags against the features it owns (find returns null for
   //   a foreign feature, so the file ref is not persisted to a wrong sub-app file).
+  // @cap-decision(F-082/followup) Cross-sub-app blast radius fix: parseError gate is now
+  //   evaluated AFTER the aggregation-detection branch. An aggregated parseError (a duplicate
+  //   in ONE sub-app) must NOT block enrichment for healthy sibling sub-apps — the aggregator
+  //   `_enrichFromTagsAcrossSubApps` already skips bad scopes individually at L1671-1675. The
+  //   gate below applies ONLY to legacy single-scope reads (no _subAppPrefixes).
   if (!appPath && featureMap._subAppPrefixes && featureMap._subAppPrefixes.size > 0) {
     return _enrichFromTagsAcrossSubApps(projectRoot, scanResults, featureMap);
+  }
+
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  //   Single-scope only; aggregated reads handle parseError per-scope (see above).
+  if (featureMap.parseError) {
+    console.warn('cap: skipping enrichFromTags — duplicate feature ID detected: ' + _safeForError(featureMap.parseError.message));
+    return featureMap;
   }
 
   for (const tag of scanResults) {
@@ -1654,18 +1704,28 @@ function _enrichFromTagsAcrossSubApps(projectRoot, scanResults, aggregatedMap) {
 
   const prefixes = aggregatedMap._subAppPrefixes;
 
+  // @cap-decision(F-082/followup) Best-effort batch-write logging. Per-scope writes are NOT
+  //   atomic across the N sub-app maps (true 2-phase commit across N files is out of scope).
+  //   We track which scopes wrote successfully and which failed, then emit a single summary
+  //   warn after the loop so partial-write is never silent. The per-scope try/catch keeps a
+  //   late EROFS / EACCES from aborting writes for healthy sibling scopes.
+  /** @type {string[]} */ const written = [];
+  /** @type {{scope: string, error: string}[]} */ const failed = [];
+
   // For each scope, perform a single-map enrichment + write.
   for (const [scope, idsInScope] of featureIdsByScope) {
     if (idsInScope.size === 0) continue;
     const scopedAppPath = scope ? (prefixes ? prefixes.get(scope) : null) : null;
     if (scope && !scopedAppPath) {
       // Sub-app slug present but prefix could not be resolved — defensive skip.
-      console.warn('cap: enrichFromTags — sub-app "' + scope + '" prefix unresolved; tags for that scope skipped.');
+      // @cap-decision(F-082/followup) ANSI-defense via _safeForError on user-controlled scope slug.
+      console.warn('cap: enrichFromTags — sub-app "' + _safeForError(scope) + '" prefix unresolved; tags for that scope skipped.');
       continue;
     }
     const scopedMap = readFeatureMap(projectRoot, scopedAppPath || undefined, { safe: true });
     if (scopedMap.parseError) {
-      console.warn('cap: enrichFromTags — skipping scope "' + (scope || 'root') + '": ' + String(scopedMap.parseError.message).trim());
+      // @cap-decision(F-082/followup) ANSI-defense via _safeForError on scope + parseError.message.
+      console.warn('cap: enrichFromTags — skipping scope "' + _safeForError(scope || 'root') + '": ' + _safeForError(scopedMap.parseError.message));
       continue;
     }
     let mutated = false;
@@ -1682,8 +1742,27 @@ function _enrichFromTagsAcrossSubApps(projectRoot, scanResults, aggregatedMap) {
       }
     }
     if (mutated) {
-      writeFeatureMap(projectRoot, scopedMap, scopedAppPath || undefined);
+      const scopeLabel = scope || 'root';
+      try {
+        writeFeatureMap(projectRoot, scopedMap, scopedAppPath || undefined);
+        written.push(scopeLabel);
+      } catch (e) {
+        failed.push({ scope: scopeLabel, error: (e && e.message) ? e.message : String(e) });
+      }
     }
+  }
+
+  // @cap-decision(F-082/followup) Summary warn fires only when at least one scope FAILED;
+  //   keeps the happy-path silent. Includes both the failed and the (still-)written scopes
+  //   so the user has actionable diagnostics — they know exactly which FEATURE-MAP files
+  //   did and did not get the new file refs.
+  if (failed.length > 0) {
+    const failedSummary = failed.map(f => '"' + _safeForError(f.scope) + '" (' + _safeForError(f.error) + ')').join(', ');
+    const writtenSummary = written.length > 0 ? written.map(s => '"' + _safeForError(s) + '"').join(', ') : '(none)';
+    console.warn(
+      'cap: enrichFromTags — partial write: ' + failed.length + ' scope(s) failed: ' + failedSummary +
+      '; ' + written.length + ' scope(s) written: ' + writtenSummary
+    );
   }
 
   // Return a fresh aggregated read so callers see the post-write state.
@@ -1705,16 +1784,21 @@ function _enrichFromTagsAcrossSubApps(projectRoot, scanResults, aggregatedMap) {
  */
 function enrichFromDesignTags(projectRoot, scanResults, appPath) {
   // @cap-todo(ac:F-081/AC-4 iter:2) Migrated to {safe: true} opt-in to preserve CLI on duplicate-ID FEATURE-MAP.
-  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
   const featureMap = readFeatureMap(projectRoot, appPath, { safe: true });
-  if (featureMap.parseError) {
-    console.warn('cap: skipping enrichFromDesignTags — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
-    return featureMap;
-  }
 
   // @cap-todo(ac:F-082/iter1 fix:1) Monorepo-aware design enrichment — same lesson as enrichFromTags.
+  // @cap-decision(F-082/followup) Cross-sub-app blast radius fix: parseError gate moved BELOW
+  //   the aggregation branch so a duplicate in one sub-app does not block healthy siblings.
+  //   See enrichFromTags for the full reasoning.
   if (!appPath && featureMap._subAppPrefixes && featureMap._subAppPrefixes.size > 0) {
     return _enrichFromDesignTagsAcrossSubApps(projectRoot, scanResults, featureMap);
+  }
+
+  // @cap-decision(F-081/iter2) Bail on parseError — do not persist partial enrichment.
+  //   Single-scope only; aggregated reads handle parseError per-scope.
+  if (featureMap.parseError) {
+    console.warn('cap: skipping enrichFromDesignTags — duplicate feature ID detected: ' + _safeForError(featureMap.parseError.message));
+    return featureMap;
   }
 
   // Build file -> featureId map (first @cap-feature wins, matches F-049 convention).
@@ -1780,16 +1864,23 @@ function _enrichFromDesignTagsAcrossSubApps(projectRoot, scanResults, aggregated
 
   const prefixes = aggregatedMap._subAppPrefixes;
 
+  // @cap-decision(F-082/followup) Best-effort batch-write logging — see
+  //   _enrichFromTagsAcrossSubApps for the full reasoning.
+  /** @type {string[]} */ const written = [];
+  /** @type {{scope: string, error: string}[]} */ const failed = [];
+
   for (const [scope, idsInScope] of featureIdsByScope) {
     if (idsInScope.size === 0) continue;
     const scopedAppPath = scope ? (prefixes ? prefixes.get(scope) : null) : null;
     if (scope && !scopedAppPath) {
-      console.warn('cap: enrichFromDesignTags — sub-app "' + scope + '" prefix unresolved; design tags for that scope skipped.');
+      // @cap-decision(F-082/followup) ANSI-defense via _safeForError on user-controlled scope slug.
+      console.warn('cap: enrichFromDesignTags — sub-app "' + _safeForError(scope) + '" prefix unresolved; design tags for that scope skipped.');
       continue;
     }
     const scopedMap = readFeatureMap(projectRoot, scopedAppPath || undefined, { safe: true });
     if (scopedMap.parseError) {
-      console.warn('cap: enrichFromDesignTags — skipping scope "' + (scope || 'root') + '": ' + String(scopedMap.parseError.message).trim());
+      // @cap-decision(F-082/followup) ANSI-defense via _safeForError on scope + parseError.message.
+      console.warn('cap: enrichFromDesignTags — skipping scope "' + _safeForError(scope || 'root') + '": ' + _safeForError(scopedMap.parseError.message));
       continue;
     }
     let mutated = false;
@@ -1812,8 +1903,24 @@ function _enrichFromDesignTagsAcrossSubApps(projectRoot, scanResults, aggregated
       for (const f of scopedMap.features) {
         if (Array.isArray(f.usesDesign)) f.usesDesign.sort();
       }
-      writeFeatureMap(projectRoot, scopedMap, scopedAppPath || undefined);
+      const scopeLabel = scope || 'root';
+      try {
+        writeFeatureMap(projectRoot, scopedMap, scopedAppPath || undefined);
+        written.push(scopeLabel);
+      } catch (e) {
+        failed.push({ scope: scopeLabel, error: (e && e.message) ? e.message : String(e) });
+      }
     }
+  }
+
+  // @cap-decision(F-082/followup) Partial-write summary mirrors _enrichFromTagsAcrossSubApps.
+  if (failed.length > 0) {
+    const failedSummary = failed.map(f => '"' + _safeForError(f.scope) + '" (' + _safeForError(f.error) + ')').join(', ');
+    const writtenSummary = written.length > 0 ? written.map(s => '"' + _safeForError(s) + '"').join(', ') : '(none)';
+    console.warn(
+      'cap: enrichFromDesignTags — partial write: ' + failed.length + ' scope(s) failed: ' + failedSummary +
+      '; ' + written.length + ' scope(s) written: ' + writtenSummary
+    );
   }
 
   return readFeatureMap(projectRoot, undefined, { safe: true });
