@@ -225,9 +225,13 @@ async function migrateMemory(projectRoot, options) {
   }
 
   // 7. Atomic writes — features and platform files.
+  // @cap-decision(F-077/D6) Use plan.sourceMaxMtime (not opts.now) for the V6 `updated:` field so
+  //                  re-running migrate against unchanged V5 sources produces byte-identical output.
+  //                  Fall back to opts.now only if there were no source files (rare — unit tests).
+  const updatedTimestamp = plan.sourceMaxMtime || opts.now;
   for (const write of resolved.writes) {
     try {
-      const ok = _writePlannedFile(write, opts.now);
+      const ok = _writePlannedFile(write, updatedTimestamp);
       if (ok) result.wroteFiles.push(write.destinationPath);
       else result.errors.push(`atomic write failed for ${write.destinationPath}`);
     } catch (e) {
@@ -269,6 +273,7 @@ function buildMigrationPlan(projectRoot, context, options) {
   const plan = {
     sourceCounts: {},
     sourceSizes: {},
+    sourceMaxMtime: 0, // F-077/D6: max(mtimeMs) across V5 sources, used as `updated:` for V6 files
     writes: [],
     ambiguous: [],
     unassigned: [],
@@ -297,6 +302,15 @@ function buildMigrationPlan(projectRoot, context, options) {
     }
     const stat = fs.statSync(fp);
     plan.sourceSizes[sourceName] = stat.size;
+    // @cap-decision(F-077/D6) Track max source mtime to derive a stable `updated:` field for V6
+    //                  files. AC-2 says "wiederholtes Ausführen ohne neue Inputs darf keine
+    //                  Diff-Änderungen produzieren" — using Date.now() at write-time would put a
+    //                  fresh ISO timestamp into every regenerated V6 file on every run, even when
+    //                  the V5 sources hadn't changed. Source-mtime makes the timestamp truly a
+    //                  function of the input, not the run.
+    if (!plan.sourceMaxMtime || stat.mtimeMs > plan.sourceMaxMtime) {
+      plan.sourceMaxMtime = stat.mtimeMs;
+    }
     const entries = parseV5MarkdownFile(raw, sourceName);
     plan.sourceCounts[sourceName] = entries.length;
     allEntries.push(...entries);
@@ -674,10 +688,16 @@ async function resolveAmbiguities(plan, opts) {
       continue;
     }
     // numeric choice — pick candidate index (1-based)
+    // @cap-decision(F-077/D4) Empty input (just Enter) and non-numeric input (parseInt → NaN)
+    //                must route to unassigned, NOT crash. NaN comparisons always return false,
+    //                so the bounds check needs an explicit Number.isNaN guard. Pre-fix: empty
+    //                input on prompt → TypeError on `picked.featureId` → half-applied migration
+    //                with backups written but no V6 files. Most common UX mistake (user hits
+    //                Enter without thinking) currently corrupts the migration.
     const idx = parseInt(choice, 10) - 1;
     const candidates = item.decision.candidates || [];
-    if (idx < 0 || idx >= candidates.length) {
-      // Invalid input → fallback to skip
+    if (!Number.isInteger(idx) || idx < 0 || idx >= candidates.length) {
+      // Invalid / empty / non-numeric input → fallback to skip (route to unassigned)
       _routeAmbiguousToUnassigned(item, plan);
       continue;
     }
@@ -1607,8 +1627,15 @@ function _ask(text, opts) {
     return opts.promptFn(text);
   }
   // Default readline prompt.
+  // @cap-decision(F-077/D5) On non-TTY stdin (CI, piped input, headless run without
+  //                  --interactive=false), `'close'` fires before any user keystroke and
+  //                  rl.question's callback never runs → hang until external SIGKILL. Resolve
+  //                  to '' on close so EOF behaves like empty input → routes to unassigned via
+  //                  D4. Promise is idempotent (only first resolve takes effect), so the
+  //                  question callback in the happy path still wins when input arrives.
   return new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+    rl.on('close', () => resolve(''));
     rl.question(text, (answer) => {
       rl.close();
       resolve(answer);

@@ -1151,3 +1151,123 @@ describe('Adversarial edges', () => {
     } finally { cleanup(root); }
   });
 });
+
+// ---------------------------------------------------------------------------
+// PR #36 Stage-2 review hardening — pin three real bugs caught by the reviewer.
+// ---------------------------------------------------------------------------
+
+describe('PR #36 review hardening', () => {
+  it('AC-6: empty input on the ambiguity prompt routes to unassigned (not crash)', async () => {
+    // Reviewer finding #1 (CRITICAL): empty input → parseInt('', 10) → NaN. Pre-fix the bounds
+    // check `idx < 0 || idx >= candidates.length` was bypassed (NaN comparisons always false),
+    // so candidates[NaN] returned undefined and `.featureId` access crashed. The migration
+    // would corrupt half-state — backups already written, V6 files NOT written.
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [
+        { id: 'F-100', title: 'Alpha', files: ['src/alpha.cjs'] },
+        { id: 'F-200', title: 'Beta', files: ['src/beta.cjs'] },
+      ]);
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        {
+          anchorId: 'a1',
+          title: 'Ambiguous decision spanning multiple modules',
+          files: ['src/alpha.cjs', 'src/beta.cjs'],
+        },
+      ]));
+      const result = await migrateMemory(root, {
+        apply: true,
+        interactive: true,
+        now: FIXED_NOW,
+        log: () => {},
+        _testPromptResponses: [{ choice: 'y' }, { choice: '' }], // confirm + EMPTY ambiguity input
+      });
+      // Migration should NOT crash; the entry should land in unassigned.
+      assert.equal(
+        result.errors.length,
+        0,
+        `unexpected errors: ${JSON.stringify(result.errors)}`,
+      );
+      // The unassigned route writes to .cap/memory/platform/unassigned.md.
+      assert.ok(
+        result.wroteFiles.some((p) => p.endsWith('platform/unassigned.md')),
+        `expected unassigned write, got: ${result.wroteFiles.join(', ')}`,
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('AC-6: non-numeric and out-of-range input also fall back safely', async () => {
+    for (const choice of ['xyz', '99', '0', '-1']) {
+      const root = makeProject();
+      try {
+        writeFeatureMap(root, [
+          { id: 'F-100', title: 'Alpha', files: ['src/alpha.cjs'] },
+          { id: 'F-200', title: 'Beta', files: ['src/beta.cjs'] },
+        ]);
+        writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+          {
+            anchorId: 'a1',
+            title: 'Ambiguous decision',
+            files: ['src/alpha.cjs', 'src/beta.cjs'],
+          },
+        ]));
+        const result = await migrateMemory(root, {
+          apply: true,
+          interactive: true,
+          now: FIXED_NOW,
+          log: () => {},
+          _testPromptResponses: [{ choice: 'y' }, { choice }],
+        });
+        assert.equal(
+          result.errors.length,
+          0,
+          `failed for choice=${JSON.stringify(choice)}: ${JSON.stringify(result.errors)}`,
+        );
+      } finally {
+        cleanup(root);
+      }
+    }
+  });
+
+  it('AC-2: re-running migrate with default opts.now produces byte-identical V6 files', async () => {
+    // Reviewer finding #3 (warning): the `updated:` field used Date.now() at write time, so
+    // two re-runs five minutes apart produced different `updated:` ISO strings → AC-2 violated.
+    // Fix (D6): derive `updated` from max source-file mtime so unchanged source = same V6 file.
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-100', title: 'Alpha', files: ['src/alpha.cjs'] }]);
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        {
+          anchorId: 'a1',
+          title: 'A specific tagged decision F-100 from real source',
+          files: ['src/alpha.cjs'],
+        },
+      ]));
+      // First apply — uses Date.now() default (no `now` pinned).
+      const r1 = await migrateMemory(root, { apply: true, interactive: false, log: () => {} });
+      assert.equal(r1.errors.length, 0);
+      const v6Path = r1.wroteFiles.find((p) => p.includes('features/') && p.includes('F-100'));
+      assert.ok(v6Path, 'expected an F-100 feature file');
+      const content1 = fs.readFileSync(v6Path, 'utf8');
+
+      // Spin until Date.now() advances by at least 100 ms so any wall-clock-derived `updated:`
+      // would clearly differ between runs.
+      const sleepUntil = Date.now() + 100;
+      while (Date.now() < sleepUntil) { /* spin */ }
+
+      // Second apply over UNCHANGED V5 input must produce zero diff.
+      const r2 = await migrateMemory(root, { apply: true, interactive: false, log: () => {} });
+      assert.equal(r2.errors.length, 0);
+      const content2 = fs.readFileSync(v6Path, 'utf8');
+      assert.equal(
+        content2,
+        content1,
+        'V6 file content must be byte-identical across re-runs (AC-2 idempotency)',
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+});
