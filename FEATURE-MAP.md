@@ -1409,18 +1409,27 @@
 - `commands/cap/memory.md`
 - `cap/bin/lib/cap-doctor.cjs`
 
-### F-078: Implement Platform-Bucket for Cross-Cutting Decisions [planned]
+### F-078: Implement Platform-Bucket for Cross-Cutting Decisions [tested]
 
 **Depends on:** F-076
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Das System muss ein Platform-Topic-Layout unter `.cap/memory/platform/<topic>.md` unterstützen, mit demselben Auto/Manual-Split wie Per-Feature-Files (F-076). |
-| AC-2 | pending | Decisions müssen explizit via `@cap-decision platform:<topic>` getaggt werden, um in den Platform-Bucket zu promovieren — keine Auto-Promotion aus Per-Feature-Files. |
-| AC-3 | pending | Per-Feature-Files müssen Platform-Topics referenzieren können via `extends: platform/<topic>`-Frontmatter-Feld; der Reader muss `extends`-Ketten in einer einzigen lookup-Pass auflösen. |
-| AC-4 | pending | Subsystem-übergreifende Pitfalls müssen unter `.cap/memory/platform/checklists/<subsystem>.md` aggregierbar sein, separates Layout vom topic-Layer. |
-| AC-5 | pending | Zirkuläre `extends`-Referenzen müssen vom Reader erkannt und mit Fehlermeldung (Pfad der Zyklus-Kette) abgelehnt werden. |
-| AC-6 | pending | Tests müssen verifizieren: explizit-only-Promotion (nicht-getaggte Decision landet nie im Platform-Bucket), `extends`-Resolution, Zyklus-Detection. |
+| AC-1 | tested | Das System muss ein Platform-Topic-Layout unter `.cap/memory/platform/<topic>.md` unterstützen, mit demselben Auto/Manual-Split wie Per-Feature-Files (F-076). |
+| AC-2 | tested | Decisions müssen explizit via `@cap-decision platform:<topic>` getaggt werden, um in den Platform-Bucket zu promovieren — keine Auto-Promotion aus Per-Feature-Files. |
+| AC-3 | tested | Per-Feature-Files müssen Platform-Topics referenzieren können via `extends: platform/<topic>`-Frontmatter-Feld; der Reader muss `extends`-Ketten in einer einzigen lookup-Pass auflösen. |
+| AC-4 | tested | Subsystem-übergreifende Pitfalls müssen unter `.cap/memory/platform/checklists/<subsystem>.md` aggregierbar sein, separates Layout vom topic-Layer. |
+| AC-5 | tested | Zirkuläre `extends`-Referenzen müssen vom Reader erkannt und mit Fehlermeldung (Pfad der Zyklus-Kette) abgelehnt werden. |
+| AC-6 | tested | Tests müssen verifizieren: explizit-only-Promotion (nicht-getaggte Decision landet nie im Platform-Bucket), `extends`-Resolution, Zyklus-Detection. |
+
+**Files:**
+- `cap/bin/lib/cap-memory-platform.cjs`
+- `cap/bin/lib/cap-memory-extends.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-memory-platform.test.cjs`
+- `tests/cap-memory-platform-adversarial.test.cjs`
+- `tests/cap-doctor-integrity.test.cjs`
+- `tests/cap-ui-design-editor-adversarial.test.cjs`
 
 ### F-079: Wire Snapshot Linkage to Features and Platform [planned]
 
@@ -1496,6 +1505,8 @@
 - `tests/fixtures/v61-monorepo/packages/shared/FEATURE-MAP.md`
 - `tests/cap-feature-map-monorepo-adversarial.test.cjs`
 - `tests/cap-memory-migrate-monorepo-adversarial.test.cjs`
+- `tests/cap-feature-map-emdash.test.cjs`
+- `tests/cap-feature-map-monorepo-iterate.test.cjs`
 
 ## Legend
 
@@ -1507,4 +1518,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-06T20:10:42.133Z*
+*Last updated: 2026-05-06T22:14:02.094Z*
