@@ -139,7 +139,8 @@ function run(options = {}) {
   //                evidence: GoetzeInvest had 61 hotspot nodes in graph.json from a prior init run,
   //                but hotspots.md was a 202-byte "_No hotspots recorded yet._" header after every
   //                incremental run. Compute hotspots from ALL sessions every run; the
-  //                .last-run filter still gates whether we run at all (line 114 early-return).
+  //                filterNewSessions short-circuit above (early-return when sessionFiles is empty)
+  //                still gates whether we run at all, so we don't burn IO on no-op invocations.
   const filesToProcess = allSessionFiles.map(f => ({
     path: f.path,
     isDebugSession: activeDebug,
