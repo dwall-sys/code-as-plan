@@ -19,6 +19,7 @@ const DIST_DIR = path.join(HOOKS_DIR, 'dist');
 const HOOKS_TO_COPY = [
   'cap-check-update.js',
   'cap-context-monitor.js',
+  'cap-learn-review-hook.js',
   'cap-learning-hook.js',
   'cap-memory.js',
   'cap-prompt-guard.js',

@@ -7,6 +7,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dist/cap-memory.js",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/dist/cap-learn-review-hook.js",
+            "timeout": 5
           }
         ]
       }

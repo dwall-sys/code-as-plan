@@ -879,14 +879,15 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     assert.strictEqual(ui.atomicWriteDesign, editor.atomicWriteDesign);
   });
 
-  it('module manifest is 79 after F-074 adds cap-pattern-apply.cjs (doctor contract)', () => {
+  it('module manifest is 80 after F-073 adds cap-learn-review.cjs (doctor contract)', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added (Token Telemetry observability).
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added (Trust-Mode Configuration Slot).
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added (Collect Learning Signals).
     // @cap-decision(F-071) Bumped 76 -> 77 when cap-pattern-pipeline.cjs was added (Heuristic + LLM-briefing pattern pipeline).
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added (Two-Layer Fitness Score for Pattern Unlearn).
     // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added (Enable Pattern Unlearn and Auto-Retract).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 79);
+    // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added (Review Patterns via Learn Command).
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 80);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));
