@@ -1313,7 +1313,7 @@
 | AC-6 | tested | Ist ein Patch für Rückzug markiert, muss das Learn-Review-Board (F-073) ihn mit Label „Rückzug empfohlen" und One-Click-Unlearn-Option anzeigen. |
 | AC-7 | tested | Unlearn muss idempotent sein: zweifacher Aufruf auf bereits zurückgenommenen P-ID darf keinen doppelten Commit erzeugen. |
 
-### F-073: Review Patterns via Learn Command [tested]
+### F-073: Review Patterns via Learn Command [shipped]
 
 **Depends on:** F-072, F-074
 
@@ -1356,4 +1356,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-06T07:47:14.771Z*
+*Last updated: 2026-05-06T08:24:18.053Z*
