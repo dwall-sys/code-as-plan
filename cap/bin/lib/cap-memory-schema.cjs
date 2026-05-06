@@ -23,7 +23,23 @@ const AUTO_BLOCK_END_MARKER = '<!-- cap:auto:end -->';
 // @cap-decision(F-076/D2) Memory features live under a fixed relative path so all consumers (F-077 migration,
 // F-078 platform bucket, F-079 snapshot linkage, F-080 Claude-native bridge) share the same directory contract
 // without each re-deriving it. Exported as a constant rather than computed per call.
+//
+// NOTE: Use `getFeaturePath(root, featureId, topic)` to construct paths — that goes through the
+// feature-id + topic regex validation. Do NOT `path.join(root, MEMORY_FEATURES_DIR, …)` directly
+// for path construction; the constant is exposed for read-only path matching only.
 const MEMORY_FEATURES_DIR = '.cap/memory/features';
+
+// @cap-decision(F-076/AC-4) Cross-feature linkage is by Feature-ID reference only. The schema
+// deliberately does NOT define an `embedded_content` or `inlined_decisions` field. If a downstream
+// feature wants to reference another feature's decision, it lists `related_features: [F-NNN]` and
+// the reader resolves by ID at read time. Inhibition prevents the kind of duplication-drift that
+// the V5 monolith decisions.md suffered from.
+//
+// @cap-decision(F-076/AC-6) The schema is strictly complementary to FEATURE-MAP.md. Lifecycle fields
+// (title/state/acs/dependencies) live ONLY in FEATURE-MAP. Per-feature memory files own decisions,
+// pitfalls, lessons, linked snapshots, and cross-feature references. If you find yourself wanting
+// to mirror state into a memory file, that is a sign FEATURE-MAP needs the missing field — not that
+// the memory format should grow.
 
 // @cap-decision(F-076/D3) Feature ID regex enforces F-NNN with at least 3 digits (matches FEATURE-MAP.md zero-pad
 // convention and is forward-compat with F-1000+ when the project crosses 1000 features). Anchored on both sides to
@@ -121,8 +137,16 @@ function locateFrontMatter(content) {
  * @returns {Object<string, string|string[]>}
  */
 function parseSimpleYaml(yaml) {
-  /** @type {Object<string, any>} */
-  const out = {};
+  // @cap-risk(F-076/AC-5) Front-matter is hand-editable. A typo or copy-paste from external docs
+  //                       could include `__proto__:`, `constructor:`, or `prototype:` keys, which
+  //                       would (a) re-parent the parsed object to a non-Object prototype or
+  //                       (b) overwrite its constructor field. V8 blocks global Object.prototype
+  //                       pollution for object literals, but the per-instance damage still bites
+  //                       any downstream consumer doing instanceof / .constructor checks. Two
+  //                       defenses: prototype-less object via Object.create(null), and a hard
+  //                       skip on the three reserved keys.
+  const out = Object.create(null);
+  const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
   const lines = yaml.split(/\r?\n/);
   for (const raw of lines) {
     const line = raw.replace(/^\s+|\s+$/g, '');
@@ -130,6 +154,7 @@ function parseSimpleYaml(yaml) {
     const m = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*):\s*(.*)$/);
     if (!m) continue; // unknown shape — silently skip; validator will catch missing required keys
     const key = m[1];
+    if (RESERVED_KEYS.has(key)) continue; // defense-in-depth, regex already excludes most via __ prefix
     const rawValue = m[2];
     if (rawValue === '') {
       out[key] = '';
@@ -391,6 +416,17 @@ function serializeFeatureMemoryFile(file) {
 
   // 2. Manual + auto. If round-trip metadata exists, splice exactly.
   if (rt) {
+    // @cap-decision(F-076/D7) When the parsed source had NO auto-block AND the in-memory autoBlock
+    //                  is empty, do not inject markers on serialize. AC-7 byte-identity must hold for
+    //                  empty-auto-block inputs too — F-077 migration will validate files that may not
+    //                  yet have markers, and adding spurious markers would break round-trip on a clean
+    //                  pre-V6 file or on a freshly-stubbed front-matter-only file.
+    const autoIsEmpty = !file.autoBlock
+      || ((file.autoBlock.decisions || []).length === 0
+        && (file.autoBlock.pitfalls || []).length === 0);
+    if (!rt.hadAutoBlock && autoIsEmpty) {
+      return fmText + (file.manualBlock ? file.manualBlock.raw : '');
+    }
     const autoText = _autoBlockUnchangedLiteral(file, rt) ?? renderAutoBlock(file.autoBlock, eol);
     const preAuto = (file.manualBlock && _manualUnchanged(file, rt))
       ? rt.preAuto
@@ -631,8 +667,14 @@ function _validateContent(content, result) {
   // 4. Auto-block markers.
   // @cap-risk Marker uniqueness is critical: a duplicated start marker would let a parser silently nest
   // garbage in the wrong block. We count occurrences explicitly and require exactly one of each.
-  const startCount = _countOccurrences(content, AUTO_BLOCK_START_MARKER);
-  const endCount = _countOccurrences(content, AUTO_BLOCK_END_MARKER);
+  // @cap-decision(F-076/D6) Counting on full-line matches (not raw substring) so a memory file that
+  //                  legitimately mentions the marker text in a Lessons section ("the format uses
+  //                  <!-- cap:auto:start --> ...") doesn't fail validation. The parser already uses
+  //                  indexOf on the first occurrence; the validator must agree on what "marker"
+  //                  means. F-076 is THE feature documenting the marker format — a meta-test would
+  //                  otherwise wedge.
+  const startCount = _countMarkerLines(content, AUTO_BLOCK_START_MARKER);
+  const endCount = _countMarkerLines(content, AUTO_BLOCK_END_MARKER);
   if (startCount === 0 && endCount === 0) {
     result.valid = false;
     result.errors.push(`auto-block markers missing (expected exactly one ${AUTO_BLOCK_START_MARKER} and one ${AUTO_BLOCK_END_MARKER})`);
@@ -690,6 +732,23 @@ function _countOccurrences(haystack, needle) {
   while ((idx = haystack.indexOf(needle, idx)) !== -1) {
     count++;
     idx += needle.length;
+  }
+  return count;
+}
+
+/**
+ * Count lines whose trimmed content equals `marker` exactly. Mirrors `_validateMarkerLine`
+ * semantics so the validator and parser agree on what counts as a marker (only marker-only
+ * lines, not in-prose mentions).
+ * @param {string} content
+ * @param {string} marker
+ * @returns {number}
+ */
+function _countMarkerLines(content, marker) {
+  let count = 0;
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.replace(/^\s+|\s+$/g, '');
+    if (trimmed === marker) count++;
   }
   return count;
 }

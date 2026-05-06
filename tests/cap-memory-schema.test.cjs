@@ -615,7 +615,9 @@ describe('validateFeatureMemoryFile', () => {
   });
 
   it('rejects when start marker is not on its own line', () => {
-    // Start marker has trailing garbage text on the same line.
+    // Start marker has trailing garbage text on the same line. Under D6 (line-anchored marker
+    // counting), this is treated as 0 valid start markers — same outcome (rejection) but the
+    // error surfaces as "missing marker" rather than "marker line must contain only the marker".
     const content = [
       '---',
       'feature: F-001',
@@ -629,7 +631,12 @@ describe('validateFeatureMemoryFile', () => {
     ].join('\n');
     const result = validateFeatureMemoryFile(content);
     assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => /marker line must contain only the marker/i.test(e)));
+    assert.ok(
+      result.errors.some((e) =>
+        /marker line must contain only the marker|expected exactly one .*cap:auto:start|markers missing/i.test(e),
+      ),
+      `expected marker-rejection error, got: ${JSON.stringify(result.errors)}`,
+    );
   });
 
   it('rejects when start marker is at end-of-file without trailing newline', () => {
@@ -897,5 +904,90 @@ describe('getFeaturePath', () => {
 
   it('rejects empty projectRoot', () => {
     assert.throws(() => getFeaturePath('', 'F-001', 'foo'), /projectRoot/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V6 review hardening — three bugs caught by Stage-2 review on PR #35.
+// Pin them so a future refactor can't silently regress.
+// ---------------------------------------------------------------------------
+
+describe('PR #35 review hardening', () => {
+  it('parseSimpleYaml refuses to honour __proto__ / constructor / prototype keys (proto pollution)', () => {
+    // Reviewer finding #1 (critical): a hand-edited memory file with __proto__: [pwned] in
+    // front-matter would re-parent the parsed object pre-fix. Now: prototypeless via
+    // Object.create(null) AND reserved keys are skipped explicitly.
+    const content = [
+      '---',
+      'feature: F-001',
+      'topic: foo',
+      'updated: 2026-05-06T12:00:00Z',
+      '__proto__: [pwned]',
+      'constructor: [hijacked]',
+      'prototype: [shadowed]',
+      '---',
+      '',
+      AUTO_BLOCK_START_MARKER,
+      AUTO_BLOCK_END_MARKER,
+      '',
+    ].join('\n');
+    const parsed = parseFeatureMemoryFile(content);
+    // The reserved keys must NOT be present at all.
+    assert.equal(parsed.frontmatter.__proto__, undefined);
+    assert.equal(parsed.frontmatter.constructor, undefined);
+    assert.equal(parsed.frontmatter.prototype, undefined);
+    // Object.getPrototypeOf must remain null (Object.create(null) sentinel).
+    assert.equal(Object.getPrototypeOf(parsed.frontmatter), null);
+  });
+
+  it('validator and parser agree: marker mention inside a Lessons section does not double-count', () => {
+    // Reviewer finding #2 (warning): F-076 IS the feature documenting the marker format.
+    // A legitimate Lessons section explaining "the format uses <!-- cap:auto:start -->"
+    // would otherwise fail validation while round-tripping cleanly.
+    const content = [
+      '---',
+      'feature: F-076',
+      'topic: v6-memory-format',
+      'updated: 2026-05-06T12:00:00Z',
+      '---',
+      '',
+      '# F-076',
+      '',
+      AUTO_BLOCK_START_MARKER,
+      AUTO_BLOCK_END_MARKER,
+      '',
+      '## Lessons',
+      '',
+      `The format uses ${AUTO_BLOCK_START_MARKER} as the auto-block opener; the closer is ${AUTO_BLOCK_END_MARKER}.`,
+      '',
+    ].join('\n');
+    const result = validateFeatureMemoryFile(content);
+    assert.equal(result.valid, true, `expected valid, got errors: ${JSON.stringify(result.errors)}`);
+    // Round-trip must also succeed without invented duplicate markers.
+    const parsed = parseFeatureMemoryFile(content);
+    const reserialized = serializeFeatureMemoryFile(parsed);
+    assert.equal(reserialized, content);
+  });
+
+  it('serialize does NOT inject auto-block markers when source had none and autoBlock is empty', () => {
+    // Reviewer finding #3 (warning): serializing a front-matter-only file should be byte-identical.
+    // Pre-fix, serialize would splice in `<!-- cap:auto:start --><!-- cap:auto:end -->`.
+    const content = [
+      '---',
+      'feature: F-001',
+      'topic: foo',
+      'updated: 2026-05-06T12:00:00Z',
+      '---',
+      '',
+      '# Feature title',
+      '',
+      'Lessons-only manual content, no markers.',
+      '',
+    ].join('\n');
+    const parsed = parseFeatureMemoryFile(content);
+    const reserialized = serializeFeatureMemoryFile(parsed);
+    assert.equal(reserialized, content);
+    assert.ok(!reserialized.includes(AUTO_BLOCK_START_MARKER));
+    assert.ok(!reserialized.includes(AUTO_BLOCK_END_MARKER));
   });
 });
