@@ -144,6 +144,91 @@ function queueDir(projectRoot) {
   return path.join(learningRoot(projectRoot), QUEUE_DIR);
 }
 
+// -----------------------------------------------------------------------------
+// Read-side wiring for F-074 applied-state — closes the V5 self-learning loop.
+//
+// @cap-decision(F-071/D9) Read .cap/learning/applied-state.json directly with a tiny inline helper
+//                 instead of `require('./cap-pattern-apply.cjs')`. cap-pattern-apply already requires
+//                 cap-pattern-pipeline, so importing it here would create a circular dependency.
+//                 Schema is owned by F-074 and documented at cap-pattern-apply#readAppliedState
+//                 (F-074/D2): { version:1, l1:{ '<featureId>/<KEY>': value }, l2:[], l3:[] }.
+// -----------------------------------------------------------------------------
+
+const APPLIED_STATE_RELATIVE = path.join(CAP_DIR, LEARNING_DIR, 'applied-state.json');
+
+/**
+ * Look up the L1 override value for a given featureId+key. Returns `null` when the file is missing,
+ * malformed, the key is absent, or the value fails the validator. Pure read, never throws.
+ *
+ * @cap-risk(F-071/D9) The applied-state file is hand-editable. A user (or a buggy pattern) could
+ *                     stuff a string, NaN, or negative number into the L1 map. The validator below
+ *                     is the trust boundary — anything that fails it falls back to the constant
+ *                     default. The strict integer check exists so a malformed file cannot weaken
+ *                     promotion gates (e.g. `to: -1` would otherwise allow every cluster through).
+ *
+ * @param {string} projectRoot
+ * @param {string} featureId - 'F-070' style; null/non-string returns null.
+ * @param {string} key - Sub-key, e.g. 'threshold'. Combined as `${featureId}/${key}` per F-074/D2.
+ * @param {(v: unknown) => boolean} validator - True when the value is acceptable. Mandatory.
+ * @returns {*} The validated value, or null.
+ */
+function readAppliedL1(projectRoot, featureId, key, validator) {
+  if (typeof projectRoot !== 'string' || projectRoot.length === 0) return null;
+  if (typeof featureId !== 'string' || featureId.length === 0) return null;
+  if (typeof key !== 'string' || key.length === 0) return null;
+  if (typeof validator !== 'function') return null;
+  const fp = path.join(projectRoot, APPLIED_STATE_RELATIVE);
+  let raw;
+  try {
+    raw = fs.readFileSync(fp, 'utf8');
+  } catch (_e) {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (_e) {
+    return null;
+  }
+  const l1 = parsed && parsed.l1;
+  if (!l1 || typeof l1 !== 'object' || Array.isArray(l1)) return null;
+  const value = l1[`${featureId}/${key}`];
+  if (value === undefined) return null;
+  return validator(value) ? value : null;
+}
+
+/**
+ * Strict positive-integer validator for threshold values. Rejects strings, floats, NaN, Infinity,
+ * negatives, and zero. Threshold of 0 would mean "every cluster promotes immediately", which is
+ * semantically broken — refuse it at the boundary.
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function isPositiveIntegerThreshold(v) {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0 && Number.isFinite(v);
+}
+
+/**
+ * Compute the effective threshold for a (signalType, featureId) pair, honouring any L1 override
+ * applied via F-074. Falls back to the module constant when no override is applicable.
+ *
+ * Lookup precedence:
+ *   1. applied-state.json#l1[`${featureId}/threshold`] — when projectRoot + featureId provided
+ *   2. THRESHOLD_REGRET_COUNT (regret) / THRESHOLD_OVERRIDE_COUNT (override, anything else)
+ *
+ * memory-ref candidates never promote; callers gate them out before reaching here.
+ *
+ * @param {string|null|undefined} projectRoot
+ * @param {string} signalType
+ * @param {string|null|undefined} featureId
+ * @returns {number}
+ */
+function getEffectiveThreshold(projectRoot, signalType, featureId) {
+  const fallback = signalType === 'regret' ? THRESHOLD_REGRET_COUNT : THRESHOLD_OVERRIDE_COUNT;
+  const override = readAppliedL1(projectRoot, featureId, 'threshold', isPositiveIntegerThreshold);
+  return override === null ? fallback : override;
+}
+
 /**
  * Cap a string at ID_MAX, return null for non-strings or empty.
  */
@@ -361,10 +446,15 @@ function runHeuristicStage(projectRoot, options) {
   // it into the per-session top-K. This is the "frequency" arm of AC-1's heuristic engine.
   // @cap-todo(ac:F-071/AC-1) Frequency-analysis arm: tokens with count >= threshold are considered
   //                          regardless of TF-IDF rank.
+  // @cap-decision(F-071/D9) Effective threshold respects per-featureId L1 overrides from F-074
+  //                  applied-state.json. The token's first record carries the featureId; if a user
+  //                  applied P-NNN that proposed `F-070/threshold: 4`, the F-070 cluster needs 4
+  //                  records (not 3) to reach the frequency arm.
   for (const [token, recs] of recordsByToken.entries()) {
     const recsArr = recs;
     const sigType = (recsArr[0] && recsArr[0].signalType) || 'unknown';
-    const requiredCount = sigType === 'regret' ? THRESHOLD_REGRET_COUNT : THRESHOLD_OVERRIDE_COUNT;
+    const featureIdForToken = recsArr[0] && capId(recsArr[0].featureId);
+    const requiredCount = getEffectiveThreshold(projectRoot, sigType, featureIdForToken);
     if (recsArr.length >= requiredCount) topTokens.add(token);
   }
 
@@ -382,13 +472,27 @@ function runHeuristicStage(projectRoot, options) {
     //                          the (signalType, featureId) prefix; the contextKey distinguishes
     //                          instances within the cluster.
 
-    candidate(candidates, token, recs, maxTfidfByToken.get(token) || 0);
+    candidate(candidates, token, recs, maxTfidfByToken.get(token) || 0, projectRoot);
   }
+
+  // @cap-decision(F-071/D9) Post-collection effective-threshold filter. The TF-IDF arm could still
+  //                  bubble up a "rare-but-concentrated" cluster whose count is below an applied
+  //                  threshold; in the V5 loop the user has explicitly said "I don't want F-X
+  //                  candidates until 4 records accumulate", so we drop them here instead of
+  //                  surfacing them in the review board where they'd just produce noise. Stage 2
+  //                  promotion (`checkThreshold`) is also threshold-aware as defense-in-depth.
+  const filtered = candidates.filter((c) => {
+    if (c.signalType === 'memory-ref') return true; // memory-ref carries positive signal — never filtered.
+    const required = getEffectiveThreshold(projectRoot, c.signalType, c.featureId);
+    return Number(c.count) >= required;
+  });
 
   // Sort by count descending so the orchestrator processes the loudest clusters first.
   // F-072 / F-073 may resort by score (TF-IDF magnitude) when "rare-but-concentrated" matters more
   // than "loud" — both fields are persisted on the candidate.
-  candidates.sort((a, b) => b.count - a.count);
+  filtered.sort((a, b) => b.count - a.count);
+  candidates.length = 0;
+  for (const c of filtered) candidates.push(c);
 
   if (persist && candidates.length > 0) {
     ensureDir(candidatesDir(projectRoot));
@@ -413,8 +517,10 @@ function runHeuristicStage(projectRoot, options) {
  * @param {string} token
  * @param {Array<object>} recs
  * @param {number} tfidfScore - Maximum TF-IDF score for this token across all sessions.
+ * @param {string} [projectRoot] - Forwarded to buildHeuristicSuggestion so the L1 `from` reflects
+ *   any applied F-074 threshold override; absent => fallback to constants. (F-071/D9)
  */
-function candidate(acc, token, recs, tfidfScore) {
+function candidate(acc, token, recs, tfidfScore, projectRoot) {
   const signalType = recs[0].signalType;
 
   // Per-feature breakdown, sorted descending.
@@ -453,7 +559,7 @@ function candidate(acc, token, recs, tfidfScore) {
 
   // Heuristic-only L1 suggestion — a parameter tweak the user could apply WITHOUT an LLM call.
   // This is the "graceful degradation" payload (AC-5): if Stage 2 is skipped, this still ships.
-  const suggestion = buildHeuristicSuggestion(signalType, recs, dominantFeature);
+  const suggestion = buildHeuristicSuggestion(signalType, recs, dominantFeature, projectRoot);
 
   acc.push({
     candidateId,
@@ -480,14 +586,16 @@ function candidate(acc, token, recs, tfidfScore) {
  * @param {string} signalType
  * @param {Array<object>} recs
  * @param {string|null} featureId
+ * @param {string} [projectRoot] - When provided, `from` reflects the effective threshold (any
+ *   applied F-074 override), not just the constant default. (F-071/D9)
  * @returns {{kind:'L1', target:string, from:number, to:number, rationale:string}}
  */
-function buildHeuristicSuggestion(signalType, recs, featureId) {
+function buildHeuristicSuggestion(signalType, recs, featureId, projectRoot) {
   // Default: propose raising the AC-2 threshold so the same cluster wouldn't promote next time.
   // The "from" anchors at the current threshold; "to" proposes the next step (count + 1) so the
   // cluster has to grow further before re-triggering.
   const target = featureId ? `${featureId}/threshold` : 'F-071/threshold';
-  const from = signalType === 'regret' ? THRESHOLD_REGRET_COUNT : THRESHOLD_OVERRIDE_COUNT;
+  const from = getEffectiveThreshold(projectRoot, signalType, featureId);
   const to = recs.length + 1;
   // @cap-risk(F-071/AC-3) The rationale is a pure-structural string — count + featureId.
   //                       No raw paths, no decision text. Safe to persist.
@@ -510,19 +618,21 @@ function buildHeuristicSuggestion(signalType, recs, featureId) {
  * Override candidates additionally must share `featureId` across all records (the candidate token
  * already encodes featureId, so this is implicit when the candidate was built from a single token).
  *
+ * @cap-decision(F-071/D9) Optional `projectRoot` consults applied-state.json for a per-featureId
+ *                  override. Backwards-compatible: when projectRoot is omitted, behaviour falls
+ *                  through to the module constants exactly as before, so existing callers
+ *                  (and the AC-2 unit tests) keep working unchanged.
+ *
  * @param {HeuristicCandidate} candidate
+ * @param {string} [projectRoot]
  * @returns {boolean}
  */
-function checkThreshold(candidate) {
+function checkThreshold(candidate, projectRoot) {
   if (!candidate || typeof candidate !== 'object') return false;
   if (candidate.signalType === 'memory-ref') return false;
-  if (candidate.signalType === 'override') {
-    return Number(candidate.count) >= THRESHOLD_OVERRIDE_COUNT;
-  }
-  if (candidate.signalType === 'regret') {
-    return Number(candidate.count) >= THRESHOLD_REGRET_COUNT;
-  }
-  return false;
+  if (candidate.signalType !== 'override' && candidate.signalType !== 'regret') return false;
+  const required = getEffectiveThreshold(projectRoot, candidate.signalType, candidate.featureId);
+  return Number(candidate.count) >= required;
 }
 
 // -----------------------------------------------------------------------------
@@ -915,6 +1025,7 @@ module.exports = {
   markDegraded,
   listPatterns,
   getSessionBudgetState,
+  getEffectiveThreshold,
   // path helpers — exported for tests / consumers; kept private from public docs
   candidatesDir,
   patternsDir,

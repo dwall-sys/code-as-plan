@@ -349,3 +349,175 @@ describe('buildBriefing — writes a deferred-aware markdown briefing', () => {
     assert.ok(md.includes('deferred: budget'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// F-071/D9 — Read-side wiring for F-074 applied-state.json
+//   The heuristic engine must honour any L1 threshold override that the user
+//   has applied via /cap:learn unlearn/apply. Closes the V5 self-learning loop:
+//   F-074 writes, F-071 now reads.
+// ---------------------------------------------------------------------------
+
+const patternApply = require('../cap/bin/lib/cap-pattern-apply.cjs');
+
+function writeAppliedL1(root, key, value) {
+  const dir = path.join(root, '.cap', 'learning');
+  fs.mkdirSync(dir, { recursive: true });
+  const fp = path.join(dir, 'applied-state.json');
+  const existing = fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : { version: 1, l1: {}, l2: [], l3: [] };
+  existing.l1[key] = value;
+  fs.writeFileSync(fp, JSON.stringify(existing, null, 2));
+}
+
+describe('F-071/D9 — getEffectiveThreshold honours applied-state', () => {
+  it('returns module default when applied-state.json is missing', () => {
+    assert.equal(
+      pipeline.getEffectiveThreshold(tmpDir, 'override', 'F-100'),
+      pipeline.THRESHOLD_OVERRIDE_COUNT,
+    );
+    assert.equal(
+      pipeline.getEffectiveThreshold(tmpDir, 'regret', 'F-100'),
+      pipeline.THRESHOLD_REGRET_COUNT,
+    );
+  });
+
+  it('returns the override value when applied-state.l1 holds a valid integer', () => {
+    writeAppliedL1(tmpDir, 'F-100/threshold', 7);
+    assert.equal(pipeline.getEffectiveThreshold(tmpDir, 'override', 'F-100'), 7);
+    // Different feature still falls back.
+    assert.equal(
+      pipeline.getEffectiveThreshold(tmpDir, 'override', 'F-200'),
+      pipeline.THRESHOLD_OVERRIDE_COUNT,
+    );
+  });
+
+  it('falls back to default when value fails the positive-integer validator', () => {
+    // Floats / strings / negatives / zero / NaN / booleans / arrays — all rejected, fallback fires.
+    const hostile = [0, -1, 3.5, '4', null, NaN, Infinity, true, [4]];
+    for (const bad of hostile) {
+      writeAppliedL1(tmpDir, 'F-100/threshold', bad);
+      assert.equal(
+        pipeline.getEffectiveThreshold(tmpDir, 'override', 'F-100'),
+        pipeline.THRESHOLD_OVERRIDE_COUNT,
+        `expected fallback for hostile value ${JSON.stringify(bad)}`,
+      );
+    }
+  });
+
+  it('returns default when applied-state.json is malformed JSON', () => {
+    fs.mkdirSync(path.join(tmpDir, '.cap', 'learning'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, '.cap', 'learning', 'applied-state.json'), '{not json');
+    assert.equal(
+      pipeline.getEffectiveThreshold(tmpDir, 'override', 'F-100'),
+      pipeline.THRESHOLD_OVERRIDE_COUNT,
+    );
+  });
+
+  it('returns default when projectRoot or featureId is missing', () => {
+    writeAppliedL1(tmpDir, 'F-100/threshold', 9);
+    // No projectRoot → cannot read.
+    assert.equal(
+      pipeline.getEffectiveThreshold(undefined, 'override', 'F-100'),
+      pipeline.THRESHOLD_OVERRIDE_COUNT,
+    );
+    // No featureId → no key to look up.
+    assert.equal(
+      pipeline.getEffectiveThreshold(tmpDir, 'override', null),
+      pipeline.THRESHOLD_OVERRIDE_COUNT,
+    );
+  });
+});
+
+describe('F-071/D9 — checkThreshold honours applied-state when projectRoot is provided', () => {
+  it('without projectRoot keeps the existing constant-only contract (back-compat)', () => {
+    // Pin: pre-D9 callers passed only the candidate; behaviour must not change.
+    assert.equal(pipeline.checkThreshold({ signalType: 'override', count: 3 }), true);
+    assert.equal(pipeline.checkThreshold({ signalType: 'override', count: 2 }), false);
+  });
+
+  it('with projectRoot, applied threshold raises the bar', () => {
+    writeAppliedL1(tmpDir, 'F-100/threshold', 5);
+    // count=3 was promotable under the default; with applied=5 it must NOT promote.
+    assert.equal(
+      pipeline.checkThreshold({ signalType: 'override', count: 3, featureId: 'F-100' }, tmpDir),
+      false,
+    );
+    assert.equal(
+      pipeline.checkThreshold({ signalType: 'override', count: 5, featureId: 'F-100' }, tmpDir),
+      true,
+    );
+  });
+
+  it('memory-ref still never promotes even if applied-state lowers the threshold', () => {
+    writeAppliedL1(tmpDir, 'F-100/threshold', 1);
+    assert.equal(
+      pipeline.checkThreshold({ signalType: 'memory-ref', count: 100, featureId: 'F-100' }, tmpDir),
+      false,
+    );
+  });
+
+  it('regret threshold also honours applied-state', () => {
+    writeAppliedL1(tmpDir, 'F-100/threshold', 3);
+    assert.equal(
+      pipeline.checkThreshold({ signalType: 'regret', count: 1, featureId: 'F-100' }, tmpDir),
+      false,
+    );
+    assert.equal(
+      pipeline.checkThreshold({ signalType: 'regret', count: 3, featureId: 'F-100' }, tmpDir),
+      true,
+    );
+  });
+});
+
+describe('F-071/D9 — runHeuristicStage frequency-arm honours applied threshold', () => {
+  it('a 3-record cluster does NOT promote into the frequency arm when applied threshold is 4', () => {
+    // Without override: 3 overrides hit the AC-2 default (3) → cluster appears as a candidate.
+    seedOverrides(tmpDir, 3, { featureId: 'F-100' });
+    const baseline = pipeline.runHeuristicStage(tmpDir, { persist: false });
+    const baselineMatch = baseline.candidates.find((c) => c.featureId === 'F-100');
+    assert.ok(baselineMatch, 'baseline must surface the cluster (sanity)');
+
+    // Now apply a higher threshold (e.g. user clicked Apply on a P-NNN raising F-100→4).
+    writeAppliedL1(tmpDir, 'F-100/threshold', 4);
+
+    // Re-run: the same 3 records should NOT survive the frequency arm (4 required), and TF-IDF
+    // alone won't lift them either because the cluster contains a single token within a single
+    // session — IDF=0, TF-IDF score=0, so the per-session top-K does NOT include it.
+    const after = pipeline.runHeuristicStage(tmpDir, { persist: false });
+    const afterMatch = after.candidates.find((c) => c.featureId === 'F-100');
+    assert.equal(afterMatch, undefined, 'cluster below applied threshold must NOT appear');
+  });
+
+  it('buildHeuristicSuggestion `from` reflects the applied threshold, not the constant', () => {
+    writeAppliedL1(tmpDir, 'F-100/threshold', 5);
+    // Need 5 overrides to actually surface the candidate now.
+    seedOverrides(tmpDir, 5, { featureId: 'F-100' });
+    const { candidates } = pipeline.runHeuristicStage(tmpDir, { persist: false });
+    const c = candidates.find((x) => x.featureId === 'F-100');
+    assert.ok(c, 'cluster must be present at count=5');
+    assert.equal(c.suggestion.from, 5, 'rationale must be honest about the applied threshold');
+    assert.equal(c.suggestion.to, 6, 'next step is current+1 = 6');
+  });
+
+  it('schema contract: F-074 writes via writeAppliedState, F-071 reads the same key shape', () => {
+    // Pin the contract between the two modules WITHOUT spinning up a real git sandbox.
+    // F-074 owns the schema; this test asserts F-071 honours the exact key F-074 produces from
+    // a typical L1 suggestion. If either side rewrites the key shape, this fails first.
+    seedOverrides(tmpDir, 3, { featureId: 'F-100' });
+    const initial = pipeline.runHeuristicStage(tmpDir, { persist: false });
+    const cand = initial.candidates.find((x) => x.featureId === 'F-100');
+    assert.ok(cand, 'baseline must surface candidate at default threshold');
+
+    // Mirror exactly what F-074 applyL1 does: state.l1[suggestion.target] = suggestion.to.
+    const key = cand.suggestion.target;
+    assert.equal(key, 'F-100/threshold', 'pin the F-071 → F-074 key shape');
+    const state = patternApply.readAppliedState(tmpDir);
+    state.l1[key] = cand.suggestion.to; // i.e. 4
+    const ok = patternApply.writeAppliedState(tmpDir, state);
+    assert.equal(ok, true);
+
+    // After F-074-style write, the same 3-record cluster must no longer pass the frequency arm.
+    const after = pipeline.runHeuristicStage(tmpDir, { persist: false });
+    const survived = after.candidates.find((x) => x.featureId === 'F-100');
+    assert.equal(survived, undefined, 'after F-074 apply, F-071 must respect the raised threshold');
+  });
+});
