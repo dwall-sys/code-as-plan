@@ -584,8 +584,14 @@ function parseFeatureMapContent(content, options) {
 
   // Match feature headers: ### F-001: Title text [state]
   // Also accepts:          ### F-001: Title text          (no [state] — state comes from separate line)
+  // Also accepts em-dash / en-dash / hyphen separator with surrounding spaces:
+  //   ### F-001 — Title    ### F-001 – Title    ### F-001 - Title
   // @cap-todo(ac:F-081/AC-1) Union Feature-ID regex accepts F-NNN AND F-LONGFORM (uppercase-led).
-  const featureHeaderRE = /^###\s+(F-(?:\d{3,}|[A-Z][A-Z0-9_-]*)):\s+(.+?)\s*$/;
+  // @cap-decision(F-082/iter2) Header separator tolerance: GoetzeInvest real-world dry-run uses ` — ` (em-dash)
+  //   throughout root + sub-app maps. Accepting `:` plus dash forms (with required surrounding whitespace
+  //   to disambiguate from hyphen-in-ID) makes CAP tolerant of the legacy CAP-init-template em-dash style
+  //   without forcing migration. Tested in cap-feature-map-emdash.test.cjs.
+  const featureHeaderRE = /^###\s+(F-(?:\d{3,}|[A-Z][A-Z0-9_-]*))(?::\s+|\s+[—–-]\s+)(.+?)\s*$/;
   // Match AC rows: | AC-N | status | description |
   // End-anchor (\s*$) forces the non-greedy description group to expand up to the
   // trailing pipe of the row, not the first internal pipe. Without the anchor an AC
