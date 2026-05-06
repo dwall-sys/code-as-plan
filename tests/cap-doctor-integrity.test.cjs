@@ -32,7 +32,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added (Review Patterns via Learn Command).
     // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added (V6 per-feature memory format foundation).
     // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added (V6 migration tool with hybrid classifier).
-    assert.equal(CAP_MODULE_MANIFEST.length, 82);
+    // @cap-decision(F-078) Bumped 82 -> 84 when cap-memory-extends.cjs and cap-memory-platform.cjs were added (Platform-Bucket for cross-cutting decisions).
+    assert.equal(CAP_MODULE_MANIFEST.length, 84);
   });
 
   it('every entry ends with .cjs', () => {
@@ -67,7 +68,10 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added.
     // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added.
     // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added.
-    assert.equal(result.modulesTotal, 82);
+    // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added.
+    // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added.
+    // @cap-decision(F-078) Bumped 82 -> 84 when cap-memory-extends.cjs and cap-memory-platform.cjs were added.
+    assert.equal(result.modulesTotal, 84);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -89,7 +93,10 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added.
     // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added.
     // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added.
-    assert.equal(result.modulesTotal, 82);
+    // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added.
+    // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added.
+    // @cap-decision(F-078) Bumped 82 -> 84 when cap-memory-extends.cjs and cap-memory-platform.cjs were added.
+    assert.equal(result.modulesTotal, 84);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -219,7 +226,10 @@ describe('runDoctor includes module integrity', () => {
     // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added.
     // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added.
     // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added.
-    assert.equal(report.modulesTotal, 82);
+    // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added.
+    // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added.
+    // @cap-decision(F-078) Bumped 82 -> 84 when cap-memory-extends.cjs and cap-memory-platform.cjs were added.
+    assert.equal(report.modulesTotal, 84);
   });
 
   it('report includes platformPaths', () => {

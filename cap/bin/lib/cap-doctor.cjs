@@ -58,15 +58,21 @@ const CAP_MODULE_MANIFEST = [
   'cap-memory-confidence.cjs',
   'cap-memory-dir.cjs',
   'cap-memory-engine.cjs',
+  // @cap-feature(feature:F-078) Extends-Chain Resolver — resolves `extends: platform/<topic>` chains in a single pass.
+  // @cap-decision(F-078) Bumped 82 -> 83 when cap-memory-extends.cjs was added (Platform-Bucket reader path).
+  'cap-memory-extends.cjs',
   'cap-memory-graph.cjs',
+  // @cap-feature(feature:F-077) V6 Memory Migration Tool — one-shot migration from V5 monolith to V6 per-feature layout.
+  // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added (V6 migration tool with hybrid classifier).
+  'cap-memory-migrate.cjs',
   'cap-memory-pin.cjs',
+  // @cap-feature(feature:F-078) Platform-Bucket for Cross-Cutting Decisions — explicit-only platform-topic file IO + classifier.
+  // @cap-decision(F-078) Bumped 83 -> 84 when cap-memory-platform.cjs was added (Platform-Bucket file IO + writer).
+  'cap-memory-platform.cjs',
   'cap-memory-prune.cjs',
   // @cap-feature(feature:F-076) V6 Per-Feature Memory Format — schema + validator + round-trip-safe parser/serializer.
   // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added (V6 memory-format pivot foundation).
   'cap-memory-schema.cjs',
-  // @cap-feature(feature:F-077) V6 Memory Migration Tool — one-shot migration from V5 monolith to V6 per-feature layout.
-  // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added (V6 migration tool with hybrid classifier).
-  'cap-memory-migrate.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',
   // @cap-feature(feature:F-074) Enable Pattern Unlearn and Auto-Retract — apply audit + reverse patch + retract list.
