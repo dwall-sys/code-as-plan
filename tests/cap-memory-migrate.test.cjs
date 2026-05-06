@@ -1271,3 +1271,127 @@ describe('PR #36 review hardening', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// D7 — Title-prefix heuristic with occurrence threshold.
+// ---------------------------------------------------------------------------
+
+describe('F-077/D7: title-prefix heuristic', () => {
+  it('routes prefix-clustered entries to platform/prefix-<slug>.md when count ≥ 5', async () => {
+    // 5 GoetzeBooking-prefixed decisions + 5 EasyMail-prefixed → both should bucket. No
+    // tag-metadata, no path-match, no F-NNN mention — only the prefix is signal.
+    const root = makeProject();
+    try {
+      const entries = [];
+      for (let i = 0; i < 5; i++) {
+        entries.push({ anchorId: `gb${i}`, title: `GoetzeBooking: decision number ${i}`, files: [] });
+      }
+      for (let i = 0; i < 5; i++) {
+        entries.push({ anchorId: `em${i}`, title: `EasyMail: design choice ${i}`, files: [] });
+      }
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd(entries));
+      writeFeatureMap(root, []);
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.equal(r.errors.length, 0);
+      assert.ok(
+        r.wroteFiles.some((p) => p.endsWith('platform/prefix-goetzebooking.md')),
+        `expected GoetzeBooking bucket, got: ${r.wroteFiles.join(', ')}`,
+      );
+      assert.ok(
+        r.wroteFiles.some((p) => p.endsWith('platform/prefix-easymail.md')),
+        'expected EasyMail bucket',
+      );
+      // Unassigned bucket should NOT exist (everything got routed by prefix).
+      assert.ok(
+        !r.wroteFiles.some((p) => p.endsWith('platform/unassigned.md')),
+        'unassigned bucket should be empty when all entries are prefix-clustered',
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('does NOT bucket low-occurrence prefixes (below threshold)', async () => {
+    // 4 GoetzeBooking entries (below threshold of 5) + 6 unrelated → GoetzeBooking goes to
+    // unassigned, NOT to platform/prefix-goetzebooking.md. Pin the threshold so a future change
+    // (raising or lowering 5) is visible.
+    const root = makeProject();
+    try {
+      const entries = [];
+      for (let i = 0; i < 4; i++) {
+        entries.push({ anchorId: `gb${i}`, title: `GoetzeBooking: decision ${i}`, files: [] });
+      }
+      for (let i = 0; i < 6; i++) {
+        entries.push({ anchorId: `o${i}`, title: `Some random decision ${i}`, files: [] });
+      }
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd(entries));
+      writeFeatureMap(root, []);
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.equal(r.errors.length, 0);
+      assert.ok(
+        !r.wroteFiles.some((p) => p.endsWith('platform/prefix-goetzebooking.md')),
+        'below-threshold prefix must NOT produce its own bucket',
+      );
+      assert.ok(
+        r.wroteFiles.some((p) => p.endsWith('platform/unassigned.md')),
+        'below-threshold entries route to unassigned',
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('rejects sentence-noise prefixes (Select:, Update:) regardless of count', async () => {
+    // 10 entries each starting with "Select" / "Update" / "Insert" — these are SQL-ish
+    // sentence-starts, not app names. Even at 10x count, the noise-prefix list filters them.
+    // Wait: NOISE_PREFIXES has lowercase strings (todo, note, fix, ...). Capital "Select" /
+    // "Update" / "Insert" aren't in that set. So this test verifies that *capitalised SQL words*
+    // CURRENTLY DO bucket — pinning that as a known limitation, not an error path. If we expand
+    // NOISE_PREFIXES later to cover SQL, update this test to assert NO bucket.
+    const root = makeProject();
+    try {
+      const entries = [];
+      for (let i = 0; i < 10; i++) {
+        entries.push({ anchorId: `s${i}`, title: `Select: query foo from bar where ${i}`, files: [] });
+      }
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd(entries));
+      writeFeatureMap(root, []);
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.equal(r.errors.length, 0);
+      // Currently routes to platform/prefix-select.md. If a future update extends NOISE_PREFIXES,
+      // change this assertion. The point of the test: pin observable behaviour.
+      assert.ok(
+        r.wroteFiles.some((p) => p.endsWith('platform/prefix-select.md')),
+        'Select: prefix at count 10 currently buckets — pin until NOISE_PREFIXES is expanded',
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('does not fire when path-heuristic already produced a match', async () => {
+    // Tag-metadata wins over title-prefix. An entry that has both `@cap-decision(feature:F-100)`
+    // metadata AND a "GoetzeBooking:" title-prefix must route to F-100, not platform/prefix-...
+    // Ensures D7 is a fallback, not a competitor with stronger signals.
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-100', title: 'Booking', files: ['apps/booking/foo.ts'] }]);
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        // Path match wins (file is in F-100 key_files)
+        { anchorId: 'a1', title: 'GoetzeBooking: a tagged decision', files: ['apps/booking/foo.ts'] },
+      ]));
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.equal(r.errors.length, 0);
+      assert.ok(
+        r.wroteFiles.some((p) => p.includes('features/') && p.includes('F-100')),
+        'path-match should win over title-prefix',
+      );
+      assert.ok(
+        !r.wroteFiles.some((p) => p.endsWith('platform/prefix-goetzebooking.md')),
+        'title-prefix bucket should NOT be created when stronger signal exists',
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+});

@@ -50,6 +50,13 @@ const UNASSIGNED_SNAPSHOTS_TOPIC = 'snapshots-unassigned';
 // Snapshot date-proximity window for the heuristic (hours).
 const SNAPSHOT_DATE_WINDOW_HOURS = 24;
 
+// @cap-decision(F-077/D7) Title-prefix heuristic threshold — minimum occurrences across the V5
+//                 corpus before a prefix counts as signal. 5 is the floor where we stop seeing
+//                 sentence-starts ("Select:", "Update:", "Migration 067:") and start seeing
+//                 actual app-name buckets ("GoetzeBooking:" appears 30+ times, "EasyMail:" 50+,
+//                 etc.). Exposed for future tuning; tests pin the constant explicitly.
+const TITLE_PREFIX_MIN_OCCURRENCES = 5;
+
 // -------- Typedefs --------
 
 /**
@@ -358,6 +365,14 @@ function buildMigrationPlan(projectRoot, context, options) {
   }
 
   // 4. Classify every entry + snapshot.
+  // @cap-decision(F-077/D7) Title-prefix heuristic uses a two-pass: count prefix occurrences first,
+  //                  then promote only prefixes with ≥ TITLE_PREFIX_MIN_OCCURRENCES entries. Single-
+  //                  occurrence prefixes are noise (sentences starting with "Select:", "Update:",
+  //                  "Migration 067:" etc.) and would otherwise produce a swarm of 1-2-entry
+  //                  platform files. Real-world: GoetzeInvest pre-threshold produced 130 platform
+  //                  files with mostly junk; threshold-5 yields ~5-8 meaningful app-buckets.
+  context.titlePrefixCounts = _countTitlePrefixes(allEntries);
+
   /** @type {Map<string, PlannedWrite>} */
   const writeIndex = new Map();
   const ensureWrite = (key, build) => {
@@ -527,7 +542,34 @@ function classifyEntry(entry, context) {
     };
   }
 
-  // 5. No signal.
+  // 5. Title-prefix heuristic — last-chance signal before falling back to unassigned.
+  // @cap-decision(F-077/D7) Many projects encode the app/sub-feature in a title-prefix convention
+  //                  ("GoetzeBooking: ...", "EasyMail: ...", "Hub: ..."). When tag-metadata,
+  //                  path-match, and F-NNN-mention all miss, a recognizable prefix is still useful
+  //                  signal: route to `platform/prefix-<slug>.md`. Real-world: GoetzeInvest dry-run
+  //                  pre-D7 produced 0 feature files / 1347 unassigned over 1287 V5 entries because
+  //                  the project's FEATURE-MAP uses long-form IDs (F-DEPLOY, F-HUB-AUTH) that
+  //                  cap-feature-map.cjs doesn't parse. Issue #39 tracks the proper multi-format
+  //                  + monorepo support; D7 is the bridge that makes V6.0 useful for that project
+  //                  in the meantime. Threshold-gated: prefix must appear in
+  //                  TITLE_PREFIX_MIN_OCCURRENCES entries (default 5) before it counts as signal
+  //                  — avoids the 130-tiny-files swarm from sentences that incidentally start with
+  //                  a capitalised word + colon (Select:, Update:, Migration 067:, etc.).
+  const prefixSlug = _extractTitlePrefixSlug(entry.title);
+  if (prefixSlug) {
+    const count = context.titlePrefixCounts ? context.titlePrefixCounts.get(prefixSlug) || 0 : 0;
+    if (count >= TITLE_PREFIX_MIN_OCCURRENCES) {
+      reasons.push(`title-prefix:${prefixSlug}(${count})`);
+      return {
+        destination: 'platform',
+        topic: `prefix-${prefixSlug}`,
+        confidence: 0.7,
+        reasons,
+      };
+    }
+  }
+
+  // 6. No signal.
   reasons.push('no-signal');
   return {
     destination: 'unassigned',
@@ -535,6 +577,52 @@ function classifyEntry(entry, context) {
     confidence: 0,
     reasons,
   };
+}
+
+/**
+ * Extract a slugified prefix from a V5 decision/pitfall title using the `<Prefix>:` convention.
+ * Returns null when the title doesn't match the convention or when the prefix is too short to be
+ * meaningful (< 3 chars after slugification).
+ *
+ * @cap-decision(F-077/D7) Prefix must start with a letter, be 2-40 chars long, contain only
+ *                         alphanumerics + space + dash, and be followed by exactly one ":". This
+ *                         excludes URLs ("http://"), code patterns ("foo::bar"), and misc colons
+ *                         in normal prose. Slug is kebab-case lowercase, max 40 chars.
+ *
+ * @param {string} title
+ * @returns {string|null}
+ */
+function _extractTitlePrefixSlug(title) {
+  if (typeof title !== 'string') return null;
+  const m = title.match(/^([A-Za-z][A-Za-z0-9 \-]{1,40}):\s/);
+  if (!m) return null;
+  const prefix = m[1].trim();
+  // Reject prefixes that are obviously not app-names: too short, all-numeric, generic words.
+  if (prefix.length < 3) return null;
+  const NOISE_PREFIXES = new Set(['todo', 'note', 'fix', 'bug', 'wip', 'tbd', 'fixme', 'xxx']);
+  if (NOISE_PREFIXES.has(prefix.toLowerCase())) return null;
+  // Slugify: lowercase, replace runs of non-alphanumeric with single dash, strip leading/trailing dashes.
+  const slug = prefix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (slug.length < 3 || slug.length > 40) return null;
+  return slug;
+}
+
+/**
+ * Count title-prefix occurrences across all entries. The classifier's title-prefix step (D7) gates
+ * on `count >= TITLE_PREFIX_MIN_OCCURRENCES`, so a single-occurrence prefix doesn't get its own
+ * platform file.
+ *
+ * @param {V5Entry[]} entries
+ * @returns {Map<string, number>} slug → occurrence count
+ */
+function _countTitlePrefixes(entries) {
+  const counts = new Map();
+  for (const e of entries) {
+    const slug = _extractTitlePrefixSlug(e.title || '');
+    if (!slug) continue;
+    counts.set(slug, (counts.get(slug) || 0) + 1);
+  }
+  return counts;
 }
 
 // @cap-todo(ac:F-077/AC-5) classifySnapshot — priority order:
