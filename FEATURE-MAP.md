@@ -1270,6 +1270,7 @@
 - `hooks/cap-learning-hook.js`
 - `tests/cap-learning-signals-adversarial.test.cjs`
 - `tests/cap-learning-signals.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
 
 ### F-071: Extract Patterns via Heuristics and LLM [shipped]
 
@@ -1285,6 +1286,12 @@
 | AC-6 | tested | Jeder Pattern-Vorschlag muss als `P-NNN` (zero-padded, sequenziell, nie renumeriert) ID erhalten, mit Feature-Ref, Lern-Level (L1/L2/L3), Vorschlag-Payload und Confidence-Score. |
 | AC-7 | tested | Das Budget-Override (`llmBudgetPerSession`) aus `.cap/learning/config.json` muss respektiert werden und ersetzt den Default von 3. |
 
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-pattern-pipeline.cjs`
+- `tests/cap-pattern-pipeline-adversarial.test.cjs`
+- `tests/cap-pattern-pipeline.test.cjs`
+
 ### F-072: Compute Two-Layer Fitness Score [shipped]
 
 **Depends on:** F-070, F-071
@@ -1298,6 +1305,12 @@
 | AC-5 | tested | Das Datenmodell für den Langfrist-Score muss ab Tag 1 geschrieben werden, auch wenn die Anzeige erst ab n ≥ 5 erfolgt. |
 | AC-6 | tested | Das System muss einen Fitness-Snapshot zum Zeitpunkt jedes Patch-Applies erzeugen, damit Auto-Rückzug (F-074) Vergleichswerte hat. |
 | AC-7 | tested | Die Score-Berechnung muss zero-deps und deterministisch sein (gleiche Inputs → gleicher Output). |
+
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-fitness-score.cjs`
+- `tests/cap-fitness-score-adversarial.test.cjs`
+- `tests/cap-fitness-score.test.cjs`
 
 ### F-074: Enable Pattern Unlearn and Auto-Retract [shipped]
 
@@ -1313,6 +1326,12 @@
 | AC-6 | tested | Ist ein Patch für Rückzug markiert, muss das Learn-Review-Board (F-073) ihn mit Label „Rückzug empfohlen" und One-Click-Unlearn-Option anzeigen. |
 | AC-7 | tested | Unlearn muss idempotent sein: zweifacher Aufruf auf bereits zurückgenommenen P-ID darf keinen doppelten Commit erzeugen. |
 
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-pattern-apply.cjs`
+- `tests/cap-pattern-apply-adversarial.test.cjs`
+- `tests/cap-pattern-apply.test.cjs`
+
 ### F-073: Review Patterns via Learn Command [shipped]
 
 **Depends on:** F-072, F-074
@@ -1326,6 +1345,13 @@
 | AC-5 | tested | Patterns, die über 7 Sessions ungeprüft im Review-Board stehen, müssen automatisch in `.cap/learning/archive/` verschoben und aus dem Board entfernt werden. |
 | AC-6 | tested | Für jeden Pattern muss das Board die Optionen Approve (→ Apply via F-074), Reject, Skip und bei Rückzug-Empfehlung (F-074) zusätzlich Unlearn anbieten. |
 | AC-7 | tested | Approve muss die Learn-Pipeline (F-074 Apply) synchron triggern und den Exit-Code 0 nur bei erfolgreichem Commit zurückgeben. |
+
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-learn-review.cjs`
+- `hooks/cap-learn-review-hook.js`
+- `tests/cap-learn-review-adversarial.test.cjs`
+- `tests/cap-learn-review.test.cjs`
 
 ### F-075: Provision Trust-Mode Configuration Slot [shipped]
 
@@ -1346,6 +1372,75 @@
 - `tests/cap-trust-mode-adversarial.test.cjs`
 - `tests/cap-trust-mode.test.cjs`
 
+### F-076: Define V6 Memory Format Schema [tested]
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Das System muss ein Per-Feature-Memory-Format unter `.cap/memory/features/F-NNN-<topic>.md` definieren mit Pflicht-Sektionen `title`, `decisions`, `pitfalls` und optionalen Sektionen `lessons`, `linked_snapshots`, `related_features`, `key_files`. |
+| AC-2 | tested | Jede Datei muss einen klar abgegrenzten Auto-Block (regeneriert von der Pipeline) und einen Manual-Block (von der Pipeline niemals überschrieben) enthalten, getrennt durch Marker-Kommentare `<!-- cap:auto:start -->` / `<!-- cap:auto:end -->`. |
+| AC-3 | tested | Leere optionale Sektionen müssen weggelassen werden — keine Platzhalter wie `(none)` oder `TODO` im generierten Output. |
+| AC-4 | tested | Cross-Links zwischen Features müssen über Feature-ID-Referenzen (`related_features: [F-070, F-071]`) erfolgen, nicht über Inhaltsduplikation. |
+| AC-5 | tested | Das Schema muss in `cap/bin/lib/cap-memory-schema.cjs` als JSDoc-Typedef + Validator-Funktion exportiert werden, abrufbar via `validateFeatureMemoryFile(path)`. |
+| AC-6 | tested | Das Schema-Modul muss komplementär zu `FEATURE-MAP.md` arbeiten — keine Duplikation von Title/State/ACs, sondern Referenz via Feature-ID; FEATURE-MAP bleibt single source of truth für Lifecycle. |
+| AC-7 | tested | Tests müssen Round-Trip-Parsing/Serialisierung abdecken (parse → modify auto-block → serialize → manual-block byte-identisch). |
+
+**Files:**
+- `cap/bin/lib/cap-memory-schema.cjs`
+- `tests/cap-memory-schema.test.cjs`
+
+### F-077: Build V6 Memory Migration Tool [planned]
+
+**Depends on:** F-076
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Das CLI-Kommando `cap:memory:migrate` muss `decisions.md`, `pitfalls.md`, `patterns.md`, `hotspots.md` parsen und den Inhalt in V6-Per-Feature-Files unter `.cap/memory/features/` und `.cap/memory/platform/` aufteilen. |
+| AC-2 | pending | Migration muss atomic schreiben (write-temp-then-rename, F-074-Pattern) und idempotent sein — wiederholtes Ausführen ohne neue Inputs darf keine Diff-Änderungen produzieren. |
+| AC-3 | pending | Vor jedem Schreibvorgang muss ein Backup nach `.cap/memory/.archive/decisions-pre-v6-<YYYY-MM-DD>.md` (und analog für die anderen V5-Files) erstellt werden, idempotent bei gleichem Datum. |
+| AC-4 | pending | Dry-Run-Modus (`--dry-run`) muss Default sein und einen vollständigen Diff-Plan ausgeben (Feature-Zuordnung pro Decision, Anzahl unklassifizierter Einträge); echte Schreibvorgänge erfordern explizites `--apply` mit Confirm-Prompt. |
+| AC-5 | pending | Auto-Klassifizierung muss `@cap-decision(feature:F-NNN)`-Tag-Metadaten priorisieren, dann Path-Heuristik gegen `FEATURE-MAP.md` `key_files` matchen, dann Datum + State-Transition-Heuristik für Snapshot-Orphans. |
+| AC-6 | pending | Bei Ambiguität (Mehrfach-Match, Confidence < threshold) muss das Tool interaktiv prompten mit Top-3-Kandidaten und einer `[s]kip`-Option für Platform-Bucket-Fallback. |
+| AC-7 | pending | Nach erfolgreichem Apply muss das Tool eine Migration-Report-Datei `.cap/memory/.archive/migration-report-<date>.md` schreiben (Counts: assigned/platform/skipped, Ambiguity-Auflösungen). |
+
+### F-078: Implement Platform-Bucket for Cross-Cutting Decisions [planned]
+
+**Depends on:** F-076
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Das System muss ein Platform-Topic-Layout unter `.cap/memory/platform/<topic>.md` unterstützen, mit demselben Auto/Manual-Split wie Per-Feature-Files (F-076). |
+| AC-2 | pending | Decisions müssen explizit via `@cap-decision platform:<topic>` getaggt werden, um in den Platform-Bucket zu promovieren — keine Auto-Promotion aus Per-Feature-Files. |
+| AC-3 | pending | Per-Feature-Files müssen Platform-Topics referenzieren können via `extends: platform/<topic>`-Frontmatter-Feld; der Reader muss `extends`-Ketten in einer einzigen lookup-Pass auflösen. |
+| AC-4 | pending | Subsystem-übergreifende Pitfalls müssen unter `.cap/memory/platform/checklists/<subsystem>.md` aggregierbar sein, separates Layout vom topic-Layer. |
+| AC-5 | pending | Zirkuläre `extends`-Referenzen müssen vom Reader erkannt und mit Fehlermeldung (Pfad der Zyklus-Kette) abgelehnt werden. |
+| AC-6 | pending | Tests müssen verifizieren: explizit-only-Promotion (nicht-getaggte Decision landet nie im Platform-Bucket), `extends`-Resolution, Zyklus-Detection. |
+
+### F-079: Wire Snapshot Linkage to Features and Platform [planned]
+
+**Depends on:** F-076
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | `cap:save` (Snapshot-Erstellung) muss standardmäßig die aktive Feature-ID aus `.cap/SESSION.json` `activeFeature` lesen und den Snapshot mit dieser Feature-ID verknüpfen. |
+| AC-2 | pending | Der Flag `--unassigned` muss den Snapshot ohne Feature-Bindung speichern, der Flag `--platform=<topic>` muss ihn an einen Platform-Topic binden. |
+| AC-3 | pending | Soft-Warn (stderr, kein Fail) muss erscheinen wenn `--unassigned` explizit ODER kein `activeFeature` in SESSION.json gesetzt ist; Snapshot wird trotzdem erstellt. |
+| AC-4 | pending | Die Memory-Pipeline muss Snapshots im Auto-Block des zugeordneten Per-Feature-Files (oder Platform-Files) unter Sektion `linked_snapshots` referenzieren — kein silent decay bei Pipeline-Re-Run. |
+| AC-5 | pending | Migration aus F-077 muss Datum + State-Transitions aus FEATURE-MAP heuristisch nutzen, um die ~38 GoetzeInvest-Orphan-Snapshots automatisch ihrem damaligen Feature zuzuordnen. |
+| AC-6 | pending | Nicht-zuordbare Snapshots (Heuristik liefert keinen Match) müssen unter `.cap/memory/platform/snapshots-unassigned.md` aggregiert werden, damit kein Snapshot verloren geht. |
+
+### F-080: Bridge to Claude-native Memory [planned]
+
+**Depends on:** F-076
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | Eine neue Pipeline-Stage `cap/bin/lib/cap-memory-bridge.cjs` muss `~/.claude/projects/<project-slug>/memory/MEMORY.md` ausschließlich lesend konsumieren — keine Writes in das Claude-native-Verzeichnis. |
+| AC-2 | pending | Die Bridge muss einen Cache unter `.cap/memory/.claude-native-index.json` erstellen mit Mtime-basiertem Invalidierungs-Check (kein Re-Parse bei unveränderter Quelldatei). |
+| AC-3 | pending | Fehlendes oder unzugängliches Claude-native-Verzeichnis muss zu silent skip führen (Log-Eintrag auf debug-Level, kein Error, kein Fail). |
+| AC-4 | pending | `/cap:start` und `/cap:status` müssen die Bridge-Daten surface'n im Format `Claude-native erinnert: <bullet-titles für active feature + related features>`. |
+| AC-5 | pending | Surface-Output muss auf max. 5 Bullets pro Run begrenzt sein, priorisiert nach: activeFeature direkt → related_features aus Per-Feature-File → letzte 2 globale Einträge. |
+| AC-6 | pending | Tests müssen mit Fixture-Claude-native-MEMORY.md verifizieren: Parse, Cache-Invalidierung, graceful-skip bei missing dir, Surface-Limitierung. |
+
 ## Legend
 
 | State | Meaning |
@@ -1356,4 +1451,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-06T08:24:18.053Z*
+*Last updated: 2026-05-06T11:02:50.873Z*
