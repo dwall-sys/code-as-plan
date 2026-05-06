@@ -8,6 +8,7 @@
 
 // @cap-feature(feature:F-002) Feature Map Management — read/write/enrich FEATURE-MAP.md as single source of truth
 // @cap-feature(feature:F-081) Multi-Format Feature Map Parser — Union ID regex (F-NNN | F-LONGFORM), bullet-style ACs, config-driven format selection
+// @cap-feature(feature:F-082) Aggregate Feature Maps Across Monorepo Sub-Apps — readFeatureMap transparently merges sub-app maps via Rescoped Table or opt-in directory walk
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -127,7 +128,379 @@ function readFeatureMap(projectRoot, appPath, options) {
   //   feature ID. The ID regex `[A-Z0-9_-]*` rejects ANSI escape characters, but each console.warn
   //   call still wraps the message in `String(...).trim()` as defense in depth. F-076/F-077 lesson.
   const safe = Boolean(options && options.safe === true);
-  return parseFeatureMapContent(content, { projectRoot, safe });
+  const rootResult = parseFeatureMapContent(content, { projectRoot, safe });
+
+  // @cap-todo(ac:F-082/AC-1) Aggregation only triggers on ROOT-level reads (appPath null/undef).
+  //   Sub-app reads (caller passed appPath explicitly) get the single map verbatim — the caller
+  //   is targeting one sub-app deliberately and aggregation would be surprising.
+  // @cap-decision(F-082/single-level-aggregation) Single-level only: root → sub-apps → features.
+  //   A sub-app FEATURE-MAP.md with its own Rescoped Table is NOT recursively expanded — that
+  //   would create cycles, bloat parser surface, and confuse the round-trip writer (which sub-app
+  //   does a write-back belong to?). If a project legitimately needs nested workspaces, the user
+  //   reads each sub-app explicitly via appPath.
+  if (appPath) return rootResult;
+
+  // @cap-todo(ac:F-082/AC-1) Detect "Rescoped Feature Maps" header in the root content; if found,
+  //   parse the table to discover sub-app paths and aggregate transparently.
+  const rescopedEntries = parseRescopedTable(content);
+
+  // @cap-todo(ac:F-082/AC-3) Opt-in directory-walk fallback: when no Rescoped Table is present
+  //   AND `.cap/config.json:featureMaps.discover === "auto"`, glob `apps/*/FEATURE-MAP.md`
+  //   and `packages/*/FEATURE-MAP.md`. Default `"table-only"` preserves legacy single-map behavior.
+  /** @type {Array<{appPath: string}>} */
+  let aggregationTargets = rescopedEntries;
+  if (aggregationTargets.length === 0) {
+    const cfg = readCapConfig(projectRoot);
+    const discoverMode =
+      cfg && cfg.featureMaps && typeof cfg.featureMaps.discover === 'string'
+        ? cfg.featureMaps.discover
+        : 'table-only';
+    if (discoverMode === 'auto') {
+      aggregationTargets = discoverSubAppFeatureMaps(projectRoot);
+    }
+  }
+
+  if (aggregationTargets.length === 0) return rootResult;
+
+  return aggregateSubAppFeatureMaps(projectRoot, rootResult, aggregationTargets, { safe });
+}
+
+// @cap-feature(feature:F-082) parseRescopedTable — read-side counterpart to rescopeFeatures
+//   writer. Detects the "Rescoped Feature Maps" section in root FEATURE-MAP.md and extracts
+//   the listed sub-app paths.
+// @cap-decision(F-082/AC-1) The header is matched case-insensitively but anchored on a markdown
+//   header line (## or ###) followed by literal "Rescoped Feature Maps". This avoids false
+//   positives when an AC description happens to mention the phrase in prose.
+// @cap-decision(F-082/AC-1) Each table row's first column may be either a backtick-quoted path
+//   ("`apps/web/`") or a plain-text path. Trailing slash is tolerated and stripped. Markdown
+//   link syntax `[apps/web](apps/web/FEATURE-MAP.md)` is also accepted — that's the form the
+//   /cap:rescope writer is expected to emit when writing the table back.
+/**
+ * @param {string} content - Raw FEATURE-MAP.md content
+ * @returns {Array<{appPath: string, line: number}>} - Sub-app paths in declaration order
+ */
+function parseRescopedTable(content) {
+  if (typeof content !== 'string' || content.length === 0) return [];
+  const lines = content.split('\n');
+  const headerRE = /^#{2,4}\s+Rescoped\s+Feature\s+Maps\s*$/i;
+  let inSection = false;
+  let inTable = false;
+  /** @type {Array<{appPath: string, line: number}>} */
+  const entries = [];
+  const seen = new Set();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (headerRE.test(line)) {
+      inSection = true;
+      inTable = false;
+      continue;
+    }
+    if (!inSection) continue;
+    // Exit the section on the next markdown header.
+    if (/^#{1,6}\s+/.test(line)) {
+      if (inSection && !headerRE.test(line)) {
+        inSection = false;
+        inTable = false;
+      }
+      continue;
+    }
+    // Recognise table header / separator.
+    if (/^\|.*\|$/.test(line)) {
+      // table separator line "|---|---|"
+      if (/^\|[\s:-]+\|/.test(line)) {
+        inTable = true;
+        continue;
+      }
+      // table header line — typically "| App | Features | …"
+      if (!inTable && /^\|\s*App\b/i.test(line)) {
+        continue;
+      }
+      // table data row
+      if (inTable) {
+        const cells = line.slice(1, -1).split('|').map(c => c.trim());
+        if (cells.length === 0) continue;
+        // @cap-decision(F-082/AC-1) Prefer the cell that looks most path-like (contains "/"
+        //   or starts with "apps/"/"packages/"). The Rescoped Table writer (rescopeFeatures)
+        //   emits the path in column 2 ("| App | Path | Features |"), but legacy hand-written
+        //   tables sometimes put the path in column 1. Walking the row and picking the most
+        //   path-like cell keeps both shapes working.
+        let extracted = null;
+        for (const c of cells) {
+          const candidate = _extractAppPath(c);
+          if (!candidate) continue;
+          if (candidate.includes('/') || /^(apps|packages)$/i.test(candidate.split('/')[0])) {
+            extracted = candidate;
+            break;
+          }
+          if (!extracted) extracted = candidate;
+        }
+        if (!extracted) continue;
+        if (seen.has(extracted)) continue;
+        seen.add(extracted);
+        entries.push({ appPath: extracted, line: i + 1 });
+        continue;
+      }
+    }
+    // Bullet form fallback: "- `apps/web/`" or "- apps/web/FEATURE-MAP.md".
+    const bullet = line.match(/^[\s]*[-*]\s+(.+?)\s*$/);
+    if (bullet) {
+      const extracted = _extractAppPath(bullet[1]);
+      if (extracted && !seen.has(extracted)) {
+        seen.add(extracted);
+        entries.push({ appPath: extracted, line: i + 1 });
+      }
+    }
+  }
+  return entries;
+}
+
+/**
+ * Extract a normalized app path from one cell of the Rescoped table or a bullet line.
+ * Tolerates: backtick-quoted, markdown link, trailing slash, "FEATURE-MAP.md" suffix.
+ * @param {string} raw
+ * @returns {string|null}
+ */
+function _extractAppPath(raw) {
+  if (typeof raw !== 'string') return null;
+  let s = raw.trim();
+  // Markdown link: [label](apps/web/FEATURE-MAP.md) -> use the URL.
+  const linkMatch = s.match(/^\[[^\]]*\]\(([^)]+)\)$/);
+  if (linkMatch) s = linkMatch[1].trim();
+  // Backtick-quoted.
+  const tickMatch = s.match(/^`([^`]+)`$/);
+  if (tickMatch) s = tickMatch[1].trim();
+  // Strip "/FEATURE-MAP.md" suffix.
+  s = s.replace(/\/?FEATURE-MAP\.md$/i, '');
+  // Strip trailing slash.
+  s = s.replace(/\/+$/, '');
+  if (!s) return null;
+  // @cap-risk(F-082) Reject absolute paths and parent-dir traversal — only relative paths
+  //   anchored within the project root make sense here. Defense in depth; the caller will
+  //   re-validate when resolving against projectRoot.
+  if (path.isAbsolute(s)) return null;
+  if (s.split('/').some(seg => seg === '..' || seg === '')) return null;
+  return s;
+}
+
+// @cap-feature(feature:F-082) discoverSubAppFeatureMaps — opt-in directory walk for
+//   `apps/*/FEATURE-MAP.md` and `packages/*/FEATURE-MAP.md` when
+//   `cap.config.json:featureMaps.discover === "auto"`.
+// @cap-decision(F-082/AC-3) Walk only the standard monorepo conventions (`apps/*`, `packages/*`)
+//   one level deep. Deeper walks invite directory traversal pathologies and the "table-only"
+//   default already covers the explicit-opt-in case. Users with non-standard layouts are
+//   expected to maintain a Rescoped Table.
+// @cap-risk(F-082/path-traversal) We never accept user-supplied sub-app paths from config —
+//   only paths discovered via fs.readdirSync inside `projectRoot` are returned. Defense in depth
+//   against a poisoned `cap.config.json` — even if `featureMaps.discover` becomes a string like
+//   "../../etc", we read it solely to gate the walk; we do NOT treat it as a path.
+/**
+ * @param {string} projectRoot
+ * @returns {Array<{appPath: string}>}
+ */
+function discoverSubAppFeatureMaps(projectRoot) {
+  const targets = [];
+  for (const top of ['apps', 'packages']) {
+    const topDir = path.join(projectRoot, top);
+    if (!fs.existsSync(topDir)) continue;
+    let entries;
+    try {
+      entries = fs.readdirSync(topDir, { withFileTypes: true });
+    } catch (_e) {
+      continue;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith('.')) continue;
+      const sub = path.join(topDir, e.name);
+      const fmPath = path.join(sub, FEATURE_MAP_FILE);
+      if (!fs.existsSync(fmPath)) continue;
+      // Defense-in-depth: ensure the resolved path stays inside projectRoot.
+      const resolved = path.resolve(sub);
+      const root = path.resolve(projectRoot);
+      if (!resolved.startsWith(root + path.sep) && resolved !== root) continue;
+      targets.push({ appPath: path.relative(projectRoot, sub).replace(/\\/g, '/') });
+    }
+  }
+  return targets;
+}
+
+// @cap-feature(feature:F-082) aggregateSubAppFeatureMaps — merge per-sub-app feature lists
+//   into a single map view. Each aggregated feature is a SHALLOW CLONE with `metadata.subApp`
+//   set to the last path segment of the sub-app (e.g. `apps/web` -> `"web"`).
+// @cap-decision(F-082/AC-2) Clone before annotating: the cached read result of any internal
+//   call to readFeatureMap(subAppPath) must not be mutated. Mutation would leak runtime-only
+//   `subApp` markers across separate read calls and silently change downstream behavior.
+// @cap-decision(F-082/AC-7) Cross-sub-app duplicate detection runs AFTER each per-sub-app
+//   parser has accepted its own map. The aggregated parseError keeps the same `code` as the
+//   single-map case ('CAP_DUPLICATE_FEATURE_ID') so downstream handlers don't need a new
+//   branch — the new fields (`firstSubApp`, `duplicateSubApp`, `firstFile`, `duplicateFile`)
+//   are additive and safe to ignore.
+/**
+ * @param {string} projectRoot
+ * @param {FeatureMap} rootResult - The parse result of the root FEATURE-MAP.md
+ * @param {Array<{appPath: string}>} targets - Sub-app paths to aggregate
+ * @param {{ safe?: boolean }} aggOptions
+ * @returns {FeatureMap}
+ */
+function aggregateSubAppFeatureMaps(projectRoot, rootResult, targets, aggOptions) {
+  const safe = Boolean(aggOptions && aggOptions.safe === true);
+  /** @type {Feature[]} */
+  const merged = [];
+  /** @type {Map<string, {subApp: string|null, file: string}>} */
+  const seenIds = new Map();
+  /** @type {ParseError|undefined} */
+  let aggParseError = rootResult && rootResult.parseError ? rootResult.parseError : undefined;
+  let lastScan = rootResult ? rootResult.lastScan : null;
+  // @cap-todo(ac:F-082/iter1 fix:2) Build a runtime-only sub-app prefix index (slug -> appPath).
+  //   Used by mutation functions (updateFeatureState/setAcStatus/etc.) to auto-redirect a
+  //   write that targets a sub-app feature when the caller did NOT supply appPath.
+  // @cap-decision(F-082/iter1 fix:2) Underscore-prefixed (`_subAppPrefixes`) signals runtime-only,
+  //   never persisted, mirroring `_inputFormat` and `metadata.subApp` runtime fields. Filtered
+  //   away by the serializer (it never reads any underscore-prefixed key on the FeatureMap).
+  // @cap-risk(F-082/iter1) Multiple sub-apps with the same trailing slug (e.g. `apps/web` and
+  //   `vendor/web`) would collide in this map. Mitigation: first-wins semantics matches the
+  //   classifier-side prefix map in cap-memory-migrate.cjs. The Rescoped Table is expected to
+  //   use unique slugs in practice; collision is a config-smell that surfaces at write-time.
+  /** @type {Map<string, string>} subApp slug -> sub-app relative prefix */
+  const subAppPrefixes = new Map();
+
+  // 1. Root-level features come first; they keep `metadata.subApp` undefined (root scope).
+  for (const f of rootResult && Array.isArray(rootResult.features) ? rootResult.features : []) {
+    const norm = String(f.id).toUpperCase().trim();
+    seenIds.set(norm, { subApp: null, file: 'FEATURE-MAP.md' });
+    merged.push(f);
+  }
+
+  // 2. For each sub-app, parse its FEATURE-MAP.md and merge its features.
+  for (const target of targets) {
+    const subAppRel = target.appPath;
+    const subAppName = subAppRel.split('/').pop() || subAppRel;
+    // @cap-todo(ac:F-082/iter1 fix:2) Index slug→appPath up-front so the prefix map is populated
+    //   even for sub-apps with zero features (auto-redirect on a feature that exists in the
+    //   sub-app but was added to the aggregated cache after this index was built — defensive).
+    if (!subAppPrefixes.has(subAppName)) subAppPrefixes.set(subAppName, subAppRel);
+    const subFmPath = path.join(projectRoot, subAppRel, FEATURE_MAP_FILE);
+    if (!fs.existsSync(subFmPath)) {
+      // @cap-todo(ac:F-082/AC-3) Missing sub-app file is warn-and-continue. The Rescoped
+      //   Table may have been hand-edited or the sub-app deleted before the table was updated.
+      continue;
+    }
+    let subContent;
+    try {
+      subContent = fs.readFileSync(subFmPath, 'utf8');
+    } catch (_e) {
+      continue;
+    }
+    if (!subContent || subContent.trim() === '') {
+      // Empty sub-app file — treat as zero features, no error.
+      continue;
+    }
+    /** @type {FeatureMap} */
+    let subResult;
+    try {
+      // @cap-decision(F-082/iter1 warn:5) Recursion guard is EXPLICIT-by-design: we call
+      //   `parseFeatureMapContent` (raw-content parser, no I/O, no aggregation) — NOT
+      //   `readFeatureMap`. The naming difference is the gate. If a future refactor renames
+      //   or merges these two functions, the recursion-protection contract MUST be re-stated
+      //   (e.g. via an explicit `_depth` argument or a "no-aggregation" parser flag).
+      // @cap-risk(F-082/iter1) Pre-iter1 the gate was implicit (relied on knowing the two
+      //   functions were different); this comment makes the contract testable at PR review.
+      subResult = parseFeatureMapContent(subContent, { projectRoot, safe });
+    } catch (e) {
+      // strict-mode parser threw — propagate (matches single-map throw contract).
+      throw e;
+    }
+    if (subResult.parseError && !aggParseError) {
+      // First sub-app parseError wins; tag with the sub-app file location.
+      aggParseError = {
+        ...subResult.parseError,
+        subApp: subAppRel,
+      };
+    }
+    if (subResult.lastScan && !lastScan) lastScan = subResult.lastScan;
+
+    const subRel = path.posix.join(subAppRel, FEATURE_MAP_FILE);
+    for (const f of subResult.features || []) {
+      const norm = String(f.id).toUpperCase().trim();
+      if (seenIds.has(norm)) {
+        // @cap-todo(ac:F-082/AC-7) Duplicate IDs across aggregated sub-app maps emit a loud,
+        //   positioned error. No silent dedup — we surface BOTH origins so the user can
+        //   navigate.
+        const first = seenIds.get(norm);
+        const message =
+          `Duplicate feature ID across aggregated sub-app maps: ${f.id} ` +
+          `(in ${subRel}) collides with ${f.id} (in ${first.file})`;
+        const dupErr = {
+          code: 'CAP_DUPLICATE_FEATURE_ID',
+          message,
+          duplicateId: norm,
+          firstLine: 0,
+          duplicateLine: 0,
+          firstSubApp: first.subApp,
+          duplicateSubApp: subAppName,
+          firstFile: first.file,
+          duplicateFile: subRel,
+        };
+        if (safe) {
+          if (!aggParseError) aggParseError = dupErr;
+          // do NOT push the duplicate; the first-write-wins rule keeps the merged map sane
+          //   for downstream read-only consumers while parseError signals the conflict.
+          continue;
+        }
+        const err = new Error(message);
+        err.code = 'CAP_DUPLICATE_FEATURE_ID';
+        err.duplicateId = norm;
+        err.firstSubApp = first.subApp;
+        err.duplicateSubApp = subAppName;
+        err.firstFile = first.file;
+        err.duplicateFile = subRel;
+        throw err;
+      }
+      seenIds.set(norm, { subApp: subAppName, file: subRel });
+      // @cap-todo(ac:F-082/AC-2) Shallow-clone + add runtime-only `metadata.subApp`. Source
+      //   feature object is never mutated.
+      // @cap-decision(F-082/AC-2 + F-081/_inputFormat) Use `metadata.subApp` (not a top-level
+      //   `_subApp`) for parity with the brainstorm contract. The serializer-side filter strips
+      //   it before write-back, mirroring the `_inputFormat` runtime-only pattern.
+      // @cap-todo(ac:F-082/iter1 fix:3) Deep-clone all array fields. Stage-2 #3 found that the
+      //   previous spread-only clone left `acs[]`, `files[]`, `dependencies[]`, `usesDesign[]`
+      //   shared between the aggregated feature and the underlying parsed sub-app feature.
+      //   Today the writer-filter masks the leak (sub-app features are stripped before serializing
+      //   the root), but any future code path that exposes the aggregated map without the filter
+      //   would silently mutate the source sub-app data on push/sort/splice.
+      // @cap-decision(F-082/iter1 fix:3) Defense-in-depth at the trust boundary, applied F-076's
+      //   "do not trust contained-by-convention" lesson. Cost: O(N+ACs) shallow-clones on read,
+      //   negligible vs. file I/O — N≤200 features for a typical monorepo.
+      // @cap-risk(F-082/iter1) AC entries themselves are deep-cloned via `{...a}`. Their fields
+      //   (id, description, status) are primitives, so shallow object spread is sufficient.
+      //   If AC schema gains nested objects later, this clone must be widened.
+      const cloned = {
+        ...f,
+        acs: Array.isArray(f.acs) ? f.acs.map(a => ({ ...a })) : [],
+        files: Array.isArray(f.files) ? [...f.files] : [],
+        dependencies: Array.isArray(f.dependencies) ? [...f.dependencies] : [],
+        usesDesign: Array.isArray(f.usesDesign) ? [...f.usesDesign] : [],
+        metadata: { ...(f.metadata || {}), subApp: subAppName },
+      };
+      merged.push(cloned);
+    }
+  }
+
+  /** @type {FeatureMap} */
+  const out = { features: merged, lastScan: lastScan || null };
+  if (aggParseError) out.parseError = aggParseError;
+  // @cap-todo(ac:F-082/iter1 fix:2) Expose the prefix index. Runtime-only, never persisted —
+  //   the serializer never iterates underscore-prefixed top-level keys.
+  if (subAppPrefixes.size > 0) {
+    Object.defineProperty(out, '_subAppPrefixes', {
+      value: subAppPrefixes,
+      enumerable: false, // Stage-2 lesson — keep enumeration clean for downstream consumers.
+      writable: false,
+      configurable: true,
+    });
+  }
+  return out;
 }
 
 // @cap-todo(ref:AC-8) Each feature entry contains: feature ID, title, state, ACs, and file references
@@ -544,8 +917,228 @@ function parseFeatureMapContent(content, options) {
 function writeFeatureMap(projectRoot, featureMap, appPath, options) {
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
   const filePath = path.join(baseDir, FEATURE_MAP_FILE);
-  const content = serializeFeatureMap(featureMap, options);
+
+  // @cap-todo(ac:F-082/AC-8) Round-trip idempotency: when writing the ROOT FEATURE-MAP.md and
+  //   the on-disk content contains a Rescoped Table, preserve it. Without this, a read of an
+  //   aggregated map followed by a write would flatten all sub-app features into root and
+  //   destroy the Rescoped Table — the exact silent-rewrite failure mode flagged in the F-081
+  //   round-trip-asymmetry lesson.
+  // @cap-decision(F-082/AC-8 strategy-a) Preserve-Rescoped-Table-on-write strategy. Filter the
+  //   in-memory feature list to ROOT-only features (those without `metadata.subApp`) before
+  //   serializing. The Rescoped Table block is read from the existing on-disk content and
+  //   appended verbatim. Sub-app feature mutations require an explicit `appPath` argument.
+  let preservedRescopedBlock = null;
+  /** @type {Feature[]} */
+  let featuresForRoot = featureMap && Array.isArray(featureMap.features) ? featureMap.features : [];
+  // @cap-todo(ac:F-082/iter1 warn:7) Warning #7 fix: when the on-disk file vanishes between
+  //   existsSync and readFileSync (TOCTOU race), abort the write rather than silently flattening.
+  //   Returning false signals the caller. Pre-iter1 silently fell through and clobbered the
+  //   Rescoped Table on disk if the file briefly disappeared.
+  // @cap-decision(F-082/iter1 warn:7) Hard abort over best-effort write — the alternative is to
+  //   write a flattened map that destroys the Rescoped Table mid-race. Aborting preserves data
+  //   integrity at the cost of a single retry.
+  let toctouAbort = false;
+  if (!appPath && fs.existsSync(filePath)) {
+    try {
+      const existing = fs.readFileSync(filePath, 'utf8');
+      preservedRescopedBlock = extractRescopedBlock(existing);
+    } catch (e) {
+      // File existed at existsSync but disappeared / unreadable on read → abort.
+      console.warn('cap: writeFeatureMap aborted — Rescoped Table preservation failed (TOCTOU): ' + String(e && e.message ? e.message : e).trim());
+      toctouAbort = true;
+    }
+    if (toctouAbort) return false;
+    if (preservedRescopedBlock) {
+      // Filter out aggregated sub-app features from the root write — they belong to their
+      //   own FEATURE-MAP.md files and were merged in only at read-time.
+      // @cap-todo(ac:F-082/iter1 fix:1) Safety-net: if any sub-app features survived to here,
+      //   warn loudly. With Fix #1 (monorepo-aware enrichFromTags) this branch should ideally
+      //   never trigger — but it's a defense-in-depth signal for code paths that bypass the
+      //   monorepo-aware enrichment helpers.
+      const droppedSubApps = new Set();
+      let droppedCount = 0;
+      for (const f of featuresForRoot) {
+        if (f && f.metadata && f.metadata.subApp) {
+          droppedSubApps.add(f.metadata.subApp);
+          droppedCount++;
+        }
+      }
+      if (droppedCount > 0) {
+        console.warn(
+          'cap: writeFeatureMap dropped ' + droppedCount + ' sub-app feature(s) (subApps: ' +
+          [...droppedSubApps].sort().join(', ') + '). ' +
+          'Use writeFeatureMap(root, ..., appPath) or call mutation functions per sub-app to persist sub-app changes.'
+        );
+      }
+      featuresForRoot = featuresForRoot.filter(f => !(f && f.metadata && f.metadata.subApp));
+    }
+  } else if (appPath) {
+    // @cap-todo(ac:F-082/iter1 warn:6) Warning #6 fix: defense-in-depth at sub-app branch too.
+    //   When writing to a sub-app FEATURE-MAP.md, drop any feature whose `metadata.subApp` is
+    //   set to a DIFFERENT slug than this appPath's basename. Root-direct features (no subApp
+    //   metadata) are also stripped — they don't belong in a sub-app file.
+    // @cap-decision(F-082/iter1 warn:6) Symmetric filter pattern. Pre-iter1, the sub-app branch
+    //   trusted the caller blindly; with the auto-redirect in updateFeatureState et al., a
+    //   misuse case (caller hands an aggregated map to writeFeatureMap with appPath set) could
+    //   silently leak features into the wrong sub-app file. This filter prevents that.
+    const ownSubApp = path.basename(appPath);
+    const featuresInScope = [];
+    let droppedForeign = 0;
+    for (const f of featuresForRoot) {
+      const subApp = f && f.metadata && f.metadata.subApp;
+      if (!subApp) {
+        // root-direct feature — don't write to sub-app
+        droppedForeign++;
+        continue;
+      }
+      if (subApp !== ownSubApp) {
+        droppedForeign++;
+        continue;
+      }
+      featuresInScope.push(f);
+    }
+    if (droppedForeign > 0 && featuresInScope.length > 0) {
+      // Only warn when filter actually changed the input AND some features remain — this
+      // distinguishes "caller passed aggregated map by mistake" from the legitimate single-map
+      // case where featuresForRoot already contains only sub-app-local features (no metadata).
+      console.warn(
+        'cap: writeFeatureMap (appPath=' + appPath + ') dropped ' + droppedForeign +
+        ' feature(s) that did not belong to this sub-app.'
+      );
+      featuresForRoot = featuresInScope;
+    }
+    // If `droppedForeign > 0 && featuresInScope.length === 0` it likely means the caller
+    // passed an unaggregated single-map (no metadata.subApp on any feature) — leave it alone.
+    //
+    // The legacy contract: a sub-app caller passes a single-map result of
+    // `readFeatureMap(root, appPath)` whose features have NO metadata.subApp set. That case
+    // continues to work unchanged.
+  }
+
+  const filteredMap = { ...featureMap, features: featuresForRoot };
+  let content = serializeFeatureMap(filteredMap, options);
+
+  if (preservedRescopedBlock) {
+    content = injectRescopedBlock(content, preservedRescopedBlock);
+  }
+
   fs.writeFileSync(filePath, content, 'utf8');
+  return true;
+}
+
+// @cap-feature(feature:F-082) _maybeRedirectToSubApp — internal helper used by all
+//   state-mutation functions (updateFeatureState, setAcStatus, setFeatureUsesDesign,
+//   transitionWithReason via updateFeatureState). When the looked-up feature lives in a
+//   sub-app (`metadata.subApp` set) and the caller did NOT pass appPath, we recurse with
+//   the resolved sub-app appPath so the write lands in the correct file. Without this fix,
+//   the writer-filter in writeFeatureMap (L894+) silently drops the feature and the
+//   mutation is a no-op.
+// @cap-decision(F-082/iter1 fix:2) Sentinel-based control flow (`_NO_REDIRECT`) keeps the
+//   helper composable: callers can compare the return against the sentinel to know whether
+//   the redirect ran (use the result directly) or did not (fall through to the legacy code
+//   path). Returning `null`/`undefined` would conflict with legitimate boolean return values
+//   from the original mutation functions.
+// @cap-risk(F-082/iter1) Recursion-loop guard: only triggers when `appPath` is null/undefined,
+//   AND the recursion always passes a resolved appPath, so the recursive call cannot re-enter
+//   this branch. F-077 lesson on infinite-loop guards applied.
+const _NO_REDIRECT = Symbol('cap-feature-map._NO_REDIRECT');
+
+/**
+ * @param {string} projectRoot
+ * @param {FeatureMap} featureMap - aggregated map (carries `_subAppPrefixes`)
+ * @param {Feature} feature - looked-up feature
+ * @param {string|null|undefined} appPath - caller-supplied app path
+ * @param {string} fnName - calling function name for warn message
+ * @param {(resolvedAppPath: string) => any} recurse - bound recursion into the same fn
+ * @returns {any} - either the recursed result or the `_NO_REDIRECT` sentinel
+ */
+function _maybeRedirectToSubApp(projectRoot, featureMap, feature, appPath, fnName, recurse) {
+  // Caller already supplied appPath — never redirect (would loop or override caller intent).
+  if (appPath) return _NO_REDIRECT;
+  // Feature is root-direct — legacy path is correct.
+  if (!(feature && feature.metadata && feature.metadata.subApp)) return _NO_REDIRECT;
+
+  const subApp = feature.metadata.subApp;
+  const prefixes = featureMap && featureMap._subAppPrefixes;
+  const resolvedAppPath = prefixes && typeof prefixes.get === 'function' ? prefixes.get(subApp) : null;
+  if (resolvedAppPath) {
+    // @cap-todo(ac:F-082/iter1 fix:2) Auto-redirect via the prefix map populated by the aggregator.
+    return recurse(resolvedAppPath);
+  }
+  // No prefix resolution available → loud structured rejection (defense-in-depth path).
+  console.warn(
+    'cap: ' + fnName + '("' + feature.id + '") skipped — feature lives in sub-app "' +
+    subApp + '" but no sub-app path could be resolved; pass appPath explicitly to persist.'
+  );
+  return false;
+}
+
+// @cap-feature(feature:F-082) extractRescopedBlock — pull the "## Rescoped Feature Maps"
+//   section verbatim from existing FEATURE-MAP.md content.
+/**
+ * @param {string} content
+ * @returns {string|null} - The block text (header line through the line BEFORE the next
+ *   markdown header) or null if no Rescoped Feature Maps section exists.
+ */
+function extractRescopedBlock(content) {
+  if (typeof content !== 'string' || content.length === 0) return null;
+  const lines = content.split('\n');
+  const headerRE = /^#{2,4}\s+Rescoped\s+Feature\s+Maps\s*$/i;
+  let startIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (headerRE.test(lines[i])) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1) return null;
+  // Walk forward to the next markdown header at the same or higher level.
+  let endIdx = lines.length;
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (/^#{1,6}\s+/.test(lines[i])) {
+      endIdx = i;
+      break;
+    }
+  }
+  // Trim trailing blank lines from the block.
+  while (endIdx > startIdx + 1 && lines[endIdx - 1].trim() === '') endIdx--;
+  return lines.slice(startIdx, endIdx).join('\n');
+}
+
+// @cap-feature(feature:F-082) injectRescopedBlock — re-insert the Rescoped Table block into
+//   newly-serialized content immediately before the "## Legend" section (or before the
+//   trailing footer if Legend is absent).
+/**
+ * @param {string} serialized
+ * @param {string} block
+ * @returns {string}
+ */
+function injectRescopedBlock(serialized, block) {
+  const lines = serialized.split('\n');
+  // Find the "## Legend" line; insertion point is immediately before it.
+  let insertAt = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^##\s+Legend\s*$/.test(lines[i])) {
+      insertAt = i;
+      break;
+    }
+  }
+  if (insertAt === -1) {
+    // No legend — append before the final footer "---" line if present.
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].trim() === '---') {
+        insertAt = i;
+        break;
+      }
+    }
+  }
+  if (insertAt === -1) insertAt = lines.length;
+  const before = lines.slice(0, insertAt);
+  const after = lines.slice(insertAt);
+  // Ensure a blank line separates the block from neighbours.
+  if (before.length > 0 && before[before.length - 1].trim() !== '') before.push('');
+  const blockLines = block.split('\n');
+  return [...before, ...blockLines, '', ...after].join('\n');
 }
 
 // @cap-feature(feature:F-041) Serializer is the write half of the symmetric pair.
@@ -765,6 +1358,25 @@ function updateFeatureState(projectRoot, featureId, newState, appPath) {
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
 
+  // @cap-todo(ac:F-082/iter1 fix:2) Auto-redirect: if the looked-up feature lives in a sub-app
+  //   (metadata.subApp set) and the caller did not supply appPath, recurse with the sub-app
+  //   appPath so the mutation lands in the correct file. This eliminates the silent no-op
+  //   reported by Stage-2 #2 — root-scope writes against a sub-app feature USED to filter
+  //   the feature out and write nothing; now they explicitly route to the sub-app file.
+  // @cap-decision(F-082/iter1 fix:2) Auto-redirect over loud rejection: more helpful UX, mirrors
+  //   the F-081 round-trip-asymmetry fix (silent loss → loud success). Recursion guard via the
+  //   `appPath` argument — when the recursion runs, appPath is set, so this branch can never
+  //   re-trigger.
+  // @cap-risk(F-082/iter1) When `_subAppPrefixes` cannot resolve the slug (shouldn't happen
+  //   for an aggregated map, but might for a hand-built map fed through unsupported paths),
+  //   we fall back to a loud structured rejection. The console.warn names the sub-app slug so
+  //   the user knows which appPath to pass.
+  const redirectResult = _maybeRedirectToSubApp(
+    projectRoot, featureMap, feature, appPath, 'updateFeatureState',
+    (resolvedAppPath) => updateFeatureState(projectRoot, featureId, newState, resolvedAppPath)
+  );
+  if (redirectResult !== _NO_REDIRECT) return redirectResult;
+
   const allowed = STATE_TRANSITIONS[feature.state];
   if (!allowed || !allowed.includes(newState)) return false;
 
@@ -856,6 +1468,14 @@ function setAcStatus(projectRoot, featureId, acId, newStatus, appPath) {
   }
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
+
+  // @cap-todo(ac:F-082/iter1 fix:2) Auto-redirect to sub-app when feature lives there. See
+  //   updateFeatureState for the full lesson.
+  const redirectResult = _maybeRedirectToSubApp(
+    projectRoot, featureMap, feature, appPath, 'setAcStatus',
+    (resolvedAppPath) => setAcStatus(projectRoot, featureId, acId, newStatus, resolvedAppPath)
+  );
+  if (redirectResult !== _NO_REDIRECT) return redirectResult;
 
   const ac = feature.acs.find(a => a.id === acId);
   if (!ac) return false;
@@ -966,6 +1586,24 @@ function enrichFromTags(projectRoot, scanResults, appPath) {
     return featureMap;
   }
 
+  // @cap-todo(ac:F-082/iter1 fix:1) Monorepo-aware enrichment. Stage-2 #1 found that on a
+  //   monorepo project (Rescoped Table present), the legacy bare `enrichFromTags(root, tags)`
+  //   call read the AGGREGATED map (sub-app features included), mutated their `files[]` in
+  //   memory, then wrote to root — where the writer-filter at writeFeatureMap (L894+) silently
+  //   stripped them out. Net effect: every sub-app `@cap-feature(...)` tag was dropped on every
+  //   `/cap:scan`. Production-bite class.
+  // @cap-decision(F-082/iter1 fix:1) Internal-split strategy. Detect the aggregated map via
+  //   the runtime-only `_subAppPrefixes`. If present and caller did not specify appPath,
+  //   group features by `metadata.subApp` and write each group back via the appropriate appPath.
+  //   API surface unchanged — callers in commands/cap/{scan,prototype,iterate,annotate}.md
+  //   continue to call `enrichFromTags(process.cwd(), tags)` and now Just Work for monorepos.
+  // @cap-risk(F-082/iter1 fix:1) The same scanResults are applied to every per-scope write —
+  //   each enrichment loop re-filters tags against the features it owns (find returns null for
+  //   a foreign feature, so the file ref is not persisted to a wrong sub-app file).
+  if (!appPath && featureMap._subAppPrefixes && featureMap._subAppPrefixes.size > 0) {
+    return _enrichFromTagsAcrossSubApps(projectRoot, scanResults, featureMap);
+  }
+
   for (const tag of scanResults) {
     if (tag.type !== 'feature') continue;
     const featureId = tag.metadata.feature;
@@ -982,6 +1620,68 @@ function enrichFromTags(projectRoot, scanResults, appPath) {
 
   writeFeatureMap(projectRoot, featureMap, appPath);
   return featureMap;
+}
+
+// @cap-feature(feature:F-082) _enrichFromTagsAcrossSubApps — internal monorepo split.
+//   Groups features by `metadata.subApp` and runs enrichment per scope (root + each sub-app),
+//   re-reading + re-writing each scope's FEATURE-MAP.md independently. Stage-2 #1 fix.
+// @cap-decision(F-082/iter1 fix:1) Re-read each sub-app via `readFeatureMap(root, appPath)` so
+//   the per-scope mutation operates on a single-map view (no aggregation, no writer-filter
+//   surprises). The aggregated map is used only as the index of which features live where.
+/**
+ * @param {string} projectRoot
+ * @param {import('./cap-tag-scanner.cjs').CapTag[]} scanResults
+ * @param {FeatureMap} aggregatedMap - aggregated map carrying `_subAppPrefixes` and
+ *   `metadata.subApp` per feature
+ * @returns {FeatureMap} - the aggregated map (re-read post-write so callers see fresh state)
+ */
+function _enrichFromTagsAcrossSubApps(projectRoot, scanResults, aggregatedMap) {
+  // Group features by subApp slug (null = root-direct).
+  /** @type {Map<string|null, Set<string>>} */
+  const featureIdsByScope = new Map();
+  featureIdsByScope.set(null, new Set());
+  for (const f of aggregatedMap.features || []) {
+    const scope = (f.metadata && f.metadata.subApp) || null;
+    if (!featureIdsByScope.has(scope)) featureIdsByScope.set(scope, new Set());
+    featureIdsByScope.get(scope).add(f.id);
+  }
+
+  const prefixes = aggregatedMap._subAppPrefixes;
+
+  // For each scope, perform a single-map enrichment + write.
+  for (const [scope, idsInScope] of featureIdsByScope) {
+    if (idsInScope.size === 0) continue;
+    const scopedAppPath = scope ? (prefixes ? prefixes.get(scope) : null) : null;
+    if (scope && !scopedAppPath) {
+      // Sub-app slug present but prefix could not be resolved — defensive skip.
+      console.warn('cap: enrichFromTags — sub-app "' + scope + '" prefix unresolved; tags for that scope skipped.');
+      continue;
+    }
+    const scopedMap = readFeatureMap(projectRoot, scopedAppPath || undefined, { safe: true });
+    if (scopedMap.parseError) {
+      console.warn('cap: enrichFromTags — skipping scope "' + (scope || 'root') + '": ' + String(scopedMap.parseError.message).trim());
+      continue;
+    }
+    let mutated = false;
+    for (const tag of scanResults) {
+      if (tag.type !== 'feature') continue;
+      const featureId = tag.metadata.feature;
+      if (!featureId) continue;
+      if (!idsInScope.has(featureId)) continue; // feature lives in a different scope
+      const feature = scopedMap.features.find(f => f.id === featureId);
+      if (!feature) continue;
+      if (!feature.files.includes(tag.file)) {
+        feature.files.push(tag.file);
+        mutated = true;
+      }
+    }
+    if (mutated) {
+      writeFeatureMap(projectRoot, scopedMap, scopedAppPath || undefined);
+    }
+  }
+
+  // Return a fresh aggregated read so callers see the post-write state.
+  return readFeatureMap(projectRoot, undefined, { safe: true });
 }
 
 // @cap-feature(feature:F-063) enrichFromDesignTags — populate Feature.usesDesign from design-token/design-component tags.
@@ -1004,6 +1704,11 @@ function enrichFromDesignTags(projectRoot, scanResults, appPath) {
   if (featureMap.parseError) {
     console.warn('cap: skipping enrichFromDesignTags — duplicate feature ID detected: ' + String(featureMap.parseError.message).trim());
     return featureMap;
+  }
+
+  // @cap-todo(ac:F-082/iter1 fix:1) Monorepo-aware design enrichment — same lesson as enrichFromTags.
+  if (!appPath && featureMap._subAppPrefixes && featureMap._subAppPrefixes.size > 0) {
+    return _enrichFromDesignTagsAcrossSubApps(projectRoot, scanResults, featureMap);
   }
 
   // Build file -> featureId map (first @cap-feature wins, matches F-049 convention).
@@ -1038,6 +1743,76 @@ function enrichFromDesignTags(projectRoot, scanResults, appPath) {
   return featureMap;
 }
 
+// @cap-feature(feature:F-082) _enrichFromDesignTagsAcrossSubApps — monorepo split for design tags.
+//   Same lesson + structure as _enrichFromTagsAcrossSubApps. The file→featureId index is built
+//   once from the aggregated map, then per-scope writes apply only the design IDs whose owning
+//   feature lives in that scope.
+/**
+ * @param {string} projectRoot
+ * @param {import('./cap-tag-scanner.cjs').CapTag[]} scanResults
+ * @param {FeatureMap} aggregatedMap
+ * @returns {FeatureMap}
+ */
+function _enrichFromDesignTagsAcrossSubApps(projectRoot, scanResults, aggregatedMap) {
+  /** @type {Map<string|null, Set<string>>} */
+  const featureIdsByScope = new Map();
+  featureIdsByScope.set(null, new Set());
+  for (const f of aggregatedMap.features || []) {
+    const scope = (f.metadata && f.metadata.subApp) || null;
+    if (!featureIdsByScope.has(scope)) featureIdsByScope.set(scope, new Set());
+    featureIdsByScope.get(scope).add(f.id);
+  }
+
+  // file→featureId index (matches the legacy single-scope behavior).
+  const fileToFeature = new Map();
+  for (const tag of scanResults) {
+    if (tag.type !== 'feature') continue;
+    const fid = tag.metadata && tag.metadata.feature;
+    if (!fid) continue;
+    if (!fileToFeature.has(tag.file)) fileToFeature.set(tag.file, fid);
+  }
+
+  const prefixes = aggregatedMap._subAppPrefixes;
+
+  for (const [scope, idsInScope] of featureIdsByScope) {
+    if (idsInScope.size === 0) continue;
+    const scopedAppPath = scope ? (prefixes ? prefixes.get(scope) : null) : null;
+    if (scope && !scopedAppPath) {
+      console.warn('cap: enrichFromDesignTags — sub-app "' + scope + '" prefix unresolved; design tags for that scope skipped.');
+      continue;
+    }
+    const scopedMap = readFeatureMap(projectRoot, scopedAppPath || undefined, { safe: true });
+    if (scopedMap.parseError) {
+      console.warn('cap: enrichFromDesignTags — skipping scope "' + (scope || 'root') + '": ' + String(scopedMap.parseError.message).trim());
+      continue;
+    }
+    let mutated = false;
+    for (const tag of scanResults) {
+      if (tag.type !== 'design-token' && tag.type !== 'design-component') continue;
+      const designId = tag.metadata && tag.metadata.id;
+      if (!designId) continue;
+      const featureId = fileToFeature.get(tag.file);
+      if (!featureId) continue;
+      if (!idsInScope.has(featureId)) continue;
+      const feature = scopedMap.features.find(f => f.id === featureId);
+      if (!feature) continue;
+      if (!Array.isArray(feature.usesDesign)) feature.usesDesign = [];
+      if (!feature.usesDesign.includes(designId)) {
+        feature.usesDesign.push(designId);
+        mutated = true;
+      }
+    }
+    if (mutated) {
+      for (const f of scopedMap.features) {
+        if (Array.isArray(f.usesDesign)) f.usesDesign.sort();
+      }
+      writeFeatureMap(projectRoot, scopedMap, scopedAppPath || undefined);
+    }
+  }
+
+  return readFeatureMap(projectRoot, undefined, { safe: true });
+}
+
 // @cap-api setFeatureUsesDesign(projectRoot, featureId, designIds, appPath) -- Replace a feature's usesDesign list.
 // @cap-todo(ac:F-063/AC-4) Called by /cap:design --scope after the user confirms which DT/DC IDs the feature uses.
 /**
@@ -1057,6 +1832,15 @@ function setFeatureUsesDesign(projectRoot, featureId, designIds, appPath) {
   }
   const feature = featureMap.features.find(f => f.id === featureId);
   if (!feature) return false;
+
+  // @cap-todo(ac:F-082/iter1 fix:2) Auto-redirect to sub-app when feature lives there. See
+  //   updateFeatureState for the full lesson.
+  const redirectResult = _maybeRedirectToSubApp(
+    projectRoot, featureMap, feature, appPath, 'setFeatureUsesDesign',
+    (resolvedAppPath) => setFeatureUsesDesign(projectRoot, featureId, designIds, resolvedAppPath)
+  );
+  if (redirectResult !== _NO_REDIRECT) return redirectResult;
+
   const cleaned = (Array.isArray(designIds) ? designIds : [])
     .map(s => String(s).trim())
     .filter(s => /^(DT-\d{3,}|DC-\d{3,})$/.test(s));
@@ -1430,4 +2214,10 @@ module.exports = {
   initAppFeatureMap,
   listAppFeatureMaps,
   rescopeFeatures,
+  // F-082 — exported for tests and downstream tooling
+  parseRescopedTable,
+  discoverSubAppFeatureMaps,
+  aggregateSubAppFeatureMaps,
+  extractRescopedBlock,
+  injectRescopedBlock,
 };
