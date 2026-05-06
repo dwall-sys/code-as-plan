@@ -1508,6 +1508,19 @@
 - `tests/cap-feature-map-emdash.test.cjs`
 - `tests/cap-feature-map-monorepo-iterate.test.cjs`
 
+### F-083: Extract Monorepo Aggregation Module [planned]
+
+**Depends on:** F-082
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | pending | New file `cap/bin/lib/cap-feature-map-monorepo.cjs` SHALL export `parseRescopedTable`, `discoverSubAppFeatureMaps`, `aggregateSubAppFeatureMaps`, `_enrichFromTagsAcrossSubApps`, `_enrichFromDesignTagsAcrossSubApps`, `_maybeRedirectToSubApp` |
+| AC-2 | pending | `cap-feature-map.cjs` SHALL re-export the same surface for backward-compat (zero call-site change in commands/tests) |
+| AC-3 | pending | `cap-feature-map.cjs` SHALL be reduced to ≤1500 LOC; new module ≤900 LOC |
+| AC-4 | pending | All existing tests SHALL stay green; coverage ≥ baseline (no regression) |
+| AC-5 | pending | `_subAppPrefixes` `Object.defineProperty` non-enumerable contract SHALL be preserved (round-trip test pinned) |
+| AC-6 | pending | No new circular `require` between the two modules (verified via static-analysis test or `node --trace-deprecation` probe) |
+
 ## Legend
 
 | State | Meaning |
