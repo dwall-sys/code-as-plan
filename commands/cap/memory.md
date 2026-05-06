@@ -1,7 +1,7 @@
 ---
 name: cap:memory
-description: "Manage project memory — bootstrap, run pipeline, pin/unpin annotations, view status."
-argument-hint: "[init|status|pin|unpin|prune] [--dry-run|--apply]"
+description: "Manage project memory — bootstrap, run pipeline, pin/unpin annotations, view status, migrate to V6."
+argument-hint: "[init|status|pin|unpin|prune|migrate] [--dry-run|--apply]"
 allowed-tools:
   - Read
   - Write
@@ -24,6 +24,7 @@ Manage project memory — bootstrap from existing sessions, run incremental pipe
 - `pin <file> <content-prefix>` — mark a @cap-pitfall as pinned:true
 - `unpin <file> <content-prefix>` — remove pinned:true from annotation
 - `prune [--apply]` — decay stale entries, archive very-stale low-confidence ones, purge old raw-logs (default dry-run)
+- `migrate [--apply] [--interactive=false]` — **F-077**: one-shot migration from V5 monolith files (`decisions.md`, `pitfalls.md`, etc.) to V6 per-feature layout under `.cap/memory/features/`. Default is dry-run; `--apply` requires a confirm prompt unless `--interactive=false` is passed.
 - `--dry-run` — show what would change without writing
 </objective>
 
@@ -168,5 +169,45 @@ What prune does:
 - **Report + log** (AC-6): a console report is emitted. On `--apply`, a single JSONL line `{timestamp, dryRun, decayed, archived, purged}` is appended to `.cap/memory/prune-log.jsonl`.
 
 Default behaviour is **dry-run** — no files are touched and no prune-log entry is written. Pass `--apply` explicitly to commit the changes.
+
+## Subcommand: migrate `[--apply] [--interactive=false]`
+
+<!-- @cap-feature(feature:F-077) /cap:memory migrate — V6 per-feature memory migration entry point. -->
+<!-- @cap-todo(ac:F-077/AC-4) Default is dry-run; --apply requires explicit confirm in interactive mode. -->
+
+```bash
+node -e "
+const m = require('./cap/bin/lib/cap-memory-migrate.cjs');
+const args = process.argv.slice(1);
+const apply = args.includes('--apply');
+const interactive = !args.includes('--interactive=false');
+m.migrateMemory(process.cwd(), { apply, interactive }).then(r => {
+  if (r.report) {
+    console.log('Migration report written to .cap/memory/.archive/');
+    console.log('  Total entries:', r.report.counts.total);
+    console.log('  Assigned:    ', r.report.counts.assigned);
+    console.log('  Platform:    ', r.report.counts.platform);
+    console.log('  Skipped:     ', r.report.counts.skipped);
+  }
+  process.exit(r.exitCode);
+}).catch(e => { console.error('migrate failed:', e.message); process.exit(1); });
+" -- {ARGS}
+```
+
+What migrate does (one-shot V5 -> V6):
+
+1. **Parses** `decisions.md`, `pitfalls.md`, `patterns.md`, `hotspots.md` and (for hotspots fallback) `graph.json`.
+2. **Backs up** the V5 files to `.cap/memory/.archive/<name>-pre-v6-<YYYY-MM-DD>.<ext>` (idempotent on same date).
+3. **Classifies** each entry by priority: tag-metadata (`@cap-decision(feature:F-NNN)`) -> `key_files` path-match -> F-NNN body mention. Confidence >= 0.7 auto-routes; lower = ambiguous.
+4. **Routes** snapshots from `.cap/snapshots/` by frontmatter `feature:` field, then date proximity to FEATURE-MAP transitions, then title keyword.
+5. **Prompts interactively** for ambiguous entries (top-3 candidates + skip + auto-all + quit) when `--apply` is set with default `--interactive=true`.
+6. **Atomically writes** V6 files under `.cap/memory/features/F-NNN-<topic>.md` and `.cap/memory/platform/<topic>.md` (write-temp-then-rename, F-074 pattern).
+7. **Writes a migration report** at `.cap/memory/.archive/migration-report-<YYYY-MM-DD>.md` summarising counts and ambiguity resolutions.
+
+Default is **dry-run** -- no files touched. The dry-run output is sent to stderr and lists the planned writes, backup status, and ambiguity counts. Pass `--apply` to execute. Add `--interactive=false` to skip the confirm prompt and auto-resolve every ambiguity to its highest-confidence candidate (CI-friendly).
+
+Exit codes: `0` success, `1` errors during apply, `2` user-initiated quit (declined confirm or `q` in ambiguity prompt).
+
+After a successful migration, the user commits `.cap/memory/features/`, `.cap/memory/platform/`, and `.cap/memory/.archive/` to git themselves -- the tool deliberately does NOT touch git.
 
 </process>

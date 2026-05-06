@@ -64,6 +64,9 @@ const CAP_MODULE_MANIFEST = [
   // @cap-feature(feature:F-076) V6 Per-Feature Memory Format — schema + validator + round-trip-safe parser/serializer.
   // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added (V6 memory-format pivot foundation).
   'cap-memory-schema.cjs',
+  // @cap-feature(feature:F-077) V6 Memory Migration Tool — one-shot migration from V5 monolith to V6 per-feature layout.
+  // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added (V6 migration tool with hybrid classifier).
+  'cap-memory-migrate.cjs',
   'cap-migrate-tags.cjs',
   'cap-migrate.cjs',
   // @cap-feature(feature:F-074) Enable Pattern Unlearn and Auto-Retract — apply audit + reverse patch + retract list.

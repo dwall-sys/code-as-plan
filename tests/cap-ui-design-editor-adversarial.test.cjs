@@ -888,7 +888,7 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     // @cap-decision(F-074) Bumped 78 -> 79 when cap-pattern-apply.cjs was added (Enable Pattern Unlearn and Auto-Retract).
     // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added (Review Patterns via Learn Command).
     // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added (V6 per-feature memory format foundation).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 81);
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 82);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));
