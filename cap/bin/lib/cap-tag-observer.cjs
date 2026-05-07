@@ -4,6 +4,7 @@
 // @cap-decision Snapshot-basiert statt PreToolUse — ein einheitlicher Code-Pfad für alle vier Tools (Edit/Write/MultiEdit/NotebookEdit), robust gegen Tool-Input-Schema-Änderungen, weil wir immer den aktuellen Datei-Inhalt neu lesen und gegen einen persistenten Snapshot diffen.
 // @cap-constraint Zero external dependencies — nur node:-prefixed Built-ins (fs, path, crypto).
 
+// @cap-history(sessions:2, edits:5, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 5 edits
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');

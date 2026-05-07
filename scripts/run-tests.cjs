@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @cap-history(sessions:3, edits:12, since:2026-04-20, learned:2026-05-06) Frequently modified — 3 sessions, 12 edits
 // Cross-platform test runner — resolves test file globs via Node
 // instead of relying on shell expansion (which fails on Windows PowerShell/cmd).
 // Pass --coverage to enable Node's native experimental test coverage

@@ -15,6 +15,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const anchor = require('./cap-anchor.cjs');
 const scanner = require('./cap-tag-scanner.cjs');
+// @cap-feature(feature:F-085) Scope filter — same module as the scanner uses, ensures both
+//   tools share gitignore + path-pattern + plugin-mirror exclusions.
+const scopeModule = require('./cap-scope-filter.cjs');
 
 // @cap-todo(ac:F-047/AC-3) Per-file summary of what the migration would / did change.
 /**
@@ -202,8 +205,18 @@ function planFileMigration(filePath, projectRoot, tags) {
  * @returns {FileMigrationResult[]}
  */
 function planProjectMigration(projectRoot, options = {}) {
+  // @cap-todo(ac:F-085/AC-1) The migrator builds (or accepts) the same scope filter as the
+  //   scanner so both tools agree on which files are in scope. Passing it explicitly into
+  //   scanDirectory short-circuits the scanner's default-build path.
+  const scope = options.scope || scopeModule.buildScopeFilter(projectRoot, {
+    dirExcludes: options.exclude,
+    pathExcludes: options.pathExcludes,
+    excludes: options.excludes,
+    includes: options.includes,
+    respectGitignore: options.respectGitignore,
+  });
   // We want legacy tags only — force unifiedAnchors:false so the scan baseline is clean.
-  const allTags = scanner.scanDirectory(projectRoot, { ...options, unifiedAnchors: false });
+  const allTags = scanner.scanDirectory(projectRoot, { ...options, scope, unifiedAnchors: false });
 
   // Group tags by file
   const byFile = new Map();
@@ -225,9 +238,26 @@ function planProjectMigration(projectRoot, options = {}) {
  *
  * @param {FileMigrationResult[]} results
  * @param {string} projectRoot
+ * @param {{ allowLargeDiff?: boolean }} [options]
  * @returns {{ written: string[], skipped: string[] }}
  */
-function applyMigrations(results, projectRoot) {
+function applyMigrations(results, projectRoot, options = {}) {
+  // @cap-todo(ac:F-085/AC-7) Large-diff guard: bare --apply against >500 candidate files
+  //   is almost always a scope-filter bug, not user intent. We throw with an actionable
+  //   error so the caller can re-run with allowLargeDiff:true once the scope is verified.
+  const changed = results.filter((r) => r.changed && r.newContent != null);
+  if (changed.length > scopeModule.LARGE_DIFF_THRESHOLD && !options.allowLargeDiff) {
+    const err = new Error(
+      `cap-migrate-tags: refusing to apply migration to ${changed.length} files ` +
+      `(threshold ${scopeModule.LARGE_DIFF_THRESHOLD}). This usually indicates a ` +
+      `scope-filter problem — verify the dry-run report is what you intended, then ` +
+      `re-run with allowLargeDiff:true to override.`
+    );
+    err.code = 'CAP_MIGRATE_LARGE_DIFF';
+    err.changedCount = changed.length;
+    err.threshold = scopeModule.LARGE_DIFF_THRESHOLD;
+    throw err;
+  }
   const written = [];
   const skipped = [];
   for (const r of results) {

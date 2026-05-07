@@ -1,5 +1,6 @@
 // @cap-feature(feature:F-068) CAP-UI Visual Design Editor — adversarial hardening tests.
 // @cap-context Probes path-traversal, editable gating, atomic-write crash safety, body-parser DoS,
+// @cap-history(sessions:2, edits:2, since:2026-05-05, learned:2026-05-06) Frequently modified — 2 sessions, 2 edits
 //              value validation, Git-friendly diff invariants, module-split back-compat, and snapshot read-only posture.
 // @cap-decision Zero external deps. node:test + node:assert + node:http only, mirror of the baseline file.
 // @cap-decision Baseline file (cap-ui-design-editor.test.cjs) covers happy-path AC-1..AC-6.
@@ -879,7 +880,7 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     assert.strictEqual(ui.atomicWriteDesign, editor.atomicWriteDesign);
   });
 
-  it('module manifest is 88 after F-083 splits cap-feature-map.cjs + internals + manifest-sync (doctor contract)', () => {
+  it('module manifest is 90 after F-085 adds cap-scope-filter.cjs (doctor contract)', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added (Token Telemetry observability).
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added (Trust-Mode Configuration Slot).
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added (Collect Learning Signals).
@@ -895,7 +896,8 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs (F-080) + cap-snapshot-linkage.cjs (F-079)
     //   which were on-disk but missing from the manifest).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 89);
+    // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 90);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));

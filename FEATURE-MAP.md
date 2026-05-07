@@ -1449,6 +1449,8 @@
 - `commands/cap/save.md`
 - `tests/cap-snapshot-linkage.test.cjs`
 - `tests/cap-snapshot-linkage-adversarial.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-snapshot-linkage-e2e.test.cjs`
 
 ### F-080: Bridge to Claude-native Memory [tested]
 
@@ -1470,6 +1472,7 @@
 - `tests/cap-memory-bridge.test.cjs`
 - `tests/cap-memory-bridge-adversarial.test.cjs`
 - `tests/cap-memory-bridge-e2e.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
 
 ### F-081: Extend Feature Map Parser for Multi-Format Support [shipped]
 
@@ -1521,6 +1524,7 @@
 - `tests/cap-memory-migrate-monorepo-adversarial.test.cjs`
 - `tests/cap-feature-map-emdash.test.cjs`
 - `tests/cap-feature-map-monorepo-iterate.test.cjs`
+- `cap/bin/lib/cap-feature-map-monorepo.cjs`
 
 ### F-083: Extract Monorepo Aggregation Module [tested]
 
@@ -1542,6 +1546,7 @@
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-doctor-integrity.test.cjs`
 - `tests/cap-ui-design-editor-adversarial.test.cjs`
+- `cap/bin/lib/cap-feature-map-internals.cjs`
 
 ### F-084: Project Onboarding & Migration Orchestrator [tested]
 
@@ -1567,6 +1572,90 @@
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-doctor-integrity.test.cjs`
 - `tests/cap-ui-design-editor-adversarial.test.cjs`
+- `tests/build-hooks.test.cjs`
+- `tests/cap-plugin-manifest.test.cjs`
+
+### F-085: Add Scope Filter to Tag-Scanner & Migrate-Tags [tested]
+
+**Depends on:** F-045, F-046, F-047
+
+**Motivation:** Beide tag-bezogenen Tools (`cap-tag-scanner.cjs:scanDirectory` und `cap-migrate-tags.cjs`) scannen blind alles unter `cwd()`, ohne `.gitignore`, Worktree-, Fixture- oder Plugin-Mirror-Awareness. Konkrete Befunde auf diesem Repo (2026-05-07):
+- `cap-migrate-tags` dry-run schlug **2773 File-Migrations** vor, davon nur ~89 legitim. Apply hätte Test-Fixtures kaputt gemacht, die User-Global-Plugin-Installation kontaminiert und einen un-reviewbaren Diff produziert.
+- `cap-tag-scanner` lieferte **33594 Tags in 2773 Files**, davon **30502 (91%) aus `.claude/worktrees/`** (alte Agent-Worktrees). Resultat: 88% unassigned-Tags, gefährliches `enrichFromTags` (würde `FEATURE-MAP.md` mit Worktree-Pfaden vermüllen), unbrauchbare Coverage-Statistiken.
+
+Der Fix ist gemeinsam — beide Module brauchen denselben Scope-Filter-Layer. Nach Implementierung: Scanner geht von 33594 → 2614 Tags (−92%), Migrator von 2773 → 102 Files (−96%).
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Gemeinsamer `cap-scope-filter.cjs` MUSS extrahiert werden und sowohl von `cap-tag-scanner.cjs:scanDirectory` als auch von `cap-migrate-tags.cjs:planProjectMigration` konsumiert werden — DRY, ein Default-Set, ein Override-Pfad |
+| AC-2 | tested | Scope-Filter MUSS `.gitignore` respektieren — Files, die git ignoriert, dürfen weder gescannt noch in Migrationsplan aufgenommen werden |
+| AC-3 | tested | Default-Excludes MÜSSEN umfassen: `.claude/worktrees/**`, `.claude/cap/**` (Plugin-Self-Mirror), `node_modules/**`, `dist/**`, `coverage/**`, `.cap/snapshots/**`, `**/fixtures/**` (Test-Fixtures absichtlich roh-getaggt) |
+| AC-4 | tested | Plugin-Self-Mirror-Detection MUSS heuristisch erkennen, wenn das Tool sich selbst sieht (Pfad-Mirroring von `$HOME/.claude/cap/bin/` unter `<cwd>/.claude/cap/bin/`) — Schreiben dorthin würde die User-Global-Installation kontaminieren |
+| AC-5 | tested | Scan- und Dry-Run-Reports MÜSSEN aggregierte counts pro top-level-dir zeigen (nicht nur File-Liste/Tag-Liste), damit User Scope-Verschmutzung sofort erkennt |
+| AC-6 | tested | `--include=<glob>` und `--exclude=<glob>` Flags MÜSSEN auf beiden Tools scope-override erlauben (additive Excludes, ersetzende Includes) |
+| AC-7 | tested | Migration-Sicherheit: `cap-migrate-tags` MUSS bei >500 vorgeschlagenen Files einen extra Confirm-Gate triggern (`--apply` allein reicht nicht), um destructive blind-applies zu verhindern |
+| AC-8 | tested | Tests MÜSSEN abdecken: gitignore-aware scan, worktree-exclusion, fixture-exclusion, plugin-mirror detection, glob-flag-overrides, large-diff-confirm-gate, fail-safe (kein Match → klare Meldung statt leerer Diff oder leeres Tag-Set) |
+
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-migrate-tags.cjs`
+- `cap/bin/lib/cap-scope-filter.cjs`
+- `cap/bin/lib/cap-tag-scanner.cjs`
+- `tests/cap-migrate-tags-scope.test.cjs`
+- `tests/cap-scope-filter.test.cjs`
+- `tests/cap-tag-scanner-scope.test.cjs`
+
+### F-086: Extend Scope Filter to Memory Pipeline [planned]
+
+**Depends on:** F-085
+
+**Motivation:** Real-world Befund auf GoetzeInvest (2026-05-07): nach `/cap:upgrade` enthält `apps/hub/.cap/memory/platform/unassigned.md` Decisions extrahiert aus Build-Output und Bundle-Artefakten:
+- `.next/dev/server/chunks/[root-of-the-server]__0p_l47z._.js:326` (Next.js dev-server bundle)
+- `supabase/migrations/015_pe_invite_trigger_fix.sql:12102` (Line-Number 12102 in einer SQL-Datei = concatenated bundle, nicht echter Source)
+
+F-085 hat den Scope-Filter für `cap-tag-scanner.cjs` und `cap-migrate-tags.cjs` zentralisiert, aber die Memory-Pipeline (`cap-memory-bridge.cjs`, `cap-memory-engine.cjs`, `cap-memory-pipeline.cjs`) hat eigenen Code für File-Walks und Tag-Extraktion, der den neuen `cap-scope-filter.cjs` noch nicht konsumiert. Dadurch landen Build-Artefakte trotz `.gitignore` in `decisions.md`/`pitfalls.md`/`patterns.md` und in den per-feature memory files. Die memory-pipeline muss auf denselben Filter umgezogen werden, damit das Versprechen aus F-085 für ALLE CAP-Tools gilt, nicht nur die zwei explizit migrierten.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Alle Memory-Pipeline-Module (`cap-memory-bridge.cjs`, `cap-memory-engine.cjs`, `cap-pattern-pipeline.cjs`, `cap-snapshot-linkage.cjs`, `cap-memory-prune.cjs`) MÜSSEN `cap-scope-filter.cjs:buildScopeFilter` konsumieren — kein eigener File-Walk mehr |
+| AC-2 | planned | `@cap-history`-Auto-Injection MUSS deduplizieren — wenn der Header bereits eine `@cap-history`-Zeile hat, nicht erneut anhängen, sondern in-place updaten |
+| AC-3 | planned | Memory-Pipeline MUSS Build-Output explizit ausschließen (`.next/`, `.turbo/`, `.cache/`, `dist/`, `coverage/`, `out/`) selbst wenn der user `.gitignore` lokal überschrieben hat (defense-in-depth) |
+| AC-4 | planned | Bundle-Detection: Files mit Line-Numbers >5000 ODER Bundle-typischen Pfad-Patterns (`__*.js`, `chunks/`) MÜSSEN als Bundle erkannt und ausgeschlossen werden |
+| AC-5 | planned | `cap:memory prune --gitignored` Subcommand MUSS bestehende Memory-Einträge gegen den aktuellen Scope-Filter validieren und gefilterte Einträge im Dry-Run anzeigen + auf `--apply` löschen (für nachträgliches Aufräumen wie GoetzeInvest) |
+| AC-6 | planned | Tests MÜSSEN abdecken: scope-filter-aware memory-walk, @cap-history dedup, build-output exclusion, bundle-detection, prune-stale-entries |
+
+**Files (zu erstellen/anzupassen):**
+- `cap/bin/lib/cap-memory-bridge.cjs`
+- `cap/bin/lib/cap-memory-engine.cjs`
+- `cap/bin/lib/cap-pattern-pipeline.cjs`
+- `cap/bin/lib/cap-snapshot-linkage.cjs`
+- `cap/bin/lib/cap-memory-prune.cjs`
+- `tests/cap-memory-pipeline-scope.test.cjs` (neu)
+
+### F-087: Type-Safety Gaps in Migrate-Tags & Snapshots on Monorepos [planned]
+
+**Depends on:** F-047, F-079, F-082
+
+**Motivation:** GoetzeInvest `/cap:upgrade` Run am 2026-05-07 hat zwei Crashes in den Migrations-Stages produziert, die sich beim Re-Run selbst geheilt haben:
+
+1. **`cap-migrate-tags`**: `paths[0] argument must be of type string. Received an instance of Object` — `path.resolve`/`path.join` bekam ein Object statt String. Vermutlich monorepo-spezifisch, wo eine Workspace-Struktur Objects liefert wo Single-Repo strings hatte.
+2. **`cap-snapshot-linkage` (processSnapshots)**: `topic.replace is not a function` — `topic` war kein String. Vermutlich frontmatter-Parsing das in monorepo-Kontext einen anderen Type liefert (Array? Object? undefined?).
+
+Beide Bugs sind nur durch Re-Run "verschwunden" — vermutlich race-condition-artiges Verhalten oder lazy-init das beim 2. Run state hatte. Sie sind reproduzierbar nicht-deterministisch, was auf eine schlecht typisierte Schnittstelle hindeutet. Type-Safety-Audit fällig.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | `cap-migrate-tags.cjs` MUSS alle `path.*`-Calls mit `assertString(arg, 'argName')`-Guard absichern und einen klaren `MIGRATE_PATH_TYPE`-Error werfen statt eine kryptische Node-Internal zu propagieren |
+| AC-2 | planned | `cap-snapshot-linkage.cjs:processSnapshots` MUSS frontmatter-Felder (`topic`, `feature`, `prefix`) validieren bevor String-Methoden aufgerufen werden — bei type-mismatch klarer Fehler mit Filename + erwartet-vs-gefunden |
+| AC-3 | planned | Reproducer-Test: simuliere monorepo mit `apps/*` workspaces + `.cap/SESSION.json:activeApp` gesetzt + Snapshot mit fehlendem topic-Feld; planProjectMigration und processSnapshots MÜSSEN mit klaren Errors antworten, nicht intern crashen |
+| AC-4 | planned | Beide Module MÜSSEN idempotent sein: derselbe Input liefert dasselbe Output ohne hidden state. Wenn Re-Run anders Verhalten zeigt als First-Run, ist das ein Bug |
+| AC-5 | planned | Tests MÜSSEN abdecken: missing/wrong-type frontmatter, monorepo workspace path resolution, idempotency assertion (n×Run = identisches Output) |
+
+**Files (zu erstellen/anzupassen):**
+- `cap/bin/lib/cap-migrate-tags.cjs`
+- `cap/bin/lib/cap-snapshot-linkage.cjs`
+- `tests/cap-migrate-tags-monorepo.test.cjs` (neu)
+- `tests/cap-snapshot-linkage-type-safety.test.cjs` (neu)
 
 ## Legend
 
@@ -1578,4 +1667,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T12:50:50.905Z*
+*Last updated: 2026-05-07T16:25:00.000Z*

@@ -2,6 +2,7 @@
 
 'use strict';
 
+// @cap-history(sessions:5, edits:32, since:2026-04-20, learned:2026-05-06) Frequently modified — 5 sessions, 32 edits
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -39,7 +40,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     //   cap-snapshot-linkage.cjs (F-079) which were on disk but missing from the manifest. Surfaced
     //   by the on-disk-vs-manifest deepEqual contract once cap-feature-map-internals.cjs landed.
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
-    assert.equal(CAP_MODULE_MANIFEST.length, 89);
+    // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
+    assert.equal(CAP_MODULE_MANIFEST.length, 90);
   });
 
   it('every entry ends with .cjs', () => {
@@ -81,7 +83,7 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added.
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs + cap-snapshot-linkage.cjs).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
-    assert.equal(result.modulesTotal, 89);
+    assert.equal(result.modulesTotal, 90);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -110,7 +112,7 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added.
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs + cap-snapshot-linkage.cjs).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
-    assert.equal(result.modulesTotal, 89);
+    assert.equal(result.modulesTotal, 90);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -247,7 +249,7 @@ describe('runDoctor includes module integrity', () => {
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added.
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs + cap-snapshot-linkage.cjs).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
-    assert.equal(report.modulesTotal, 89);
+    assert.equal(report.modulesTotal, 90);
   });
 
   it('report includes platformPaths', () => {

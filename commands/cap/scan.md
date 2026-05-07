@@ -1,7 +1,7 @@
 ---
 name: cap:scan
 description: "Scan codebase for @cap-feature and @cap-todo tags with monorepo support. Traverses all workspace packages, updates Feature Map, reports coverage gaps."
-argument-hint: "[--features NAME] [--json] [--monorepo] [--strict]"
+argument-hint: "[--features NAME] [--json] [--monorepo] [--strict] [--include=<glob>] [--exclude=<glob>]"
 allowed-tools:
   - Read
   - Write
@@ -14,6 +14,7 @@ allowed-tools:
 <!-- @cap-decision Monorepo detection is automatic -- checks package.json workspaces field and lerna.json. No --monorepo flag required (AC-80). -->
 <!-- @cap-decision Cross-package file references use full relative paths from project root (e.g., packages/core/src/auth.ts) to avoid ambiguity (AC-79). -->
 <!-- @cap-constraint Works seamlessly with normal single-repo projects -- monorepo features are additive, not blocking (AC-80). -->
+<!-- @cap-feature(feature:F-085) Scope filter — gitignore-aware, plugin-mirror-aware, with --include/--exclude glob overrides. Shared with cap-migrate-tags via cap-scope-filter.cjs. -->
 
 <!-- @cap-todo(ref:AC-78) /cap:scan shall traverse all packages in a monorepo -->
 <!-- @cap-todo(ref:AC-79) Feature Map entries shall support cross-package file references -->
@@ -35,10 +36,21 @@ Scans the codebase for @cap-feature and @cap-todo tags. In monorepo projects, au
 - Tokens found outside any recognized comment (e.g. inside a string literal) are NOT parsed as tags but are reported as warnings.
 - Supported comment styles: `//`, `/* */` (JS/TS/Go/Rust/C/Java/CSS/SCSS), `#` (Python/Ruby/Shell/YAML/TOML), `"""`/`'''` (Python triple-quote), `=begin`/`=end` (Ruby), `///` (Rust doc), `<!-- -->` (HTML/Markdown), `--` (SQL).
 
+**Scope filter (F-085):** the scan respects the project's top-level `.gitignore` and an opinionated default-exclude list. By default it skips:
+
+- everything matched by `.gitignore` (typically `.claude/`, `node_modules/`, `dist/`, `coverage/`, build caches);
+- agent worktrees under `.claude/worktrees/`;
+- the plugin-self-mirror at `.claude/cap/` (detected when both `bin/` and `commands/` are present);
+- test fixtures under `tests/fixtures/` and `**/fixtures/polyglot/` — fixtures are intentionally raw-tagged.
+
+The same scope filter is shared with `cap:migrate-tags` so the two tools never disagree about which files are in scope.
+
 **Arguments:**
 - `--features NAME` -- scope scan to specific Feature Map entries (comma-separated)
 - `--json` -- output raw scan results as JSON instead of formatted report
 - `--strict` -- (F-046/AC-4) fail the scan with a non-zero exit code if ANY `@cap-*` token is found outside a recognized comment. Intended for CI enforcement.
+- `--include=<glob>` -- restrict the scan to paths matching the pattern (additive, repeatable).
+- `--exclude=<glob>` -- additionally skip paths matching the pattern (additive, repeatable).
 </objective>
 
 <context>

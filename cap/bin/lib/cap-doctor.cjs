@@ -9,6 +9,7 @@
 // @cap-feature(feature:F-019) Module Integrity Verification — verify CAP CJS modules exist and load correctly
 // @cap-feature(feature:F-058) Claude-Code Plugin Manifest — detect npx vs plugin install modes and surface coexistence
 
+// @cap-history(sessions:6, edits:20, since:2026-04-20, learned:2026-05-06) Frequently modified — 6 sessions, 20 edits
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -98,6 +99,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-realtime-affinity.cjs',
   'cap-reconcile.cjs',
   'cap-research-gate.cjs',
+  // @cap-feature(feature:F-085) Scope filter shared by cap-tag-scanner and cap-migrate-tags.
+  'cap-scope-filter.cjs',
   'cap-semantic-pipeline.cjs',
   'cap-session-extract.cjs',
   'cap-session.cjs',

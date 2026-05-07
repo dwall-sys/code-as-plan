@@ -9,8 +9,13 @@
 // @cap-feature(feature:F-001) Tag Scanner — regex-based extraction of @cap-* tags from source files
 // @cap-todo decision: Migrating @gsd-* comment headers in this file to @cap-* format is blocked on F-006 migration completion
 
+// @cap-history(sessions:2, edits:6, since:2026-04-20, learned:2026-05-06) Frequently modified — 2 sessions, 6 edits
 const fs = require('node:fs');
 const path = require('node:path');
+// @cap-feature(feature:F-085) Scope filter integration — gitignore + path-pattern + plugin-mirror
+//   awareness lives in cap-scope-filter.cjs. Imported here so scanDirectory and friends share the
+//   same exclusion semantics with cap-migrate-tags.
+const scopeModule = require('./cap-scope-filter.cjs');
 
 // @cap-todo(ref:AC-20) Primary tags are @cap-feature and @cap-todo; risk and decision are optional standalone tags
 // @cap-decision CAP tag types: 2 primary (feature, todo) + 2 optional (risk, decision). Simplified from GSD's 8 types.
@@ -210,8 +215,13 @@ function scanFile(filePath, projectRoot, options) {
  */
 function scanDirectory(dirPath, options = {}) {
   const extensions = options.extensions || SUPPORTED_EXTENSIONS;
-  const exclude = options.exclude || DEFAULT_EXCLUDE;
   const projectRoot = options.projectRoot || dirPath;
+  // @cap-todo(ac:F-085/AC-1) The scanner consumes a unified scope filter: gitignore-aware,
+  //   path-pattern-aware, plugin-mirror-aware. Legacy `options.exclude` (basename list) is
+  //   forwarded as dirExcludes for backwards compat with single-purpose callers.
+  const scope = options.scope || scopeModule.buildScopeFilter(projectRoot, {
+    dirExcludes: options.exclude,
+  });
   // F-047: honour explicit opt-in via options OR .cap/config.json flag. Config is
   // read once per scan so the overhead stays constant regardless of file count.
   const unifiedAnchors =
@@ -231,11 +241,12 @@ function scanDirectory(dirPath, options = {}) {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (exclude.includes(entry.name)) continue;
+        if (scope.isExcluded(fullPath, true)) continue;
         walk(fullPath);
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name);
         if (!extensions.includes(ext)) continue;
+        if (scope.isExcluded(fullPath, false)) continue;
         const fileTags = scanFile(fullPath, projectRoot, { unifiedAnchors });
         tags.push(...fileTags);
       }
@@ -1466,8 +1477,10 @@ function scanFileWithContext(filePath, projectRoot) {
  */
 function scanDirectoryWithContext(dirPath, options = {}) {
   const extensions = options.extensions || Object.keys(COMMENT_STYLES);
-  const exclude = options.exclude || DEFAULT_EXCLUDE;
   const projectRoot = options.projectRoot || dirPath;
+  const scope = options.scope || scopeModule.buildScopeFilter(projectRoot, {
+    dirExcludes: options.exclude,
+  });
   const tags = [];
   const warnings = [];
 
@@ -1481,11 +1494,12 @@ function scanDirectoryWithContext(dirPath, options = {}) {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (exclude.includes(entry.name)) continue;
+        if (scope.isExcluded(fullPath, true)) continue;
         walk(fullPath);
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name);
         if (!extensions.includes(ext)) continue;
+        if (scope.isExcluded(fullPath, false)) continue;
         const result = scanFileWithContext(fullPath, projectRoot);
         tags.push(...result.tags);
         warnings.push(...result.warnings);
@@ -1526,7 +1540,9 @@ const LEGACY_TAG_RE = /^[ \t]*(?:\/\/|\/\*|\*|#|--|"""|''')[ \t]*@gsd-(feature|t
  */
 function detectLegacyTags(projectRoot, options = {}) {
   const extensions = options.extensions || SUPPORTED_EXTENSIONS;
-  const exclude = options.exclude || DEFAULT_EXCLUDE;
+  const scope = options.scope || scopeModule.buildScopeFilter(projectRoot, {
+    dirExcludes: options.exclude,
+  });
   const result = { count: 0, files: [], recommendation: '' };
   const fileSet = new Set();
 
@@ -1540,11 +1556,12 @@ function detectLegacyTags(projectRoot, options = {}) {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (exclude.includes(entry.name)) continue;
+        if (scope.isExcluded(fullPath, true)) continue;
         walk(fullPath);
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name);
         if (!extensions.includes(ext)) continue;
+        if (scope.isExcluded(fullPath, false)) continue;
         scanFileForLegacy(fullPath);
       }
     }
