@@ -1,22 +1,106 @@
 /**
  * GSD Tools Tests - config.cjs
  *
- * CLI integration tests for config-ensure-section, config-set, and config-get
- * commands exercised through cap-tools.cjs via execSync.
+ * Direct in-process tests for config-ensure-section, config-set, and config-get
+ * commands by calling the cmdConfig* functions in cap/bin/lib/config.cjs.
  *
  * Requirements: TEST-13
  */
+
+// @cap-decision(CI/issue-42 Path-2 PR-2.3) Migrated 77 runGsdTools spawn
+// callsites to direct cmdConfig* in-process calls. Removes ~2.3s of spawn
+// overhead. Tracks issue #42 Path 2 plan in scripts/run-tests.cjs:39-53.
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
-const config = require('../cap/bin/lib/config.cjs');
+const { createTempProject, cleanup } = require('./helpers.cjs');
+const configMod = require('../cap/bin/lib/config.cjs');
+
+/**
+ * In-process equivalent of runGsdTools that captures stdout, stderr, and
+ * process.exit(). Returns the same {success, output, error} shape so the
+ * existing test bodies need no further changes beyond swapping the call.
+ *
+ * Pattern follows tests/commands.test.cjs runCmd helper (PR #55).
+ */
+function runCmd(fn) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
+
+/**
+ * Like runCmd, but also temporarily overrides process.env for the call.
+ * Used to replace runGsdTools(args, cwd, { HOME: tmpDir, USERPROFILE: tmpDir })
+ * which sandboxed env in the spawned child. In-process, we mutate and restore.
+ */
+function runCmdWithEnv(envOverrides, fn) {
+  const orig = {};
+  for (const k of Object.keys(envOverrides)) {
+    orig[k] = process.env[k];
+    process.env[k] = envOverrides[k];
+  }
+  try {
+    return runCmd(fn);
+  } finally {
+    for (const k of Object.keys(envOverrides)) {
+      if (orig[k] === undefined) delete process.env[k];
+      else process.env[k] = orig[k];
+    }
+  }
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function readConfig(tmpDir) {
+  const configPath = path.join(tmpDir, '.planning', 'config.json');
+  return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+}
+
+function writeConfig(tmpDir, obj) {
+  const configPath = path.join(tmpDir, '.planning', 'config.json');
+  fs.writeFileSync(configPath, JSON.stringify(obj, null, 2), 'utf-8');
+}
 
 /**
  * Helper: capture output from config functions that call core.output().
  * core.output() calls fs.writeSync(1, data) — we intercept fd 1 writes.
+ * Used by the legacy "direct unit tests" suite at the bottom of this file.
  */
 function captureOutput(fn) {
   const origWriteSync = fs.writeSync;
@@ -33,18 +117,6 @@ function captureOutput(fn) {
   return captured ? JSON.parse(captured) : null;
 }
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-function readConfig(tmpDir) {
-  const configPath = path.join(tmpDir, '.planning', 'config.json');
-  return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-}
-
-function writeConfig(tmpDir, obj) {
-  const configPath = path.join(tmpDir, '.planning', 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify(obj, null, 2), 'utf-8');
-}
-
 // ─── config-ensure-section ───────────────────────────────────────────────────
 
 describe('config-ensure-section command', () => {
@@ -59,7 +131,7 @@ describe('config-ensure-section command', () => {
   });
 
   test('creates config.json with expected structure and types', () => {
-    const result = runGsdTools('config-ensure-section', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -84,12 +156,12 @@ describe('config-ensure-section command', () => {
   });
 
   test('is idempotent — returns already_exists on second call', () => {
-    const first = runGsdTools('config-ensure-section', tmpDir);
+    const first = runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
     assert.ok(first.success, `First call failed: ${first.error}`);
     const firstOutput = JSON.parse(first.output);
     assert.strictEqual(firstOutput.created, true);
 
-    const second = runGsdTools('config-ensure-section', tmpDir);
+    const second = runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
     assert.ok(second.success, `Second call failed: ${second.error}`);
     const secondOutput = JSON.parse(second.output);
     assert.strictEqual(secondOutput.created, false);
@@ -97,13 +169,15 @@ describe('config-ensure-section command', () => {
   });
 
   test('detects Brave Search from file-based key', () => {
-    // runGsdTools sandboxes HOME=tmpDir, so brave_api_key is written there —
-    // no real filesystem side effects, cleanup happens via afterEach.
+    // Sandbox HOME=tmpDir for the in-process call so brave_api_key lookup hits
+    // the temp dir, not the developer's real ~/.gsd/.
     const gsdDir = path.join(tmpDir, '.gsd');
     fs.mkdirSync(gsdDir, { recursive: true });
     fs.writeFileSync(path.join(gsdDir, 'brave_api_key'), 'test-key', 'utf-8');
 
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -111,8 +185,8 @@ describe('config-ensure-section command', () => {
   });
 
   test('merges user defaults from defaults.json', () => {
-    // runGsdTools sandboxes HOME=tmpDir, so defaults.json is written there —
-    // no real filesystem side effects, cleanup happens via afterEach.
+    // Sandbox HOME=tmpDir for the in-process call so defaults.json lookup hits
+    // the temp dir, not the developer's real ~/.gsd/.
     const gsdDir = path.join(tmpDir, '.gsd');
     fs.mkdirSync(gsdDir, { recursive: true });
     fs.writeFileSync(path.join(gsdDir, 'defaults.json'), JSON.stringify({
@@ -120,7 +194,9 @@ describe('config-ensure-section command', () => {
       commit_docs: false,
     }), 'utf-8');
 
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -131,15 +207,17 @@ describe('config-ensure-section command', () => {
   });
 
   test('merges nested workflow keys from defaults.json preserving unset keys', () => {
-    // runGsdTools sandboxes HOME=tmpDir, so defaults.json is written there —
-    // no real filesystem side effects, cleanup happens via afterEach.
+    // Sandbox HOME=tmpDir for the in-process call so defaults.json lookup hits
+    // the temp dir, not the developer's real ~/.gsd/.
     const gsdDir = path.join(tmpDir, '.gsd');
     fs.mkdirSync(gsdDir, { recursive: true });
     fs.writeFileSync(path.join(gsdDir, 'defaults.json'), JSON.stringify({
       workflow: { research: false },
     }), 'utf-8');
 
-    const result = runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -157,7 +235,7 @@ describe('config-set command', () => {
   beforeEach(() => {
     tmpDir = createTempProject();
     // Create initial config
-    runGsdTools('config-ensure-section', tmpDir);
+    runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -165,7 +243,7 @@ describe('config-set command', () => {
   });
 
   test('sets a top-level string value', () => {
-    const result = runGsdTools('config-set model_profile quality', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'model_profile', 'quality', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -178,7 +256,7 @@ describe('config-set command', () => {
   });
 
   test('coerces true to boolean', () => {
-    const result = runGsdTools('config-set commit_docs true', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'commit_docs', 'true', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -187,7 +265,7 @@ describe('config-set command', () => {
   });
 
   test('coerces false to boolean', () => {
-    const result = runGsdTools('config-set commit_docs false', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'commit_docs', 'false', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -196,7 +274,7 @@ describe('config-set command', () => {
   });
 
   test('coerces numeric strings to numbers', () => {
-    const result = runGsdTools('config-set granularity 42', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'granularity', '42', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -205,7 +283,7 @@ describe('config-set command', () => {
   });
 
   test('preserves plain strings', () => {
-    const result = runGsdTools('config-set model_profile hello', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'model_profile', 'hello', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -214,7 +292,7 @@ describe('config-set command', () => {
   });
 
   test('sets nested values via dot-notation', () => {
-    const result = runGsdTools('config-set workflow.research false', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.research', 'false', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -225,7 +303,7 @@ describe('config-set command', () => {
     // Start with empty config
     writeConfig(tmpDir, {});
 
-    const result = runGsdTools('config-set workflow.research false', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.research', 'false', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -234,7 +312,7 @@ describe('config-set command', () => {
   });
 
   test('rejects unknown config keys', () => {
-    const result = runGsdTools('config-set workflow.nyquist_validation_enabled false', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.nyquist_validation_enabled', 'false', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Unknown config key'),
@@ -245,7 +323,7 @@ describe('config-set command', () => {
   test('sets workflow.text_mode for remote session support', () => {
     writeConfig(tmpDir, {});
 
-    const result = runGsdTools('config-set workflow.text_mode true', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.text_mode', 'true', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -253,12 +331,12 @@ describe('config-set command', () => {
   });
 
   test('errors when no key path provided', () => {
-    const result = runGsdTools('config-set', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, undefined, undefined, false));
     assert.strictEqual(result.success, false);
   });
 
   test('rejects known invalid nyquist alias keys with a suggestion', () => {
-    const result = runGsdTools('config-set workflow.nyquist_validation_enabled false', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.nyquist_validation_enabled', 'false', false));
     assert.strictEqual(result.success, false);
     assert.match(result.error, /Unknown config key: workflow\.nyquist_validation_enabled/);
     assert.match(result.error, /workflow\.nyquist_validation/);
@@ -277,7 +355,9 @@ describe('config-get command', () => {
   beforeEach(() => {
     tmpDir = createTempProject();
     // Create config with known values — sandbox HOME to avoid global defaults
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
   });
 
   afterEach(() => {
@@ -285,7 +365,9 @@ describe('config-get command', () => {
   });
 
   test('gets a top-level value', () => {
-    const result = runGsdTools('config-get model_profile', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigGet(tmpDir, 'model_profile', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -293,7 +375,7 @@ describe('config-get command', () => {
   });
 
   test('gets a nested value via dot-notation', () => {
-    const result = runGsdTools('config-get workflow.research', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, 'workflow.research', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -301,7 +383,7 @@ describe('config-get command', () => {
   });
 
   test('errors for nonexistent key', () => {
-    const result = runGsdTools('config-get nonexistent_key', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, 'nonexistent_key', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Key not found'),
@@ -310,7 +392,7 @@ describe('config-get command', () => {
   });
 
   test('errors for deeply nested nonexistent key', () => {
-    const result = runGsdTools('config-get workflow.nonexistent', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, 'workflow.nonexistent', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Key not found'),
@@ -330,7 +412,7 @@ describe('config-get command', () => {
     });
 
     test('errors when config.json does not exist', () => {
-      const result = runGsdTools('config-get model_profile', emptyTmpDir);
+      const result = runCmd(() => configMod.cmdConfigGet(emptyTmpDir, 'model_profile', false));
       assert.strictEqual(result.success, false);
       assert.ok(
         result.error.includes('No config.json'),
@@ -340,7 +422,7 @@ describe('config-get command', () => {
   });
 
   test('errors when no key path provided', () => {
-    const result = runGsdTools('config-get', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, undefined, false));
     assert.strictEqual(result.success, false);
   });
 });
@@ -367,7 +449,9 @@ describe('config-new-project command', () => {
       model_profile: 'balanced',
       workflow: { research: true, plan_check: true, verifier: true, nyquist_validation: true },
     });
-    const result = runGsdTools(['config-new-project', choices], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, choices, false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -420,7 +504,9 @@ describe('config-new-project command', () => {
       model_profile: 'quality',
       workflow: { research: false, plan_check: false, verifier: true, nyquist_validation: false },
     });
-    const result = runGsdTools(['config-new-project', choices], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, choices, false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -444,7 +530,9 @@ describe('config-new-project command', () => {
       granularity: 'standard',
       arc: { enabled: false },
     });
-    const result = runGsdTools(['config-new-project', choices], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, choices, false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -452,7 +540,9 @@ describe('config-new-project command', () => {
   });
 
   test('works with empty choices — all defaults materialized', () => {
-    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, '{}', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -476,12 +566,12 @@ describe('config-new-project command', () => {
   test('is idempotent — returns already_exists if config exists', () => {
     const choices = JSON.stringify({ mode: 'yolo', granularity: 'fine' });
 
-    const first = runGsdTools(['config-new-project', choices], tmpDir);
+    const first = runCmd(() => configMod.cmdConfigNewProject(tmpDir, choices, false));
     assert.ok(first.success, `First call failed: ${first.error}`);
     const firstOut = JSON.parse(first.output);
     assert.strictEqual(firstOut.created, true);
 
-    const second = runGsdTools(['config-new-project', choices], tmpDir);
+    const second = runCmd(() => configMod.cmdConfigNewProject(tmpDir, choices, false));
     assert.ok(second.success, `Second call failed: ${second.error}`);
     const secondOut = JSON.parse(second.output);
     assert.strictEqual(secondOut.created, false);
@@ -499,7 +589,7 @@ describe('config-new-project command', () => {
       granularity: 'standard',
       workflow: { research: true, plan_check: true, verifier: true, nyquist_validation: true, auto_advance: true },
     });
-    const result = runGsdTools(['config-new-project', choices], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigNewProject(tmpDir, choices, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -507,14 +597,14 @@ describe('config-new-project command', () => {
   });
 
   test('rejects invalid JSON choices', () => {
-    const result = runGsdTools(['config-new-project', '{not-json}'], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigNewProject(tmpDir, '{not-json}', false));
     assert.strictEqual(result.success, false);
     assert.ok(result.error.includes('Invalid JSON'), `Expected "Invalid JSON" in: ${result.error}`);
   });
 
   test('output has created:true and path on success', () => {
     const choices = JSON.stringify({ mode: 'interactive', granularity: 'standard' });
-    const result = runGsdTools(['config-new-project', choices], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigNewProject(tmpDir, choices, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.strictEqual(out.created, true);
@@ -529,7 +619,9 @@ describe('config-set research_before_questions and discuss_mode', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
   });
 
   afterEach(() => {
@@ -537,7 +629,7 @@ describe('config-set research_before_questions and discuss_mode', () => {
   });
 
   test('workflow.research_before_questions is a valid config key', () => {
-    const result = runGsdTools('config-set workflow.research_before_questions true', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.research_before_questions', 'true', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -545,7 +637,7 @@ describe('config-set research_before_questions and discuss_mode', () => {
   });
 
   test('workflow.discuss_mode is a valid config key', () => {
-    const result = runGsdTools('config-set workflow.discuss_mode assumptions', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.discuss_mode', 'assumptions', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -563,7 +655,7 @@ describe('config-set research_before_questions and discuss_mode', () => {
   });
 
   test('hooks.research_questions is rejected with suggestion', () => {
-    const result = runGsdTools('config-set hooks.research_questions true', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'hooks.research_questions', 'true', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Unknown config key'),
@@ -583,7 +675,7 @@ describe('config-set unknown key (no suggestion)', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
+    runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -591,7 +683,7 @@ describe('config-set unknown key (no suggestion)', () => {
   });
 
   test('rejects a key that has no suggestion', () => {
-    const result = runGsdTools('config-set totally.unknown.key value', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'totally.unknown.key', 'value', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Unknown config key'),
@@ -616,7 +708,7 @@ describe('config-get edge cases', () => {
   test('errors when traversing a dot-path through a non-object value', () => {
     // model_profile is a string — requesting model_profile.something traverses into a non-object
     writeConfig(tmpDir, { model_profile: 'balanced' });
-    const result = runGsdTools('config-get model_profile.something', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, 'model_profile.something', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Key not found'),
@@ -628,7 +720,7 @@ describe('config-get edge cases', () => {
     const configPath = path.join(tmpDir, '.planning', 'config.json');
     fs.mkdirSync(path.join(tmpDir, '.planning'), { recursive: true });
     fs.writeFileSync(configPath, '{not valid json', 'utf-8');
-    const result = runGsdTools('config-get model_profile', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, 'model_profile', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Failed to read config.json'),
@@ -644,7 +736,9 @@ describe('config-set-model-profile command', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
   });
 
   afterEach(() => {
@@ -652,7 +746,7 @@ describe('config-set-model-profile command', () => {
   });
 
   test('sets a valid profile and updates config', () => {
-    const result = runGsdTools('config-set-model-profile quality', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, 'quality', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const out = JSON.parse(result.output);
@@ -665,7 +759,9 @@ describe('config-set-model-profile command', () => {
   });
 
   test('reports previous profile in output', () => {
-    const result = runGsdTools('config-set-model-profile budget', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigSetModelProfile(tmpDir, 'budget', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const out = JSON.parse(result.output);
@@ -675,8 +771,8 @@ describe('config-set-model-profile command', () => {
 
   test('setting the same profile is a no-op on config but still succeeds', () => {
     // Set to quality first, then set to quality again
-    runGsdTools('config-set-model-profile quality', tmpDir);
-    const result = runGsdTools('config-set-model-profile quality', tmpDir);
+    runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, 'quality', false));
+    const result = runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, 'quality', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const out = JSON.parse(result.output);
@@ -685,7 +781,7 @@ describe('config-set-model-profile command', () => {
   });
 
   test('is case-insensitive', () => {
-    const result = runGsdTools('config-set-model-profile BALANCED', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, 'BALANCED', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -693,7 +789,7 @@ describe('config-set-model-profile command', () => {
   });
 
   test('rejects invalid profile', () => {
-    const result = runGsdTools('config-set-model-profile turbo', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, 'turbo', false));
     assert.strictEqual(result.success, false);
     assert.ok(
       result.error.includes('Invalid profile'),
@@ -702,7 +798,7 @@ describe('config-set-model-profile command', () => {
   });
 
   test('errors when no profile provided', () => {
-    const result = runGsdTools('config-set-model-profile', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, undefined, false));
     assert.strictEqual(result.success, false);
   });
 
@@ -718,7 +814,7 @@ describe('config-set-model-profile command', () => {
     });
 
     test('creates config if missing before setting profile', () => {
-      const result = runGsdTools('config-set-model-profile budget', emptyDir);
+      const result = runCmd(() => configMod.cmdConfigSetModelProfile(emptyDir, 'budget', false));
       assert.ok(result.success, `Command failed: ${result.error}`);
 
       const config = readConfig(emptyDir);
@@ -734,7 +830,7 @@ describe('config-set workflow.skip_discuss', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
+    runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -742,7 +838,7 @@ describe('config-set workflow.skip_discuss', () => {
   });
 
   test('workflow.skip_discuss is a valid config key', () => {
-    const result = runGsdTools('config-set workflow.skip_discuss true', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.skip_discuss', 'true', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -755,8 +851,8 @@ describe('config-set workflow.skip_discuss', () => {
   });
 
   test('skip_discuss can be toggled back to false', () => {
-    runGsdTools('config-set workflow.skip_discuss true', tmpDir);
-    const result = runGsdTools('config-set workflow.skip_discuss false', tmpDir);
+    runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.skip_discuss', 'true', false));
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.skip_discuss', 'false', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -775,7 +871,9 @@ describe('config-set workflow.skip_discuss', () => {
     });
 
     test('skip_discuss is present in config-new-project output', () => {
-      const result = runGsdTools(['config-new-project', '{}'], emptyDir, { HOME: emptyDir, USERPROFILE: emptyDir });
+      const result = runCmdWithEnv({ HOME: emptyDir, USERPROFILE: emptyDir }, () =>
+        configMod.cmdConfigNewProject(emptyDir, '{}', false)
+      );
       assert.ok(result.success, `Command failed: ${result.error}`);
 
       const config = readConfig(emptyDir);
@@ -786,7 +884,9 @@ describe('config-set workflow.skip_discuss', () => {
       const choices = JSON.stringify({
         workflow: { skip_discuss: true },
       });
-      const result = runGsdTools(['config-new-project', choices], emptyDir, { HOME: emptyDir, USERPROFILE: emptyDir });
+      const result = runCmdWithEnv({ HOME: emptyDir, USERPROFILE: emptyDir }, () =>
+        configMod.cmdConfigNewProject(emptyDir, choices, false)
+      );
       assert.ok(result.success, `Command failed: ${result.error}`);
 
       const config = readConfig(emptyDir);
@@ -795,8 +895,8 @@ describe('config-set workflow.skip_discuss', () => {
   });
 
   test('config-get workflow.skip_discuss returns the set value', () => {
-    runGsdTools('config-set workflow.skip_discuss true', tmpDir);
-    const result = runGsdTools('config-get workflow.skip_discuss', tmpDir);
+    runCmd(() => configMod.cmdConfigSet(tmpDir, 'workflow.skip_discuss', 'true', false));
+    const result = runCmd(() => configMod.cmdConfigGet(tmpDir, 'workflow.skip_discuss', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -811,7 +911,7 @@ describe('config-set JSON value parsing', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
+    runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -819,7 +919,7 @@ describe('config-set JSON value parsing', () => {
   });
 
   test('parses JSON array value', () => {
-    const result = runGsdTools(['config-set', 'arc.comment_anchors', '["//","#"]'], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'arc.comment_anchors', '["//","#"]', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -827,7 +927,7 @@ describe('config-set JSON value parsing', () => {
   });
 
   test('parses JSON object value', () => {
-    const result = runGsdTools(['config-set', 'arc.comment_anchors', '{"a":1}'], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'arc.comment_anchors', '{"a":1}', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -835,7 +935,7 @@ describe('config-set JSON value parsing', () => {
   });
 
   test('keeps invalid JSON as string', () => {
-    const result = runGsdTools(['config-set', 'arc.tag_prefix', '{broken'], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'arc.tag_prefix', '{broken', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -844,7 +944,7 @@ describe('config-set JSON value parsing', () => {
 
   test('empty string value is kept as empty string (not coerced to number)', () => {
     // Empty value "" is not NaN and not '', so it stays as string
-    const result = runGsdTools(['config-set', 'arc.tag_prefix', ''], tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'arc.tag_prefix', '', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -859,7 +959,7 @@ describe('config-set dynamic keys', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir);
+    runCmd(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -867,7 +967,7 @@ describe('config-set dynamic keys', () => {
   });
 
   test('accepts agent_skills.<agent-type> as valid key', () => {
-    const result = runGsdTools('config-set agent_skills.researcher true', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'agent_skills.researcher', 'true', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -875,7 +975,7 @@ describe('config-set dynamic keys', () => {
   });
 
   test('accepts phase_modes.<number> as valid key', () => {
-    const result = runGsdTools('config-set phase_modes.3 code-first', tmpDir);
+    const result = runCmd(() => configMod.cmdConfigSet(tmpDir, 'phase_modes.3', 'code-first', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -890,7 +990,9 @@ describe('config-set-model-profile raw output', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    runGsdTools('config-ensure-section', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigEnsureSection(tmpDir, false)
+    );
   });
 
   afterEach(() => {
@@ -898,15 +1000,16 @@ describe('config-set-model-profile raw output', () => {
   });
 
   test('raw output shows "was:" when profile changes', () => {
-    // First set to quality, capturing raw output
-    const result = runGsdTools('config-set-model-profile quality --raw', tmpDir);
-    // Whether raw or JSON, it should succeed
+    // First set to quality with raw=true; assertion only checks success.
+    const result = runCmd(() => configMod.cmdConfigSetModelProfile(tmpDir, 'quality', true));
     assert.ok(result.success, `Command failed: ${result.error}`);
   });
 
   test('setting same profile shows "already set"', () => {
     // Set to balanced (which is the default), then set again
-    const result = runGsdTools('config-set-model-profile balanced', tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigSetModelProfile(tmpDir, 'balanced', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const out = JSON.parse(result.output);
@@ -935,7 +1038,9 @@ describe('buildNewProjectConfig depth migration', () => {
       depth: 'comprehensive',
     }), 'utf-8');
 
-    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, '{}', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -952,7 +1057,9 @@ describe('buildNewProjectConfig depth migration', () => {
     fs.mkdirSync(gsdDir, { recursive: true });
     fs.writeFileSync(path.join(gsdDir, 'firecrawl_api_key'), 'test-key', 'utf-8');
 
-    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, '{}', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const config = readConfig(tmpDir);
@@ -964,7 +1071,9 @@ describe('buildNewProjectConfig depth migration', () => {
     fs.mkdirSync(gsdDir, { recursive: true });
     fs.writeFileSync(path.join(gsdDir, 'exa_api_key'), 'test-key', 'utf-8');
 
-    const result = runGsdTools(['config-new-project', '{}'], tmpDir, { HOME: tmpDir, USERPROFILE: tmpDir });
+    const result = runCmdWithEnv({ HOME: tmpDir, USERPROFILE: tmpDir }, () =>
+      configMod.cmdConfigNewProject(tmpDir, '{}', false)
+    );
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const cfg = readConfig(tmpDir);
@@ -989,7 +1098,7 @@ describe('config direct unit tests — buildNewProjectConfig', () => {
   });
 
   test('returns full config with all sections', () => {
-    const cfg = config.buildNewProjectConfig({});
+    const cfg = configMod.buildNewProjectConfig({});
     assert.strictEqual(cfg.model_profile, 'balanced');
     assert.strictEqual(cfg.commit_docs, true);
     assert.ok(cfg.git && typeof cfg.git === 'object');
@@ -1000,7 +1109,7 @@ describe('config direct unit tests — buildNewProjectConfig', () => {
   });
 
   test('user choices override hardcoded defaults', () => {
-    const cfg = config.buildNewProjectConfig({
+    const cfg = configMod.buildNewProjectConfig({
       mode: 'yolo',
       model_profile: 'quality',
       workflow: { research: false },
@@ -1015,7 +1124,7 @@ describe('config direct unit tests — buildNewProjectConfig', () => {
   });
 
   test('handles null/undefined choices', () => {
-    const cfg = config.buildNewProjectConfig(null);
+    const cfg = configMod.buildNewProjectConfig(null);
     assert.strictEqual(cfg.model_profile, 'balanced');
   });
 });
@@ -1037,7 +1146,7 @@ describe('config direct unit tests — setConfigValue', () => {
   });
 
   test('sets a top-level value', () => {
-    const result = config.setConfigValue(tmpDir, 'model_profile', 'quality');
+    const result = configMod.setConfigValue(tmpDir, 'model_profile', 'quality');
     assert.strictEqual(result.updated, true);
     assert.strictEqual(result.key, 'model_profile');
     assert.strictEqual(result.value, 'quality');
@@ -1045,14 +1154,14 @@ describe('config direct unit tests — setConfigValue', () => {
   });
 
   test('sets a nested value', () => {
-    const result = config.setConfigValue(tmpDir, 'workflow.research', false);
+    const result = configMod.setConfigValue(tmpDir, 'workflow.research', false);
     assert.strictEqual(result.updated, true);
     assert.strictEqual(result.value, false);
     assert.strictEqual(result.previousValue, true);
   });
 
   test('auto-creates intermediate objects for deep paths', () => {
-    const result = config.setConfigValue(tmpDir, 'deep.nested.key', 'value');
+    const result = configMod.setConfigValue(tmpDir, 'deep.nested.key', 'value');
     assert.strictEqual(result.updated, true);
 
     const cfg = readConfig(tmpDir);
@@ -1063,7 +1172,7 @@ describe('config direct unit tests — setConfigValue', () => {
     // Remove config
     fs.unlinkSync(path.join(tmpDir, '.planning', 'config.json'));
 
-    const result = config.setConfigValue(tmpDir, 'model_profile', 'budget');
+    const result = configMod.setConfigValue(tmpDir, 'model_profile', 'budget');
     assert.strictEqual(result.updated, true);
 
     const cfg = readConfig(tmpDir);
@@ -1072,8 +1181,8 @@ describe('config direct unit tests — setConfigValue', () => {
 
   test('overwrites non-object intermediate value with object', () => {
     // Set model_profile to a string, then try to use it as parent for nested key
-    config.setConfigValue(tmpDir, 'model_profile', 'balanced');
-    const result = config.setConfigValue(tmpDir, 'model_profile.sub', 'value');
+    configMod.setConfigValue(tmpDir, 'model_profile', 'balanced');
+    const result = configMod.setConfigValue(tmpDir, 'model_profile.sub', 'value');
     assert.strictEqual(result.updated, true);
 
     const cfg = readConfig(tmpDir);
@@ -1098,17 +1207,17 @@ describe('config direct unit tests — cmdConfigEnsureSection', () => {
 
   test('creates config file when it does not exist', () => {
     const result = captureOutput(() => {
-      config.cmdConfigEnsureSection(tmpDir, false);
+      configMod.cmdConfigEnsureSection(tmpDir, false);
     });
     assert.strictEqual(result.created, true);
   });
 
   test('returns already_exists when config exists', () => {
     // Create config first
-    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+    captureOutput(() => configMod.cmdConfigEnsureSection(tmpDir, false));
 
     const result = captureOutput(() => {
-      config.cmdConfigEnsureSection(tmpDir, false);
+      configMod.cmdConfigEnsureSection(tmpDir, false);
     });
     assert.strictEqual(result.created, false);
     assert.strictEqual(result.reason, 'already_exists');
@@ -1123,7 +1232,7 @@ describe('config direct unit tests — cmdConfigSet', () => {
     tmpDir = createTempProject();
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
-    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+    captureOutput(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -1133,7 +1242,7 @@ describe('config direct unit tests — cmdConfigSet', () => {
 
   test('sets a string value', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'model_profile', 'quality', false);
+      configMod.cmdConfigSet(tmpDir, 'model_profile', 'quality', false);
     });
     assert.strictEqual(result.updated, true);
     assert.strictEqual(result.value, 'quality');
@@ -1141,49 +1250,49 @@ describe('config direct unit tests — cmdConfigSet', () => {
 
   test('coerces true to boolean', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'commit_docs', 'true', false);
+      configMod.cmdConfigSet(tmpDir, 'commit_docs', 'true', false);
     });
     assert.strictEqual(result.value, true);
   });
 
   test('coerces false to boolean', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'commit_docs', 'false', false);
+      configMod.cmdConfigSet(tmpDir, 'commit_docs', 'false', false);
     });
     assert.strictEqual(result.value, false);
   });
 
   test('coerces numeric string to number', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'granularity', '42', false);
+      configMod.cmdConfigSet(tmpDir, 'granularity', '42', false);
     });
     assert.strictEqual(result.value, 42);
   });
 
   test('parses JSON array value', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'arc.comment_anchors', '["//","#"]', false);
+      configMod.cmdConfigSet(tmpDir, 'arc.comment_anchors', '["//","#"]', false);
     });
     assert.deepStrictEqual(result.value, ['//', '#']);
   });
 
   test('parses JSON object value', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'arc.comment_anchors', '{"a":1}', false);
+      configMod.cmdConfigSet(tmpDir, 'arc.comment_anchors', '{"a":1}', false);
     });
     assert.deepStrictEqual(result.value, { a: 1 });
   });
 
   test('keeps malformed JSON as string', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'arc.tag_prefix', '{broken', false);
+      configMod.cmdConfigSet(tmpDir, 'arc.tag_prefix', '{broken', false);
     });
     assert.strictEqual(result.value, '{broken');
   });
 
   test('sets nested value via dot notation', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSet(tmpDir, 'workflow.research', 'false', false);
+      configMod.cmdConfigSet(tmpDir, 'workflow.research', 'false', false);
     });
     assert.strictEqual(result.value, false);
   });
@@ -1197,7 +1306,7 @@ describe('config direct unit tests — cmdConfigGet', () => {
     tmpDir = createTempProject();
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
-    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+    captureOutput(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -1207,14 +1316,14 @@ describe('config direct unit tests — cmdConfigGet', () => {
 
   test('gets a top-level value', () => {
     const result = captureOutput(() => {
-      config.cmdConfigGet(tmpDir, 'model_profile', false);
+      configMod.cmdConfigGet(tmpDir, 'model_profile', false);
     });
     assert.strictEqual(result, 'balanced');
   });
 
   test('gets a nested value', () => {
     const result = captureOutput(() => {
-      config.cmdConfigGet(tmpDir, 'workflow.research', false);
+      configMod.cmdConfigGet(tmpDir, 'workflow.research', false);
     });
     assert.strictEqual(result, true);
   });
@@ -1238,7 +1347,7 @@ describe('config direct unit tests — cmdConfigNewProject', () => {
   test('creates config with choices', () => {
     const choices = JSON.stringify({ mode: 'yolo', granularity: 'fine' });
     const result = captureOutput(() => {
-      config.cmdConfigNewProject(tmpDir, choices, false);
+      configMod.cmdConfigNewProject(tmpDir, choices, false);
     });
     assert.strictEqual(result.created, true);
 
@@ -1248,10 +1357,10 @@ describe('config direct unit tests — cmdConfigNewProject', () => {
   });
 
   test('is idempotent', () => {
-    captureOutput(() => config.cmdConfigNewProject(tmpDir, '{}', false));
+    captureOutput(() => configMod.cmdConfigNewProject(tmpDir, '{}', false));
 
     const result = captureOutput(() => {
-      config.cmdConfigNewProject(tmpDir, '{}', false);
+      configMod.cmdConfigNewProject(tmpDir, '{}', false);
     });
     assert.strictEqual(result.created, false);
     assert.strictEqual(result.reason, 'already_exists');
@@ -1259,7 +1368,7 @@ describe('config direct unit tests — cmdConfigNewProject', () => {
 
   test('handles empty/null choices', () => {
     const result = captureOutput(() => {
-      config.cmdConfigNewProject(tmpDir, '', false);
+      configMod.cmdConfigNewProject(tmpDir, '', false);
     });
     assert.strictEqual(result.created, true);
   });
@@ -1273,7 +1382,7 @@ describe('config direct unit tests — cmdConfigSetModelProfile', () => {
     tmpDir = createTempProject();
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
-    captureOutput(() => config.cmdConfigEnsureSection(tmpDir, false));
+    captureOutput(() => configMod.cmdConfigEnsureSection(tmpDir, false));
   });
 
   afterEach(() => {
@@ -1283,7 +1392,7 @@ describe('config direct unit tests — cmdConfigSetModelProfile', () => {
 
   test('sets valid profile and returns agent map', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSetModelProfile(tmpDir, 'quality', false);
+      configMod.cmdConfigSetModelProfile(tmpDir, 'quality', false);
     });
     assert.strictEqual(result.updated, true);
     assert.strictEqual(result.profile, 'quality');
@@ -1292,7 +1401,7 @@ describe('config direct unit tests — cmdConfigSetModelProfile', () => {
 
   test('returns previous profile', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSetModelProfile(tmpDir, 'budget', false);
+      configMod.cmdConfigSetModelProfile(tmpDir, 'budget', false);
     });
     assert.strictEqual(result.previousProfile, 'balanced');
     assert.strictEqual(result.profile, 'budget');
@@ -1300,7 +1409,7 @@ describe('config direct unit tests — cmdConfigSetModelProfile', () => {
 
   test('is case-insensitive', () => {
     const result = captureOutput(() => {
-      config.cmdConfigSetModelProfile(tmpDir, 'BALANCED', false);
+      configMod.cmdConfigSetModelProfile(tmpDir, 'BALANCED', false);
     });
     assert.strictEqual(result.profile, 'balanced');
   });
