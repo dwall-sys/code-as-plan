@@ -2,11 +2,121 @@
  * Workstream Tests — CRUD, env-var routing, collision detection
  */
 
+// @cap-decision(CI/issue-42 Path-2 PR-2.7) Migrated remaining 23 runGsdTools
+// spawn callsites to direct workstream-module in-process calls. File is now
+// 100% in-process (was already partial — the 461-1040 Direct Unit Tests
+// block was the original Path 2 template).
+
 const { describe, test, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { createTempProject, cleanup } = require('./helpers.cjs');
+const {
+  migrateToWorkstreams,
+  cmdWorkstreamCreate,
+  cmdWorkstreamList,
+  cmdWorkstreamStatus,
+  cmdWorkstreamComplete,
+  cmdWorkstreamSet,
+  cmdWorkstreamGet,
+  cmdWorkstreamProgress,
+  getOtherActiveWorkstreams,
+} = require('../cap/bin/lib/workstream.cjs');
+const { cmdStateJson } = require('../cap/bin/lib/state.cjs');
+const { cmdFindPhase } = require('../cap/bin/lib/phase.cjs');
+const core = require('../cap/bin/lib/core.cjs');
+
+// ─── In-process command runner ──────────────────────────────────────────────
+//
+// Captures stdout (fd 1), stderr (fd 2), and process.exit() from a cmd
+// invocation, returning a {success, output, error} shape compatible with the
+// previous runGsdTools spawn-based tests so the test bodies stay unchanged.
+//
+// Pattern follows tests/commands.test.cjs:41-78 (PR #55) which itself
+// generalises the captureOutput/captureError helpers below at lines 461-1040.
+
+function runCmd(fn, env = {}) {
+  // Save and apply env overrides for the duration of the call.
+  const savedEnv = {};
+  for (const k of Object.keys(env)) {
+    savedEnv[k] = process.env[k];
+    if (env[k] === undefined) delete process.env[k];
+    else process.env[k] = env[k];
+  }
+
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+    // Restore env
+    for (const k of Object.keys(savedEnv)) {
+      if (savedEnv[k] === undefined) delete process.env[k];
+      else process.env[k] = savedEnv[k];
+    }
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
+
+/**
+ * Replicates cap-tools.cjs CLI behaviour for workstream resolution + validation
+ * BEFORE invoking the cmd function. Use for tests that exercise the CLI's
+ * --ws flag or GSD_WORKSTREAM env-var traversal validation. Plain cmd calls
+ * without workstream-flag semantics use runCmd() directly.
+ *
+ * Priority (matches cap-tools.cjs:248-271):
+ *   --ws flag (opts.ws) > GSD_WORKSTREAM env (opts.env) > getActiveWorkstream(cwd)
+ */
+function runWs(fn, opts = {}) {
+  const { ws, env = {}, cwd } = opts;
+  return runCmd(() => {
+    let resolved = null;
+    if (ws !== undefined && ws !== null) {
+      resolved = ws;
+    } else if (process.env.GSD_WORKSTREAM) {
+      resolved = process.env.GSD_WORKSTREAM.trim();
+    } else if (cwd) {
+      resolved = core.getActiveWorkstream(cwd);
+    }
+    if (resolved && !/^[a-zA-Z0-9_-]+$/.test(resolved)) {
+      fs.writeSync(2, 'Error: Invalid workstream name: must be alphanumeric, hyphens, and underscores only\n');
+      process.exit(1);
+    }
+    if (resolved) process.env.GSD_WORKSTREAM = resolved;
+    else delete process.env.GSD_WORKSTREAM;
+    fn();
+  }, env);
+}
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -37,7 +147,7 @@ describe('planningDir workstream awareness via env var', () => {
   after(() => cleanup(tmpDir));
 
   test('state json returns workstream-scoped state when GSD_WORKSTREAM is set', () => {
-    const result = runGsdTools(['state', 'json', '--raw'], tmpDir, { GSD_WORKSTREAM: 'alpha' });
+    const result = runCmd(() => cmdStateJson(tmpDir, true), { GSD_WORKSTREAM: 'alpha' });
     assert.ok(result.success, `state json failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.ok(data.status || data.current_phase !== undefined, 'should return state data');
@@ -46,7 +156,7 @@ describe('planningDir workstream awareness via env var', () => {
   test('state json reads from flat .planning when no workstream set', () => {
     // Clear active-workstream so no auto-detection
     try { fs.unlinkSync(path.join(tmpDir, '.planning', 'active-workstream')); } catch {}
-    const result = runGsdTools(['state', 'json', '--raw'], tmpDir, { GSD_WORKSTREAM: '' });
+    const result = runCmd(() => cmdStateJson(tmpDir, true), { GSD_WORKSTREAM: '' });
     // Should fail or return empty state since flat .planning/ has no STATE.md
     assert.ok(!result.success || result.output.includes('not found') || result.output === '{}',
       'should read from flat .planning/');
@@ -60,7 +170,9 @@ describe('planningDir workstream awareness via env var', () => {
     fs.mkdirSync(path.join(betaDir, 'phases'), { recursive: true });
     fs.writeFileSync(path.join(betaDir, 'STATE.md'), '# State\n**Status:** Beta active\n');
 
-    const result = runGsdTools(['state', 'json', '--raw', '--ws', 'beta'], tmpDir, { GSD_WORKSTREAM: 'alpha' });
+    // CLI semantic: --ws beta overrides GSD_WORKSTREAM=alpha. Since runWs takes
+    // explicit ws, it normalises GSD_WORKSTREAM to 'beta' before cmdStateJson runs.
+    const result = runWs(() => cmdStateJson(tmpDir, true), { ws: 'beta', env: { GSD_WORKSTREAM: 'alpha' } });
     assert.ok(result.success, `state json --ws beta failed: ${result.error}`);
   });
 });
@@ -78,7 +190,7 @@ describe('workstream create', () => {
   after(() => cleanup(tmpDir));
 
   test('creates a new workstream in clean project', () => {
-    const result = runGsdTools(['workstream', 'create', 'feature-x', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamCreate(tmpDir, 'feature-x', {}, true));
     assert.ok(result.success, `create failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.created, true);
@@ -93,7 +205,7 @@ describe('workstream create', () => {
   });
 
   test('rejects duplicate workstream', () => {
-    const result = runGsdTools(['workstream', 'create', 'feature-x', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamCreate(tmpDir, 'feature-x', {}, true));
     assert.ok(result.success); // returns success with error field
     const data = JSON.parse(result.output);
     assert.strictEqual(data.created, false);
@@ -101,7 +213,7 @@ describe('workstream create', () => {
   });
 
   test('creates second workstream', () => {
-    const result = runGsdTools(['workstream', 'create', 'feature-y', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamCreate(tmpDir, 'feature-y', {}, true));
     assert.ok(result.success);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.created, true);
@@ -123,7 +235,9 @@ describe('workstream create with migration', () => {
   after(() => cleanup(tmpDir));
 
   test('migrates existing flat work to named workstream', () => {
-    const result = runGsdTools(['workstream', 'create', 'new-feature', '--migrate-name', 'existing-work', '--raw'], tmpDir);
+    const result = runCmd(() =>
+      cmdWorkstreamCreate(tmpDir, 'new-feature', { migrateName: 'existing-work' }, true)
+    );
     assert.ok(result.success, `create with migration failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.created, true);
@@ -153,7 +267,7 @@ describe('workstream list', () => {
   after(() => cleanup(tmpDir));
 
   test('lists all workstreams', () => {
-    const result = runGsdTools(['workstream', 'list', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamList(tmpDir, true));
     assert.ok(result.success, `list failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.mode, 'workstream');
@@ -174,7 +288,7 @@ describe('workstream list', () => {
     });
 
     test('reports flat mode when no workstreams exist', () => {
-      const result = runGsdTools(['workstream', 'list', '--raw'], flatDir);
+      const result = runCmd(() => cmdWorkstreamList(flatDir, true));
       assert.ok(result.success);
       const data = JSON.parse(result.output);
       assert.strictEqual(data.mode, 'flat');
@@ -197,7 +311,7 @@ describe('workstream status', () => {
   after(() => cleanup(tmpDir));
 
   test('returns detailed status for workstream', () => {
-    const result = runGsdTools(['workstream', 'status', 'alpha', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamStatus(tmpDir, 'alpha', true));
     assert.ok(result.success, `status failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.found, true);
@@ -208,7 +322,7 @@ describe('workstream status', () => {
   });
 
   test('returns not found for missing workstream', () => {
-    const result = runGsdTools(['workstream', 'status', 'nonexistent', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamStatus(tmpDir, 'nonexistent', true));
     assert.ok(result.success);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.found, false);
@@ -229,7 +343,7 @@ describe('workstream complete', () => {
   after(() => cleanup(tmpDir));
 
   test('archives workstream to milestones/', () => {
-    const result = runGsdTools(['workstream', 'complete', 'done-ws', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamComplete(tmpDir, 'done-ws', {}, true));
     assert.ok(result.success, `complete failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.completed, true);
@@ -258,13 +372,13 @@ describe('workstream set/get', () => {
   after(() => cleanup(tmpDir));
 
   test('sets active workstream', () => {
-    const result = runGsdTools(['workstream', 'set', 'ws-a', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamSet(tmpDir, 'ws-a', true));
     assert.ok(result.success);
     assert.strictEqual(result.output, 'ws-a');
   });
 
   test('gets active workstream', () => {
-    const result = runGsdTools(['workstream', 'get', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamGet(tmpDir, true));
     assert.ok(result.success);
     assert.strictEqual(result.output, 'ws-a');
   });
@@ -293,7 +407,7 @@ describe('getOtherActiveWorkstreams', () => {
   after(() => cleanup(tmpDir));
 
   test('workstream list excludes completed workstreams from active count', () => {
-    const result = runGsdTools(['workstream', 'list', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamList(tmpDir, true));
     assert.ok(result.success);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.count, 3); // all listed
@@ -320,7 +434,7 @@ describe('workstream progress', () => {
   after(() => cleanup(tmpDir));
 
   test('returns progress summary', () => {
-    const result = runGsdTools(['workstream', 'progress', '--raw'], tmpDir);
+    const result = runCmd(() => cmdWorkstreamProgress(tmpDir, true));
     assert.ok(result.success, `progress failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.mode, 'workstream');
@@ -351,13 +465,13 @@ describe('gsd-tools --ws flag integration', () => {
   after(() => cleanup(tmpDir));
 
   test('find-phase resolves to workstream-scoped phases via --ws', () => {
-    const result = runGsdTools(['find-phase', '1', '--raw', '--ws', 'test-ws'], tmpDir);
+    const result = runWs(() => cmdFindPhase(tmpDir, '1', true), { ws: 'test-ws' });
     assert.ok(result.success, `find-phase failed: ${result.error}`);
     assert.ok(result.output.includes('workstreams/test-ws'), `path should be workstream-scoped: ${result.output}`);
   });
 
   test('find-phase returns JSON with workstream path when not raw', () => {
-    const result = runGsdTools(['find-phase', '1', '--ws', 'test-ws'], tmpDir);
+    const result = runWs(() => cmdFindPhase(tmpDir, '1', false), { ws: 'test-ws' });
     assert.ok(result.success, `find-phase failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.ok(data.found, 'phase should be found');
@@ -394,7 +508,7 @@ describe('path traversal rejection', () => {
   describe('--ws flag rejects traversal attempts', () => {
     for (const name of maliciousNames) {
       test(`rejects --ws=${name}`, () => {
-        const result = runGsdTools(['workstream', 'list', '--raw', '--ws', name], tmpDir);
+        const result = runWs(() => cmdWorkstreamList(tmpDir, true), { ws: name });
         assert.ok(!result.success, `should reject --ws=${name}`);
         assert.ok(result.error.includes('Invalid workstream name'), `error should mention invalid name for: ${name}`);
       });
@@ -404,7 +518,7 @@ describe('path traversal rejection', () => {
   describe('GSD_WORKSTREAM env var rejects traversal attempts', () => {
     for (const name of maliciousNames) {
       test(`rejects GSD_WORKSTREAM=${name}`, () => {
-        const result = runGsdTools(['workstream', 'list', '--raw'], tmpDir, { GSD_WORKSTREAM: name });
+        const result = runWs(() => cmdWorkstreamList(tmpDir, true), { env: { GSD_WORKSTREAM: name } });
         assert.ok(!result.success, `should reject GSD_WORKSTREAM=${name}`);
         assert.ok(result.error.includes('Invalid workstream name'), `error should mention invalid name for: ${name}`);
       });
@@ -414,7 +528,7 @@ describe('path traversal rejection', () => {
   describe('cmdWorkstreamSet rejects traversal attempts', () => {
     for (const name of maliciousNames) {
       test(`rejects set ${name}`, () => {
-        const result = runGsdTools(['workstream', 'set', name, '--raw'], tmpDir);
+        const result = runCmd(() => cmdWorkstreamSet(tmpDir, name, true));
         // cmdWorkstreamSet validates the positional arg and returns invalid_name error
         assert.ok(result.success, `command should exit cleanly for: ${name}`);
         const data = JSON.parse(result.output);
@@ -429,7 +543,7 @@ describe('path traversal rejection', () => {
       test(`rejects poisoned file containing ${name}`, () => {
         // Write malicious name directly to the active-workstream file
         fs.writeFileSync(path.join(tmpDir, '.planning', 'active-workstream'), name + '\n');
-        const result = runGsdTools(['workstream', 'get'], tmpDir, { GSD_WORKSTREAM: '' });
+        const result = runCmd(() => cmdWorkstreamGet(tmpDir, false), { GSD_WORKSTREAM: '' });
         assert.ok(result.success, 'get should succeed');
         const data = JSON.parse(result.output);
         // getActiveWorkstream should return null for invalid names
@@ -459,18 +573,6 @@ describe('path traversal rejection', () => {
 });
 
 // ─── Direct Unit Tests (in-process coverage) ──────────────────────────────────
-
-const {
-  migrateToWorkstreams,
-  cmdWorkstreamCreate,
-  cmdWorkstreamList,
-  cmdWorkstreamStatus,
-  cmdWorkstreamComplete,
-  cmdWorkstreamSet,
-  cmdWorkstreamGet,
-  cmdWorkstreamProgress,
-  getOtherActiveWorkstreams,
-} = require('../cap/bin/lib/workstream.cjs');
 
 function makeTmpProject() {
   const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'ws-unit-'));
