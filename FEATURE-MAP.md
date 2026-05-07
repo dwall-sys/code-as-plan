@@ -1661,6 +1661,35 @@ Beide Bugs sind nur durch Re-Run "verschwunden" — vermutlich race-condition-ar
 - `tests/cap-migrate-tags-monorepo.test.cjs` (neu)
 - `tests/cap-snapshot-linkage-type-safety.test.cjs` (neu)
 
+### F-088: Lossless FEATURE-MAP Round-Trip [planned]
+
+**Depends on:** F-041, F-042, F-081
+
+**Motivation:** Real-world Befund auf GoetzeInvest hub (2026-05-07): nach `/cap:reconcile` schrumpfte `apps/hub/FEATURE-MAP.md` von **3303 auf 1902 Zeilen** (−42%). User hatte 52 angekündigte Status-Bit-Updates erwartet, bekam aber 1401 verlorene Zeilen Beschreibungstext, Group-Header und Trennlinien.
+
+Root cause: der parse → mutate → serialize round-trip in `cap-feature-map.cjs` ist **lossy**. Der Parser (`readFeatureMap`) sammelt nur strukturierte Felder ins `feature`-Object (id, title, state, dependencies, acs, files, usesDesign). Der Serializer (`serializeFeatureMap`) emittiert nur was im Object steht. Alles dazwischen — Freitext-Beschreibungen zwischen Header und "Depends on", `**Group:**`-Marker, `---`-Trennlinien, Header-Format-Variationen (`### F-NNN — Title` vs `### F-NNN: Title`) — geht beim Schreiben verloren.
+
+Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle rufen `writeFeatureMap` mit dem geparsten Feature-Object). Existierender Memory-Eintrag warnt seit 2026-05-04 vor `enrichFromTags`-Wipe (siehe `feedback_cap_scan_destructive.md` auf GoetzeInvest); F-088 ist die strukturelle Lösung.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Parser MUSS unbekannten Text zwischen Header und "Depends on:" ins Feature-Object preserven (z.B. `feature._description`) und der Serializer MUSS es zurückschreiben |
+| AC-2 | planned | Group-Header (`**Group:** ...`) und thematische Section-Header (`## ...`) MÜSSEN beim round-trip preserviert werden — entweder als Feature-Metadaten oder als File-Level "section markers" |
+| AC-3 | planned | Trennlinien (`---`) zwischen Features MÜSSEN preserviert werden ODER der Serializer emittiert sie konsistent (Style-Choice) |
+| AC-4 | planned | Header-Format pro Feature MUSS preserviert werden (analog zu F-081's per-feature `_inputFormat` für AC-Tabellen vs. Bullets — gleicher Mechanismus auf Header-Ebene) |
+| AC-5 | planned | Surgical-Patch-Mode: zusätzlich zum Parser-basierten Round-Trip MUSS es einen line-level Patcher geben, der NUR die geänderten Status-Bits flippt ohne Re-Serialisierung. Anwendung: `setAcStatus`, `updateFeatureState`. Nutzt regex über die existierende File-Content statt parse → mutate → write |
+| AC-6 | planned | Round-Trip-Idempotenz Test: `parse(serialize(parse(content))) === parse(content)` UND `serialize(parse(content))` ≤ `content + 5%` (kleine Re-Formatierung erlaubt, aber kein Datenverlust >5%) |
+| AC-7 | planned | Pre-Write Safety Net: bei jedem `writeFeatureMap`-Call MUSS die Resultat-Größe gegen Pre-Write-Größe verglichen werden; wenn das neue File <50% der alten Zeilenzahl hat → throw + abort, weil das in 99% der Fälle ein Bug ist |
+| AC-8 | planned | Tests MÜSSEN abdecken: GoetzeInvest-style "fat map" (lots of description text + group headers) round-trip ohne Verlust, surgical-patch update ohne re-serialization, safety-net abort bei künstlich provoziertem >50%-shrink |
+
+**Files (zu erstellen/anzupassen):**
+- `cap/bin/lib/cap-feature-map.cjs` (Parser preserve `_description`, `_groupHeader`, `_inputHeaderFormat`; Serializer emit them; surgical-patch helper)
+- `cap/bin/lib/cap-feature-map-internals.cjs` (gemeinsame Helper für patch-mode)
+- `cap/bin/lib/cap-reconcile.cjs` (auf surgical-patch umstellen für status-only updates)
+- `tests/cap-feature-map-roundtrip.test.cjs` (neu)
+- `tests/cap-feature-map-surgical-patch.test.cjs` (neu)
+- `tests/cap-feature-map-safety-net.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
@@ -1671,4 +1700,4 @@ Beide Bugs sind nur durch Re-Run "verschwunden" — vermutlich race-condition-ar
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T16:55:00.000Z*
+*Last updated: 2026-05-07T17:30:00.000Z*
