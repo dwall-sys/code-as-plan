@@ -72,18 +72,54 @@ if (wantsCoverage) {
   // tests, not the hot lib modules whose coverage collapses. Diagnosed
   // empirically.
   //
-  // Three real remediation paths (none implemented yet):
-  //   1. Switch to c8/nyc (writes per-worker JSON, supports merge across
-  //      workers). ~1-2 days.
+  // Three real remediation paths considered:
+  //   1. Switch to c8/nyc (hypothesis: writes per-worker JSON, supports merge
+  //      across workers). REJECTED — see @cap-decision below.
   //   2. Upgrade CI to Node 23+ and switch to stable --test-isolation=process
   //      with v23's worker-coverage-merge fixes. ~0.5 day, needs verification.
   //   3. Status quo: keep --experimental-test-isolation=none, ~21 min CI runs,
   //      97.4% coverage. F-052-class race detection sacrificed by design here
   //      but covered by plain `npm test` worker isolation.
   //
-  // Until one of those lands: the flag stays. The 552 in-process migrations
-  // are still net wins (faster `npm test` runs locally + cleaner test
-  // architecture) but did NOT enable the Path 1 wall-time win on coverage.
+  // @cap-decision(CI/issue-42 c8-also-rejected) Path 1 (c8 variant) REJECTED.
+  //
+  // Hypothesis from PR #62 follow-up: c8 instruments via a require()-hook at
+  // module-load time and writes per-worker JSON to coverage/tmp/, so it should
+  // fix the worker-aggregator gap that bit native --experimental-test-coverage.
+  // Empirically tested 2026-05-07 with c8 v10.1.3 + Node 24 + --test-isolation=
+  // process (the stabilised flag). Three configurations measured:
+  //
+  //   A. native + --experimental-test-isolation=none .... 97.40% lines, 1240s
+  //      (current production, unchanged since F-051)
+  //   B. c8     + --test-isolation=process (default) .... 55.18% lines, 26.4s
+  //      (the hypothesised win — REJECTED, same gap as native+Path 1's 55.83%)
+  //   C. c8     + --experimental-test-isolation=none .... 97.39% lines, 1258s
+  //      (parity check — confirms c8 matches native at the same isolation)
+  //
+  // Root cause of the c8 rejection: c8 v10 does NOT use a require()-hook. The
+  // hypothesis was wrong about how c8 works. c8 v10 just sets NODE_V8_COVERAGE
+  // before spawning the wrapped command and reads V8's per-process JSONs on
+  // exit — it is a thin wrapper around Node's *native* coverage mechanism.
+  // Forensic check on coverage/tmp/ after the c8+Path1 run: 308 worker JSONs
+  // were written but only 46 of 167 test files appeared in any of them. The
+  // missing 121 test files are alphabetically-early (agent-*, antigravity-*,
+  // arc-*, build-*, cap-affinity through cap-divergence, cap-feature-map.*,
+  // most cap-memory-*, cap-tag-*, etc). This is the SAME Node-level bug:
+  // --test-isolation=process pool workers spawn before NODE_V8_COVERAGE has
+  // had its on-exit handler armed, so early workers exit without writing.
+  // Switching tools cannot fix this — both tools sit downstream of the same
+  // V8/Node coverage mechanism.
+  //
+  // Phase 4 is still NOT necessary. The remaining remediation options are:
+  //   - Node 23+ upgrade + stable --test-isolation=process with verified
+  //     worker-coverage-merge (Remediation Path 2 above).
+  //   - Persist current --experimental-test-isolation=none status quo.
+  // c8 was the original tool, removed in F-051 (commit 8cc51fd) under the same
+  // empirical evidence — that decision stands.
+  //
+  // Until Path 2 lands: the flag stays. The 552 in-process migrations from
+  // PRs #54-#61 remain net wins (faster `npm test` runs locally + cleaner test
+  // architecture) but neither they nor c8 close the coverage gap on Path 1.
   nodeArgs.push(
     '--experimental-test-isolation=none',
     '--experimental-test-coverage',
