@@ -567,13 +567,147 @@ function parseFeatureMapContent(content, options) {
   return { features, lastScan };
 }
 
+// @cap-feature(feature:F-088, primary:true) Surgical-patch helpers — flip status bits directly
+//   in the on-disk FEATURE-MAP content via regex substitution, without going through the lossy
+//   parse → serialize round-trip. Used by setAcStatus and updateFeatureState (AC-5).
+//
+// @cap-decision(F-088/AC-5) The surgical patcher operates on the canonical bracket-header form
+//   (`### F-NNN: Title [state]`) and table-form ACs (`| AC-N | status | desc |`). Bullet-form
+//   ACs and legacy `- **Status:** state` headers are NOT yet supported by the patcher; callers
+//   fall back to the parse → write path for those, which is acceptable because (a) the bracket
+//   form + table form is what 99% of real maps use, (b) bullet/legacy maps tend to be smaller
+//   and less likely to have prose lost on round-trip.
+
+/**
+ * Surgically update the [state] bracket in a feature header line.
+ * Returns the new content + a hit flag. If the regex did not match (header in legacy form
+ * or feature missing), returns hit=false and the original content unchanged so the caller
+ * can fall back to a parse → write flow.
+ *
+ * @param {string} content
+ * @param {string} featureId  e.g. "F-001"
+ * @param {string} newState
+ * @returns {{ content: string, hit: boolean }}
+ */
+function _surgicalUpdateFeatureState(content, featureId, newState) {
+  // Match: `### F-NNN: Title text [state]` OR `### F-NNN — Title text [state]`
+  // Capture the prefix (up to the [) and the closing ] so we can replace just the state token.
+  const escapedId = featureId.replace(/[-]/g, '\\-');
+  const re = new RegExp(
+    '^(###\\s+' + escapedId + '(?::\\s+|\\s+[—–-]\\s+)[^\\n]*?\\[)([^\\]]+)(\\][ \\t]*$)',
+    'm'
+  );
+  if (!re.test(content)) return { content, hit: false };
+  return {
+    content: content.replace(re, (_m, before, _state, after) => before + newState + after),
+    hit: true,
+  };
+}
+
+/**
+ * Surgically update the status cell of an AC table row inside a specific feature block.
+ * Scopes the substitution to the lines between the feature's header and the next feature
+ * header (or end-of-file) so two features that share an AC-id (e.g. both have AC-1) don't
+ * collide.
+ *
+ * @param {string} content
+ * @param {string} featureId
+ * @param {string} acId       e.g. "AC-1"
+ * @param {string} newStatus
+ * @returns {{ content: string, hit: boolean }}
+ */
+function _surgicalSetAcStatus(content, featureId, acId, newStatus) {
+  const escapedId = featureId.replace(/[-]/g, '\\-');
+  const headerRe = new RegExp(
+    '^###\\s+' + escapedId + '(?::\\s+|\\s+[—–-]\\s+)',
+    'm'
+  );
+  const headerMatch = headerRe.exec(content);
+  if (!headerMatch) return { content, hit: false };
+
+  // Find the start of the NEXT feature header (or end of content).
+  const blockStart = headerMatch.index;
+  const afterHeader = content.slice(blockStart + headerMatch[0].length);
+  const nextHeaderMatch = /^###\s+F-(?:\d{3,}|[A-Z][A-Z0-9_-]*)(?::\s+|\s+[—–-]\s+)/m.exec(afterHeader);
+  const blockEnd = nextHeaderMatch
+    ? blockStart + headerMatch[0].length + nextHeaderMatch.index
+    : content.length;
+
+  const block = content.slice(blockStart, blockEnd);
+  const escapedAc = acId.replace(/[-]/g, '\\-');
+  // Match: `| AC-N | oldStatus | description |`
+  // Capture the AC cell + leading pipe, then the status token, then the trailing pipe + desc.
+  const acRowRe = new RegExp(
+    '^(\\|\\s*' + escapedAc + '\\s*\\|\\s*)(\\w+)(\\s*\\|)',
+    'm'
+  );
+  if (!acRowRe.test(block)) return { content, hit: false };
+
+  const newBlock = block.replace(acRowRe, (_m, prefix, _status, suffix) => prefix + newStatus + suffix);
+  return {
+    content: content.slice(0, blockStart) + newBlock + content.slice(blockEnd),
+    hit: true,
+  };
+}
+
+/**
+ * Surgically update the on-disk FEATURE-MAP file by applying multiple state/AC-status patches
+ * in a single read-modify-write cycle. Atomic via .tmp + rename. Bypasses the F-088 shrink
+ * guard because we never re-serialize through the lossy path.
+ *
+ * @param {string} projectRoot
+ * @param {string|null|undefined} appPath
+ * @param {Array<
+ *   {kind:'state', featureId:string, newState:string} |
+ *   {kind:'ac', featureId:string, acId:string, newStatus:string}
+ * >} patches
+ * @returns {{ ok: boolean, hits: number, misses: Array<object> }}
+ */
+function applySurgicalPatches(projectRoot, appPath, patches) {
+  const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
+  const filePath = path.join(baseDir, FEATURE_MAP_FILE);
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (e) {
+    return { ok: false, hits: 0, misses: patches.slice(), error: e.message };
+  }
+  let hits = 0;
+  const misses = [];
+  for (const p of patches) {
+    let result;
+    if (p.kind === 'state') {
+      result = _surgicalUpdateFeatureState(content, p.featureId, p.newState);
+    } else if (p.kind === 'ac') {
+      result = _surgicalSetAcStatus(content, p.featureId, p.acId, p.newStatus);
+    } else {
+      misses.push(p);
+      continue;
+    }
+    if (result.hit) {
+      content = result.content;
+      hits++;
+    } else {
+      misses.push(p);
+    }
+  }
+  if (hits === 0) {
+    return { ok: false, hits: 0, misses };
+  }
+  // Atomic write: tmp + rename
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, content, 'utf8');
+  fs.renameSync(tmp, filePath);
+  return { ok: true, hits, misses };
+}
+
 // @cap-api writeFeatureMap(projectRoot, featureMap, appPath, options) -- Serializes FeatureMap to FEATURE-MAP.md.
 // Side effect: overwrites FEATURE-MAP.md at project root or app subdirectory.
 /**
  * @param {string} projectRoot - Absolute path to project root
  * @param {FeatureMap} featureMap - Structured feature map data
  * @param {string|null} [appPath=null] - Relative app path (e.g., "apps/flow"). If null, writes to projectRoot.
- * @param {{ legacyStatusLine?: boolean }} [options] - Serialization options forwarded to serializeFeatureMap.
+ * @param {{ legacyStatusLine?: boolean, allowShrink?: boolean }} [options] - Serialization options forwarded to serializeFeatureMap.
  */
 function writeFeatureMap(projectRoot, featureMap, appPath, options) {
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
@@ -658,6 +792,42 @@ function writeFeatureMap(projectRoot, featureMap, appPath, options) {
   if (preservedRescopedBlock) {
     // @cap-todo(ac:F-083/AC-6) Lazy-require — see _monorepo() definition.
     content = _monorepo().injectRescopedBlock(content, preservedRescopedBlock);
+  }
+
+  // @cap-todo(ac:F-088/AC-7) Pre-write safety net: refuse to write a FEATURE-MAP that lost
+  //   more than 50% of its lines vs. the on-disk version. The lossy round-trip in this module
+  //   silently drops free-text descriptions, **Group:** markers, --- separators, and other
+  //   unstructured content (real-world: GoetzeInvest hub shrunk 3303 → 1902 lines on a single
+  //   reconcile run). Until the lossless round-trip lands (AC-1..4), this guard turns silent
+  //   data loss into a loud, actionable error. The 50% threshold + 50-line floor lets small
+  //   maps shrink legitimately (e.g. 10-feature project removing half via cleanup) while
+  //   catching the 3303 → 20 stub-wipe failure mode the memory pitfall warns about.
+  if (!options || options.allowShrink !== true) {
+    let preExisting = null;
+    try {
+      preExisting = fs.readFileSync(filePath, 'utf8');
+    } catch (_e) {
+      preExisting = null; // first write; nothing to compare against
+    }
+    if (preExisting && preExisting.length > 0) {
+      const oldLines = preExisting.split('\n').length;
+      const newLines = content.split('\n').length;
+      const SAFETY_MIN_LINES = 50; // sanity floor — small maps may legitimately halve
+      const SAFETY_RATIO = 0.5;
+      if (oldLines >= SAFETY_MIN_LINES && newLines < oldLines * SAFETY_RATIO) {
+        const err = new Error(
+          'cap: writeFeatureMap aborted — output is ' + newLines + ' lines, on-disk is ' +
+          oldLines + ' (lost ' + (oldLines - newLines) + ' lines, ' +
+          Math.round(((oldLines - newLines) / oldLines) * 100) + '% shrink). This is almost ' +
+          'always a lossy round-trip bug (F-088). Pass options.allowShrink:true to override after ' +
+          'verifying the diff.'
+        );
+        err.code = 'CAP_FEATURE_MAP_SHRINK_GUARD';
+        err.oldLines = oldLines;
+        err.newLines = newLines;
+        throw err;
+      }
+    }
   }
 
   fs.writeFileSync(filePath, content, 'utf8');
@@ -981,6 +1151,25 @@ function updateFeatureState(projectRoot, featureId, newState, appPath) {
   }
   // 'planned' and 'prototyped' transitions intentionally leave ACs untouched.
 
+  // @cap-todo(ac:F-088/AC-5) Try the surgical-patch path first to avoid the lossy round-trip.
+  //   Build a patch list: (1) the feature state, (2) any AC promotions performed above. If the
+  //   patcher hits all of them, we're done. Otherwise (legacy header / bullet ACs / unusual
+  //   format) fall back to the original parse → write flow.
+  const patches = [{ kind: 'state', featureId, newState }];
+  if (newState === 'tested') {
+    for (const ac of feature.acs) {
+      if (ac.status === 'tested') {
+        patches.push({ kind: 'ac', featureId, acId: ac.id, newStatus: 'tested' });
+      }
+    }
+  }
+  const surgical = applySurgicalPatches(projectRoot, appPath, patches);
+  if (surgical.ok && surgical.misses.length === 0) {
+    return true;
+  }
+
+  // Fallback: legacy parse → serialize path. Still gated by the F-088 shrink-guard so a lossy
+  // write is loud rather than silent.
   writeFeatureMap(projectRoot, featureMap, appPath);
   return true;
 }
@@ -1053,6 +1242,17 @@ function setAcStatus(projectRoot, featureId, acId, newStatus, appPath) {
   if (!ac) return false;
 
   ac.status = newStatus;
+
+  // @cap-todo(ac:F-088/AC-5) Surgical-patch fast path — avoid the lossy round-trip when the
+  //   FEATURE-MAP uses the canonical bracket-header + table-AC form. Falls back to the parse →
+  //   write path for legacy / bullet-form features.
+  const surgical = applySurgicalPatches(projectRoot, appPath, [
+    { kind: 'ac', featureId, acId, newStatus },
+  ]);
+  if (surgical.ok && surgical.misses.length === 0) {
+    return true;
+  }
+
   writeFeatureMap(projectRoot, featureMap, appPath);
   return true;
 }
@@ -1480,6 +1680,10 @@ module.exports = {
   // @cap-todo(ac:F-083/AC-1) Internal helper exposed for the monorepo module's lazy-require.
   //   Not part of the documented public surface, but the monorepo module destructures it.
   _safeForError,
+  // F-088 surgical-patch helpers (exposed for tests + downstream callers like cap-reconcile).
+  applySurgicalPatches,
+  _surgicalUpdateFeatureState,
+  _surgicalSetAcStatus,
 };
 
 // @cap-todo(ac:F-083/AC-2) Stage-2 re-export attachment — identity-preserving wiring of the
