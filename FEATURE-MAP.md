@@ -1431,18 +1431,24 @@
 - `tests/cap-doctor-integrity.test.cjs`
 - `tests/cap-ui-design-editor-adversarial.test.cjs`
 
-### F-079: Wire Snapshot Linkage to Features and Platform [planned]
+### F-079: Wire Snapshot Linkage to Features and Platform [tested]
 
 **Depends on:** F-076
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | `cap:save` (Snapshot-Erstellung) muss standardmäßig die aktive Feature-ID aus `.cap/SESSION.json` `activeFeature` lesen und den Snapshot mit dieser Feature-ID verknüpfen. |
-| AC-2 | pending | Der Flag `--unassigned` muss den Snapshot ohne Feature-Bindung speichern, der Flag `--platform=<topic>` muss ihn an einen Platform-Topic binden. |
-| AC-3 | pending | Soft-Warn (stderr, kein Fail) muss erscheinen wenn `--unassigned` explizit ODER kein `activeFeature` in SESSION.json gesetzt ist; Snapshot wird trotzdem erstellt. |
-| AC-4 | pending | Die Memory-Pipeline muss Snapshots im Auto-Block des zugeordneten Per-Feature-Files (oder Platform-Files) unter Sektion `linked_snapshots` referenzieren — kein silent decay bei Pipeline-Re-Run. |
-| AC-5 | pending | Migration aus F-077 muss Datum + State-Transitions aus FEATURE-MAP heuristisch nutzen, um die ~38 GoetzeInvest-Orphan-Snapshots automatisch ihrem damaligen Feature zuzuordnen. |
-| AC-6 | pending | Nicht-zuordbare Snapshots (Heuristik liefert keinen Match) müssen unter `.cap/memory/platform/snapshots-unassigned.md` aggregiert werden, damit kein Snapshot verloren geht. |
+| AC-1 | tested | `cap:save` (Snapshot-Erstellung) muss standardmäßig die aktive Feature-ID aus `.cap/SESSION.json` `activeFeature` lesen und den Snapshot mit dieser Feature-ID verknüpfen. |
+| AC-2 | tested | Der Flag `--unassigned` muss den Snapshot ohne Feature-Bindung speichern, der Flag `--platform=<topic>` muss ihn an einen Platform-Topic binden. |
+| AC-3 | tested | Soft-Warn (stderr, kein Fail) muss erscheinen wenn `--unassigned` explizit ODER kein `activeFeature` in SESSION.json gesetzt ist; Snapshot wird trotzdem erstellt. |
+| AC-4 | tested | Die Memory-Pipeline muss Snapshots im Auto-Block des zugeordneten Per-Feature-Files (oder Platform-Files) unter Sektion `linked_snapshots` referenzieren — kein silent decay bei Pipeline-Re-Run. |
+| AC-5 | tested | Migration aus F-077 muss Datum + State-Transitions aus FEATURE-MAP heuristisch nutzen, um die ~38 GoetzeInvest-Orphan-Snapshots automatisch ihrem damaligen Feature zuzuordnen. |
+| AC-6 | tested | Nicht-zuordbare Snapshots (Heuristik liefert keinen Match) müssen unter `.cap/memory/platform/snapshots-unassigned.md` aggregiert werden, damit kein Snapshot verloren geht. |
+
+**Files:**
+- `cap/bin/lib/cap-snapshot-linkage.cjs`
+- `commands/cap/save.md`
+- `tests/cap-snapshot-linkage.test.cjs`
+- `tests/cap-snapshot-linkage-adversarial.test.cjs`
 
 ### F-080: Bridge to Claude-native Memory [planned]
 
@@ -1539,4 +1545,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T00:12:08.268Z*
+*Last updated: 2026-05-07T00:47:27.534Z*

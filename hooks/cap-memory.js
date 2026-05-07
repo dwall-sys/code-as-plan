@@ -182,6 +182,21 @@ function run(options = {}) {
   // F-029: Write memory directory (merge mode for multi-developer support)
   memDir.writeMemoryDirectory(cwd, allEntries, { merge: !options.init });
 
+  // @cap-decision(F-079/iter1) Stage-2 #1 fix: processSnapshots wired into memory-pipeline.
+  // Closes AC-4 — "Memory-Pipeline MUSS Snapshots ... referenzieren" — by invoking
+  // processSnapshots() after writeMemoryDirectory so per-feature/platform files get a
+  // populated linked_snapshots block on every pipeline run. Idempotent: byte-identical on
+  // re-run because processSnapshots groups by target and writes ONE upsert per target with
+  // the FULL set. Wrapped in try/catch so a snapshot-linkage failure never blocks memory.
+  const linkage = tryRequire(path.join(capLib, 'cap-snapshot-linkage.cjs'));
+  if (linkage && linkage.processSnapshots) {
+    try {
+      linkage.processSnapshots(cwd, {});
+    } catch (_e) {
+      // Snapshot linkage is best-effort; never block the rest of the pipeline.
+    }
+  }
+
   // F-034: Update memory graph
   const memGraph = tryRequire(path.join(capLib, 'cap-memory-graph.cjs'));
   if (memGraph) {
