@@ -611,6 +611,75 @@ describe('AC-5: Classifier priority', () => {
     assert.equal(decision.destination, 'unassigned');
     assert.equal(decision.topic, UNASSIGNED_SNAPSHOTS_TOPIC);
   });
+
+  // @cap-decision(F-079/iter1) Stage-2 #2 fix: Stage-2-migrated AC-5 fixture from
+  //   tests/cap-snapshot-linkage-adversarial.test.cjs. F-079's assignSnapshotByDate was
+  //   deleted (Option A consolidation); F-077's classifySnapshot is the single source of
+  //   truth. These cases pin the same date-proximity contract here.
+  it('Stage-2-migrated AC-5 fixture: 12-snapshot synthetic batch hits >=70% accuracy via classifySnapshot', () => {
+    const featureState = new Map([
+      ['F-070', { state: 'shipped', transitionAt: '2026-04-15T00:00:00.000Z' }],
+      ['F-071', { state: 'shipped', transitionAt: '2026-04-22T00:00:00.000Z' }],
+      ['F-072', { state: 'shipped', transitionAt: '2026-04-25T00:00:00.000Z' }],
+      ['F-074', { state: 'shipped', transitionAt: '2026-04-30T00:00:00.000Z' }],
+      ['F-076', { state: 'shipped', transitionAt: '2026-05-04T00:00:00.000Z' }],
+      ['F-077', { state: 'shipped', transitionAt: '2026-05-06T00:00:00.000Z' }],
+    ]);
+    const ctx = { features: [], fileToFeatureId: new Map(), featureState };
+    const snaps = [
+      { date: '2026-04-15T03:00:00.000Z', expected: 'F-070' },
+      { date: '2026-04-22T05:00:00.000Z', expected: 'F-071' },
+      { date: '2026-04-25T01:00:00.000Z', expected: 'F-072' },
+      { date: '2026-04-30T15:00:00.000Z', expected: 'F-074' },
+      { date: '2026-05-04T09:00:00.000Z', expected: 'F-076' },
+      { date: '2026-05-06T20:00:00.000Z', expected: 'F-077' },
+      { date: '2026-04-22T01:00:00.000Z', expected: 'F-071' },
+      { date: '2026-04-25T23:00:00.000Z', expected: 'F-072' },
+      { date: '2026-05-04T22:00:00.000Z', expected: 'F-076' },
+      { date: '2026-05-06T03:00:00.000Z', expected: 'F-077' },
+      // Outside the 24h window → must route to unassigned (null featureId).
+      { date: '2026-03-01T00:00:00.000Z', expected: null },
+      { date: '2026-06-01T00:00:00.000Z', expected: null },
+    ];
+    let correct = 0;
+    for (const s of snaps) {
+      const snap = {
+        fileName: 'x.md', sourcePath: '/x/x.md', feature: null,
+        date: s.date, title: 'no F-id in title', bodyHash: 'h',
+      };
+      const decision = classifySnapshot(snap, ctx);
+      const got = decision.destination === 'feature' ? decision.featureId : null;
+      if (got === s.expected) correct++;
+    }
+    const pct = correct / snaps.length;
+    assert.ok(pct >= 0.7, `accuracy ${(pct * 100).toFixed(0)}% (correct=${correct}/${snaps.length})`);
+  });
+
+  it('Stage-2-migrated AC-5 fixture: snapshot OUTSIDE the 24h window routes to unassigned', () => {
+    const featureState = new Map([
+      ['F-070', { state: 'shipped', transitionAt: '2026-04-01T00:00:00.000Z' }],
+    ]);
+    const ctx = { features: [], fileToFeatureId: new Map(), featureState };
+    const snap = {
+      fileName: 'x.md', sourcePath: '/x/x.md', feature: null,
+      date: '2026-05-06T00:00:00.000Z', title: 'far away', bodyHash: 'h',
+    };
+    const decision = classifySnapshot(snap, ctx);
+    assert.equal(decision.destination, 'unassigned');
+  });
+
+  it('Stage-2-migrated AC-5 fixture: malformed snapshot date routes to unassigned (no crash)', () => {
+    const featureState = new Map([
+      ['F-070', { state: 'shipped', transitionAt: new Date().toISOString() }],
+    ]);
+    const ctx = { features: [], fileToFeatureId: new Map(), featureState };
+    const snap = {
+      fileName: 'x.md', sourcePath: '/x/x.md', feature: null,
+      date: 'not-a-date', title: 'bad date', bodyHash: 'h',
+    };
+    const decision = classifySnapshot(snap, ctx);
+    assert.equal(decision.destination, 'unassigned');
+  });
 });
 
 // --- AC-6: Interactive prompt ---

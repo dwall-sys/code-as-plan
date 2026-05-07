@@ -69,6 +69,11 @@ node "$HOME/.claude/hooks/cap-memory.js"
 Only processes sessions newer than .cap/memory/.last-run timestamp.
 If .last-run doesn't exist, processes all sessions (same as init).
 
+<!-- @cap-decision(F-079/iter1) Stage-2 #1 fix: processSnapshots wired into memory-pipeline. -->
+The pipeline also walks `.cap/snapshots/` and updates the `linked_snapshots` auto-block in every
+per-feature / platform memory file the snapshots route to (F-079/AC-4). Re-running the pipeline
+on the same set of snapshots is byte-identical (idempotent contract pinned by F-079 tests).
+
 ## Subcommand: status
 
 ```bash
