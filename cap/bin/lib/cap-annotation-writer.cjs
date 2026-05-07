@@ -186,13 +186,21 @@ function planFileChanges(filePath, fileContent, entries, staleContentPrefixes = 
   // Plan adds/updates for new entries
   for (const entry of entries) {
     const formatted = formatAnnotation(entry);
-    // Check if a similar annotation already exists (match by tag + first 60 chars of content)
+    // @cap-todo(ac:F-086/AC-1) Dedup matcher: aggregate annotations (one-per-file) like
+    //   @cap-history must match by TAG NAME alone, since their content carries live edit
+    //   counts that change between runs. Matching by content-prefix caused a duplicate
+    //   line every time the stats changed (observed on GoetzeInvest hub-types.ts).
+    //   Per-occurrence annotations (@cap-pitfall, @cap-pattern, @cap-decision) keep the
+    //   content-prefix match because multiple distinct ones can legitimately coexist.
     const tagName = formatted.split('(')[0].split(' ')[0]; // e.g., @cap-history
     const contentKey = entry.content.substring(0, 60).toLowerCase();
+    const isAggregateTag = tagName === '@cap-history';
 
     const existingMatch = existing.find(ann => {
       const annContent = ann.fullLine.replace(ann.prefix, '').trim();
-      return annContent.startsWith(tagName) && annContent.toLowerCase().includes(contentKey);
+      if (!annContent.startsWith(tagName)) return false;
+      if (isAggregateTag) return true; // any existing @cap-history on this file is "the" one
+      return annContent.toLowerCase().includes(contentKey);
     });
 
     if (existingMatch) {

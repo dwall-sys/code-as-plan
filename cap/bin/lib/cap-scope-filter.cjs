@@ -47,6 +47,25 @@ const DEFAULT_PATH_EXCLUDES = Object.freeze([
 //   margin. Apply against >500 files is almost always a scope-filter bug, never an intent.
 const LARGE_DIFF_THRESHOLD = 500;
 
+// @cap-decision(F-086/AC-2) Bundle-detection thresholds. The line-count budget catches
+//   concatenated outputs (Next.js dev bundles routinely hit 5–50k lines, Webpack chunks 10k+);
+//   honest source files in this codebase peak around 1600 (cap-tag-scanner.cjs). 5000 is a 3x
+//   margin against the largest legitimate file, well below the smallest typical bundle.
+const BUNDLE_LINE_THRESHOLD = 5000;
+
+// @cap-decision(F-086/AC-2) Bundle-typical path patterns. RegExps catching shapes that recur
+//   across bundlers (Next.js, Webpack, esbuild, Turbopack). Matched against the project-relative
+//   POSIX path. Path-pattern check is the cheap pre-filter; the line-count probe is the
+//   expensive last resort and only fires when callers explicitly opt in via isBundle().
+const BUNDLE_PATH_PATTERNS = Object.freeze([
+  /\/chunks\//,            // Next.js / Webpack chunk dir
+  /\[root-of-/,            // Next.js dev-server bundle naming: [root-of-the-server]
+  /__[a-z0-9_]+\._\.js$/i, // Webpack-style hashed bundle: __0p_l47z._.js
+  /\.bundle\.[mc]?js$/,    // Generic .bundle.js
+  /\.min\.[mc]?js$/,       // Minified outputs
+  /\.chunk\.[mc]?js$/,     // .chunk.js
+]);
+
 // ---------------------------------------------------------------------------
 // Gitignore handling
 
@@ -86,7 +105,11 @@ function parseGitignore(projectRoot) {
 //   back to the literal-substring matcher rather than failing closed.
 function _compileGitignorePattern(pattern) {
   let p = pattern;
-  // Trailing slash → directory-only match
+  // Trailing slash → "directory" pattern. Per gitignore semantics this matches the directory
+  // ITSELF only when isDir, BUT files inside that directory still belong to "ignored content"
+  // because their parent dir is ignored. Since our matcher gets called per-path (not as a
+  // tree-walk), we accept files when their path starts with `pattern/` — that's the only way
+  // a file can be "inside an ignored directory" given a single-path API.
   let dirOnly = false;
   if (p.endsWith('/')) {
     dirOnly = true;
@@ -101,12 +124,25 @@ function _compileGitignorePattern(pattern) {
   // No-glob fast path: literal segment (the dominant case: `node_modules`, `.claude`, `dist`)
   if (!p.includes('*') && !p.includes('?')) {
     return (relPath, isDir) => {
-      if (dirOnly && !isDir) return false;
       if (anchored) {
+        // Anchored: exact match (must be dir if dirOnly) OR path-prefix (any descendant)
+        if (dirOnly) {
+          if (relPath === p) return !!isDir;
+          return relPath.startsWith(p + '/');
+        }
         return relPath === p || relPath.startsWith(p + '/');
       }
-      // Match anywhere: as a path component or a path prefix.
+      // Unanchored: match anywhere in the tree
       const segments = relPath.split('/');
+      if (dirOnly) {
+        // For dir-only patterns, accept if any non-leaf segment equals p (descendant case)
+        // OR if relPath is exactly p AND it's a directory.
+        for (let i = 0; i < segments.length - 1; i++) {
+          if (segments[i] === p) return true;
+        }
+        return relPath === p && !!isDir;
+      }
+      // Non-dir-only: any segment match OR exact path-prefix
       if (segments.includes(p)) return true;
       return relPath === p || relPath.startsWith(p + '/');
     };
@@ -168,6 +204,51 @@ function _matchPathPattern(relPath, pattern) {
 }
 
 // ---------------------------------------------------------------------------
+// Bundle detection (F-086/AC-2)
+
+// @cap-todo(ac:F-086/AC-2) isBundle decides whether a file is a generated artefact (Webpack
+//   chunk, Next.js dev-bundle, minified output, …). Two probes:
+//   - PATH probe (cheap, default): regex match on project-relative path against
+//     BUNDLE_PATH_PATTERNS. Catches the typical bundler output naming.
+//   - LINE-COUNT probe (expensive, opt-in via deep:true): reads the file and counts lines.
+//     Files with > BUNDLE_LINE_THRESHOLD lines are flagged — concatenated bundles routinely
+//     exceed this while honest source code in this codebase peaks at ~1600.
+/**
+ * @param {string} absPath - absolute or relative path; only the basename + dir-segments matter
+ * @param {{ deep?: boolean, lineThreshold?: number }} [opts]
+ *   deep — if true, also runs the line-count probe (file I/O). Default false.
+ *   lineThreshold — override BUNDLE_LINE_THRESHOLD.
+ * @returns {boolean}
+ */
+function isBundle(absPath, opts) {
+  if (typeof absPath !== 'string' || absPath.length === 0) return false;
+  const posixPath = absPath.split(path.sep).join('/');
+  // Path probe — cheap
+  for (const re of BUNDLE_PATH_PATTERNS) {
+    if (re.test(posixPath)) return true;
+  }
+  // Line-count probe — opt-in, performs file I/O
+  if (opts && opts.deep) {
+    const limit = (opts && typeof opts.lineThreshold === 'number') ? opts.lineThreshold : BUNDLE_LINE_THRESHOLD;
+    let raw;
+    try {
+      raw = fs.readFileSync(absPath, 'utf8');
+    } catch (_e) {
+      return false; // unreadable → can't decide; default to "not bundle"
+    }
+    // Quick line count via splitting; for very large files the cost is dominated by readFileSync
+    // anyway, so a strchr-style loop wouldn't help meaningfully.
+    let lineCount = 1;
+    for (let i = 0; i < raw.length; i++) {
+      if (raw.charCodeAt(i) === 10 /* \n */) lineCount++;
+      // Early exit once we've crossed the threshold — no need to count the rest of a 50k-line bundle.
+      if (lineCount > limit) return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Plugin-self-mirror detection (F-085/AC-4)
 
 // @cap-todo(ac:F-085/AC-4) Plugin-self-mirror = a directory under cwd that exact-mirrors
@@ -201,6 +282,8 @@ function detectPluginMirror(projectRoot) {
  * @property {string[]} [includes]         - When non-empty, ONLY paths matching at least one include pattern pass.
  * @property {string[]} [excludes]         - User-supplied additional excludes (additive on top of pathExcludes).
  * @property {boolean}  [respectGitignore] - Default true. Set false for tests / sandbox runs.
+ * @property {boolean}  [bundleDetection]  - Default true. Set false to skip the path-based bundle filter (F-086/AC-2).
+ * @property {boolean}  [deepBundleCheck]  - Default false. Enables the line-count probe — expensive, opt-in.
  */
 
 /**
@@ -234,6 +317,10 @@ function buildScopeFilter(projectRoot, options) {
   const includes = Array.isArray(opts.includes) ? opts.includes : [];
   const respectGitignore = opts.respectGitignore !== false;
   const gitignoreMatchers = respectGitignore ? parseGitignore(projectRoot) : [];
+  // @cap-todo(ac:F-086/AC-2) Bundle-detection runs as part of the file-level exclude check.
+  //   Path-pattern probe is on by default (cheap); deep line-count probe is opt-in (deepBundleCheck).
+  const bundleDetection = opts.bundleDetection !== false;
+  const deepBundleCheck = opts.deepBundleCheck === true;
 
   const pluginMirror = detectPluginMirror(projectRoot);
   // If we detected a plugin mirror, ensure it's in pathExcludes (defense in depth — the
@@ -261,7 +348,12 @@ function buildScopeFilter(projectRoot, options) {
       if (m(rel, !!isDir)) return true;
     }
 
-    // 4. Includes are a positive filter: when set, only matches pass
+    // 4. Bundle-detection (F-086/AC-2): only for files, not directories.
+    if (!isDir && bundleDetection) {
+      if (isBundle(absPath, { deep: deepBundleCheck })) return true;
+    }
+
+    // 5. Includes are a positive filter: when set, only matches pass
     if (includes.length > 0) {
       let matched = false;
       for (const p of includes) {
@@ -297,8 +389,11 @@ module.exports = {
   buildScopeFilter,
   parseGitignore,
   detectPluginMirror,
+  isBundle,
   DEFAULT_DIR_EXCLUDES,
   DEFAULT_PATH_EXCLUDES,
+  BUNDLE_LINE_THRESHOLD,
+  BUNDLE_PATH_PATTERNS,
   LARGE_DIFF_THRESHOLD,
   // Internal helpers exported for unit tests.
   _matchPathPattern,
