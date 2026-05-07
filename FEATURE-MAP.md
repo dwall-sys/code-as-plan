@@ -1449,6 +1449,8 @@
 - `commands/cap/save.md`
 - `tests/cap-snapshot-linkage.test.cjs`
 - `tests/cap-snapshot-linkage-adversarial.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-snapshot-linkage-e2e.test.cjs`
 
 ### F-080: Bridge to Claude-native Memory [tested]
 
@@ -1470,6 +1472,7 @@
 - `tests/cap-memory-bridge.test.cjs`
 - `tests/cap-memory-bridge-adversarial.test.cjs`
 - `tests/cap-memory-bridge-e2e.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
 
 ### F-081: Extend Feature Map Parser for Multi-Format Support [shipped]
 
@@ -1521,6 +1524,7 @@
 - `tests/cap-memory-migrate-monorepo-adversarial.test.cjs`
 - `tests/cap-feature-map-emdash.test.cjs`
 - `tests/cap-feature-map-monorepo-iterate.test.cjs`
+- `cap/bin/lib/cap-feature-map-monorepo.cjs`
 
 ### F-083: Extract Monorepo Aggregation Module [tested]
 
@@ -1542,6 +1546,7 @@
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-doctor-integrity.test.cjs`
 - `tests/cap-ui-design-editor-adversarial.test.cjs`
+- `cap/bin/lib/cap-feature-map-internals.cjs`
 
 ### F-084: Project Onboarding & Migration Orchestrator [tested]
 
@@ -1567,6 +1572,38 @@
 - `cap/bin/lib/cap-doctor.cjs`
 - `tests/cap-doctor-integrity.test.cjs`
 - `tests/cap-ui-design-editor-adversarial.test.cjs`
+- `tests/build-hooks.test.cjs`
+- `tests/cap-plugin-manifest.test.cjs`
+
+### F-085: Add Scope Filter to Tag-Scanner & Migrate-Tags [tested]
+
+**Depends on:** F-045, F-046, F-047
+
+**Motivation:** Beide tag-bezogenen Tools (`cap-tag-scanner.cjs:scanDirectory` und `cap-migrate-tags.cjs`) scannen blind alles unter `cwd()`, ohne `.gitignore`, Worktree-, Fixture- oder Plugin-Mirror-Awareness. Konkrete Befunde auf diesem Repo (2026-05-07):
+- `cap-migrate-tags` dry-run schlug **2773 File-Migrations** vor, davon nur ~89 legitim. Apply hätte Test-Fixtures kaputt gemacht, die User-Global-Plugin-Installation kontaminiert und einen un-reviewbaren Diff produziert.
+- `cap-tag-scanner` lieferte **33594 Tags in 2773 Files**, davon **30502 (91%) aus `.claude/worktrees/`** (alte Agent-Worktrees). Resultat: 88% unassigned-Tags, gefährliches `enrichFromTags` (würde `FEATURE-MAP.md` mit Worktree-Pfaden vermüllen), unbrauchbare Coverage-Statistiken.
+
+Der Fix ist gemeinsam — beide Module brauchen denselben Scope-Filter-Layer. Nach Implementierung: Scanner geht von 33594 → 2614 Tags (−92%), Migrator von 2773 → 102 Files (−96%).
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Gemeinsamer `cap-scope-filter.cjs` MUSS extrahiert werden und sowohl von `cap-tag-scanner.cjs:scanDirectory` als auch von `cap-migrate-tags.cjs:planProjectMigration` konsumiert werden — DRY, ein Default-Set, ein Override-Pfad |
+| AC-2 | tested | Scope-Filter MUSS `.gitignore` respektieren — Files, die git ignoriert, dürfen weder gescannt noch in Migrationsplan aufgenommen werden |
+| AC-3 | tested | Default-Excludes MÜSSEN umfassen: `.claude/worktrees/**`, `.claude/cap/**` (Plugin-Self-Mirror), `node_modules/**`, `dist/**`, `coverage/**`, `.cap/snapshots/**`, `**/fixtures/**` (Test-Fixtures absichtlich roh-getaggt) |
+| AC-4 | tested | Plugin-Self-Mirror-Detection MUSS heuristisch erkennen, wenn das Tool sich selbst sieht (Pfad-Mirroring von `$HOME/.claude/cap/bin/` unter `<cwd>/.claude/cap/bin/`) — Schreiben dorthin würde die User-Global-Installation kontaminieren |
+| AC-5 | tested | Scan- und Dry-Run-Reports MÜSSEN aggregierte counts pro top-level-dir zeigen (nicht nur File-Liste/Tag-Liste), damit User Scope-Verschmutzung sofort erkennt |
+| AC-6 | tested | `--include=<glob>` und `--exclude=<glob>` Flags MÜSSEN auf beiden Tools scope-override erlauben (additive Excludes, ersetzende Includes) |
+| AC-7 | tested | Migration-Sicherheit: `cap-migrate-tags` MUSS bei >500 vorgeschlagenen Files einen extra Confirm-Gate triggern (`--apply` allein reicht nicht), um destructive blind-applies zu verhindern |
+| AC-8 | tested | Tests MÜSSEN abdecken: gitignore-aware scan, worktree-exclusion, fixture-exclusion, plugin-mirror detection, glob-flag-overrides, large-diff-confirm-gate, fail-safe (kein Match → klare Meldung statt leerer Diff oder leeres Tag-Set) |
+
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs`
+- `cap/bin/lib/cap-migrate-tags.cjs`
+- `cap/bin/lib/cap-scope-filter.cjs`
+- `cap/bin/lib/cap-tag-scanner.cjs`
+- `tests/cap-migrate-tags-scope.test.cjs`
+- `tests/cap-scope-filter.test.cjs`
+- `tests/cap-tag-scanner-scope.test.cjs`
 
 ## Legend
 
@@ -1578,4 +1615,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T12:50:50.905Z*
+*Last updated: 2026-05-07T15:50:24.716Z*

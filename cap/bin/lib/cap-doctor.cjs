@@ -99,6 +99,8 @@ const CAP_MODULE_MANIFEST = [
   'cap-realtime-affinity.cjs',
   'cap-reconcile.cjs',
   'cap-research-gate.cjs',
+  // @cap-feature(feature:F-085) Scope filter shared by cap-tag-scanner and cap-migrate-tags.
+  'cap-scope-filter.cjs',
   'cap-semantic-pipeline.cjs',
   'cap-session-extract.cjs',
   'cap-session.cjs',
