@@ -1508,18 +1508,26 @@
 - `tests/cap-feature-map-emdash.test.cjs`
 - `tests/cap-feature-map-monorepo-iterate.test.cjs`
 
-### F-083: Extract Monorepo Aggregation Module [planned]
+### F-083: Extract Monorepo Aggregation Module [tested]
 
 **Depends on:** F-082
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | New file `cap/bin/lib/cap-feature-map-monorepo.cjs` SHALL export `parseRescopedTable`, `discoverSubAppFeatureMaps`, `aggregateSubAppFeatureMaps`, `_enrichFromTagsAcrossSubApps`, `_enrichFromDesignTagsAcrossSubApps`, `_maybeRedirectToSubApp` |
-| AC-2 | pending | `cap-feature-map.cjs` SHALL re-export the same surface for backward-compat (zero call-site change in commands/tests) |
-| AC-3 | pending | `cap-feature-map.cjs` SHALL be reduced to ≤1500 LOC; new module ≤900 LOC |
-| AC-4 | pending | All existing tests SHALL stay green; coverage ≥ baseline (no regression) |
-| AC-5 | pending | `_subAppPrefixes` `Object.defineProperty` non-enumerable contract SHALL be preserved (round-trip test pinned) |
-| AC-6 | pending | No new circular `require` between the two modules (verified via static-analysis test or `node --trace-deprecation` probe) |
+| AC-1 | tested | New file `cap/bin/lib/cap-feature-map-monorepo.cjs` SHALL export `parseRescopedTable`, `discoverSubAppFeatureMaps`, `aggregateSubAppFeatureMaps`, `_enrichFromTagsAcrossSubApps`, `_enrichFromDesignTagsAcrossSubApps`, `_maybeRedirectToSubApp` |
+| AC-2 | tested | `cap-feature-map.cjs` SHALL re-export the same surface for backward-compat (zero call-site change in commands/tests) |
+| AC-3 | tested | `cap-feature-map.cjs` SHALL be reduced to ≤1500 LOC; new module ≤900 LOC |
+| AC-4 | tested | All existing tests SHALL stay green; coverage ≥ baseline (no regression) |
+| AC-5 | tested | `_subAppPrefixes` `Object.defineProperty` non-enumerable contract SHALL be preserved (round-trip test pinned) |
+| AC-6 | tested | No new circular `require` between the two modules (verified via static-analysis test or `node --trace-deprecation` probe) |
+
+**Files:**
+- `cap/bin/lib/cap-feature-map.cjs`
+- `cap/bin/lib/cap-feature-map-monorepo.cjs`
+- `tests/cap-feature-map-monorepo-extraction.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-doctor-integrity.test.cjs`
+- `tests/cap-ui-design-editor-adversarial.test.cjs`
 
 ## Legend
 
@@ -1531,4 +1539,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-06T22:14:02.094Z*
+*Last updated: 2026-05-07T00:12:08.268Z*

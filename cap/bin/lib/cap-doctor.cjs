@@ -44,6 +44,9 @@ const CAP_MODULE_MANIFEST = [
   'cap-divergence-detector.cjs',
   'cap-doctor.cjs',
   'cap-feature-map.cjs',
+  // @cap-feature(feature:F-083) Monorepo aggregation module extracted from cap-feature-map.cjs.
+  // @cap-decision(F-083) Bumped 84 -> 85 when cap-feature-map-monorepo.cjs was added.
+  'cap-feature-map-monorepo.cjs',
   // @cap-feature(feature:F-072) Compute Two-Layer Fitness Score — pure-compute scorer driving F-074 unlearn.
   // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added (Two-Layer Fitness Score for Pattern Unlearn).
   'cap-fitness-score.cjs',

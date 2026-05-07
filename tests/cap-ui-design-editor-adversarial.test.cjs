@@ -879,7 +879,7 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     assert.strictEqual(ui.atomicWriteDesign, editor.atomicWriteDesign);
   });
 
-  it('module manifest is 84 after F-078 adds platform-bucket modules (doctor contract)', () => {
+  it('module manifest is 85 after F-083 splits cap-feature-map.cjs (doctor contract)', () => {
     // @cap-decision(F-061) Bumped 73 -> 74 when cap-telemetry.cjs was added (Token Telemetry observability).
     // @cap-decision(F-075) Bumped 74 -> 75 when cap-trust-mode.cjs was added (Trust-Mode Configuration Slot).
     // @cap-decision(F-070) Bumped 75 -> 76 when cap-learning-signals.cjs was added (Collect Learning Signals).
@@ -890,7 +890,8 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     // @cap-decision(F-076) Bumped 80 -> 81 when cap-memory-schema.cjs was added (V6 per-feature memory format foundation).
     // @cap-decision(F-077) Bumped 81 -> 82 when cap-memory-migrate.cjs was added (V6 migration tool).
     // @cap-decision(F-078) Bumped 82 -> 84 when cap-memory-extends.cjs and cap-memory-platform.cjs were added (Platform-Bucket).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 84);
+    // @cap-decision(F-083) Bumped 84 -> 85 when cap-feature-map-monorepo.cjs was extracted from cap-feature-map.cjs.
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 85);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));
