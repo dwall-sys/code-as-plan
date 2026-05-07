@@ -315,6 +315,30 @@ If output is non-empty, display it before suggesting next action:
 {realtime_affinity_output}
 ```
 
+## Step 5c: Surface Claude-native auto-memory bridge (F-080)
+
+<!-- @cap-feature(feature:F-080) /cap:start surfaces Claude-native auto-memory entries relevant to the active feature. Runtime-only; bridge is a read-only consumer of ~/.claude/projects/<slug>/memory/. -->
+<!-- @cap-todo(ac:F-080/AC-4) /cap:start displays "Claude-native erinnert: <bullets>" when bridge data is available. -->
+<!-- @cap-todo(ac:F-080/AC-3) Silent skip when ~/.claude/projects/<slug>/memory/ is missing or unreadable — no warn, no error. -->
+
+```bash
+node -e "
+const bridge = require('./cap/bin/lib/cap-memory-bridge.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+try {
+  const s = session.loadSession(process.cwd());
+  const active = (s && typeof s.activeFeature === 'string' && s.activeFeature.length > 0) ? s.activeFeature : null;
+  const surface = bridge.surfaceForFeature(process.cwd(), active);
+  const formatted = bridge.formatSurface(surface);
+  if (formatted) console.log(formatted);
+} catch (_e) {
+  // Silent skip — F-080/AC-3 contract.
+}
+"
+```
+
+If output is non-empty, display it before the next-action suggestion. If empty, omit entirely (no header line).
+
 ## Step 6: Suggest next action
 
 Based on current state, suggest:

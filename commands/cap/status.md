@@ -193,6 +193,30 @@ try {
 
 Store as `token_telemetry_status` and render it verbatim under the dashboard's `Session:` block.
 
+## Step 3aa: Load Claude-native bridge surface (F-080)
+
+<!-- @cap-feature(feature:F-080) /cap:status surfaces Claude-native auto-memory entries relevant to the active feature. Runtime-only; bridge is a read-only consumer of ~/.claude/projects/<slug>/memory/. -->
+<!-- @cap-todo(ac:F-080/AC-4) /cap:status displays "Claude-native erinnert: <bullets>" when bridge data is available. -->
+<!-- @cap-todo(ac:F-080/AC-3) Silent skip when the Claude-native dir is missing or unreadable. -->
+
+```bash
+node -e "
+const bridge = require('./cap/bin/lib/cap-memory-bridge.cjs');
+const session = require('./cap/bin/lib/cap-session.cjs');
+try {
+  const s = session.loadSession(process.cwd());
+  const active = (s && typeof s.activeFeature === 'string' && s.activeFeature.length > 0) ? s.activeFeature : null;
+  const surface = bridge.surfaceForFeature(process.cwd(), active);
+  const formatted = bridge.formatSurface(surface);
+  if (formatted) console.log(formatted);
+} catch (_e) {
+  // Silent skip — F-080/AC-3.
+}
+"
+```
+
+Store as `claude_native_bridge_status` and render it (if non-empty) under the dashboard between `Session:` and `Features:` blocks. If empty, omit the section entirely.
+
 ## Step 3b: Load Neural Memory status
 
 <!-- @cap-todo(ac:F-040/AC-3) Extend /cap:status with Neural Memory section: active cluster count, dormant nodes, highest-affinity pair, last clustering timestamp -->
