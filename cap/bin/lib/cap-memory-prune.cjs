@@ -17,6 +17,9 @@ const {
   MEMORY_DIR,
   CATEGORY_FILES,
 } = require('./cap-memory-dir.cjs');
+// @cap-feature(feature:F-086) cap-memory-prune consumes the shared scope filter so its
+//   --gitignored mode uses the same path-decision logic as the scanner and migrator.
+const scopeModule = require('./cap-scope-filter.cjs');
 
 // --- Constants ---
 
@@ -504,6 +507,177 @@ function prune(projectRoot, options = {}) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// F-086/AC-3: pruneGitignored — clean already-existing memory files of entries
+//   whose related-files would now be excluded by the scope filter. Useful for
+//   projects that bootstrapped with a pre-F-085 CAP version and accumulated
+//   build-output decisions / bundle-artefact references in their memory files.
+
+// @cap-todo(ac:F-086/AC-3) V6 platform-memory bullet pattern: bullet line ending with a
+//   backtick-wrapped path:linenum reference. We extract the path, drop the line if the
+//   scope filter would exclude it. Auto-block markers (cap:auto:start / end) and headings
+//   are preserved verbatim.
+const V6_BULLET_PATH_RE = /`([^`\s][^`]*?)(?::\d+)?`\s*$/;
+
+/**
+ * Scan V5 monolith files (decisions/pitfalls/patterns/hotspots) and V6 platform/feature
+ * files for entries whose source file is now out-of-scope per the scope filter.
+ *
+ * Default behaviour is dry-run; pass `apply: true` to rewrite the files. Returns counts
+ * + per-file diffs so callers can render a report before committing.
+ *
+ * @param {string} projectRoot
+ * @param {{apply?: boolean, scope?: import('./cap-scope-filter.cjs').ScopeFilter}} [options]
+ * @returns {{
+ *   dryRun: boolean,
+ *   v5RemovedTotal: number,
+ *   v6RemovedTotal: number,
+ *   v5Files: Array<{file: string, removed: string[], kept: number}>,
+ *   v6Files: Array<{file: string, removed: string[], kept: number}>,
+ *   errors: Array<{stage: string, message: string}>
+ * }}
+ */
+function pruneGitignored(projectRoot, options) {
+  const opts = options || {};
+  const apply = opts.apply === true;
+  const scope = opts.scope || scopeModule.buildScopeFilter(projectRoot);
+
+  const result = {
+    dryRun: !apply,
+    v5RemovedTotal: 0,
+    v6RemovedTotal: 0,
+    v5Files: [],
+    v6Files: [],
+    errors: [],
+  };
+
+  // ---- V5 monolith files ----
+  for (const [, filename] of Object.entries(CATEGORY_FILES)) {
+    const fp = path.join(projectRoot, MEMORY_DIR, filename);
+    if (!fs.existsSync(fp)) continue;
+    try {
+      const { entries } = readMemoryFile(fp);
+      const kept = [];
+      const removed = [];
+      for (const entry of entries) {
+        const files = (entry.metadata && Array.isArray(entry.metadata.relatedFiles)) ? entry.metadata.relatedFiles : [];
+        // Drop entry only when ALL related files are out-of-scope (and there's at least one to judge by).
+        if (files.length > 0 && files.every((f) => scope.isExcluded(path.resolve(projectRoot, f), false))) {
+          removed.push(entry.content);
+        } else {
+          kept.push(entry);
+        }
+      }
+      result.v5RemovedTotal += removed.length;
+      result.v5Files.push({ file: path.relative(projectRoot, fp), removed, kept: kept.length });
+      if (apply && removed.length > 0) {
+        // Re-render via writeMemoryDirectory in non-merge mode (full overwrite of this file's category).
+        // The `category` is derived from the filename via reverse-lookup.
+        const category = Object.entries(CATEGORY_FILES).find(([, fn]) => fn === filename)[0];
+        const re = require('./cap-memory-dir.cjs');
+        const md = re.generateCategoryMarkdown
+          ? re.generateCategoryMarkdown(category, kept.map((e) => ({ category, ...e })))
+          : null;
+        if (md != null) {
+          const tmp = fp + '.tmp';
+          fs.writeFileSync(tmp, md, 'utf8');
+          fs.renameSync(tmp, fp);
+        }
+      }
+    } catch (err) {
+      result.errors.push({ stage: `v5:${filename}`, message: errorMessage(err) });
+    }
+  }
+
+  // ---- V6 platform/feature files ----
+  // Walk .cap/memory/platform/*.md and .cap/memory/features/*.md
+  const v6Dirs = [
+    path.join(projectRoot, MEMORY_DIR, 'platform'),
+    path.join(projectRoot, MEMORY_DIR, 'features'),
+  ];
+  for (const dir of v6Dirs) {
+    if (!fs.existsSync(dir)) continue;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir);
+    } catch (err) {
+      result.errors.push({ stage: `v6:readdir:${path.relative(projectRoot, dir)}`, message: errorMessage(err) });
+      continue;
+    }
+    for (const name of entries) {
+      if (!name.endsWith('.md')) continue;
+      const fp = path.join(dir, name);
+      try {
+        const raw = fs.readFileSync(fp, 'utf8');
+        const lines = raw.split('\n');
+        const newLines = [];
+        const removed = [];
+        let kept = 0;
+        for (const line of lines) {
+          const isBullet = /^- /.test(line);
+          if (isBullet) {
+            const match = V6_BULLET_PATH_RE.exec(line);
+            if (match) {
+              const filePath = match[1];
+              if (scope.isExcluded(path.resolve(projectRoot, filePath), false)) {
+                removed.push(line.trim());
+                continue; // drop this line
+              }
+              kept++;
+            }
+          }
+          newLines.push(line);
+        }
+        result.v6RemovedTotal += removed.length;
+        result.v6Files.push({ file: path.relative(projectRoot, fp), removed, kept });
+        if (apply && removed.length > 0) {
+          const tmp = fp + '.tmp';
+          fs.writeFileSync(tmp, newLines.join('\n'), 'utf8');
+          fs.renameSync(tmp, fp);
+        }
+      } catch (err) {
+        result.errors.push({ stage: `v6:${path.relative(projectRoot, fp)}`, message: errorMessage(err) });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Format a prune-gitignored result as a human-readable report.
+ * @param {ReturnType<typeof pruneGitignored>} result
+ * @returns {string}
+ */
+function formatGitignoredReport(result) {
+  const lines = [];
+  lines.push(`cap:memory prune --gitignored ${result.dryRun ? '(dry-run)' : '(applied)'}`);
+  lines.push(`  V5 entries removed: ${result.v5RemovedTotal}`);
+  lines.push(`  V6 lines removed:   ${result.v6RemovedTotal}`);
+  if (result.v5Files.length > 0) {
+    const dirty = result.v5Files.filter((f) => f.removed.length > 0);
+    if (dirty.length > 0) {
+      lines.push('');
+      lines.push('V5 files affected:');
+      for (const f of dirty) lines.push(`  ${f.file} — ${f.removed.length} removed, ${f.kept} kept`);
+    }
+  }
+  if (result.v6Files.length > 0) {
+    const dirty = result.v6Files.filter((f) => f.removed.length > 0);
+    if (dirty.length > 0) {
+      lines.push('');
+      lines.push('V6 files affected:');
+      for (const f of dirty) lines.push(`  ${f.file} — ${f.removed.length} removed, ${f.kept} kept`);
+    }
+  }
+  if (result.errors.length > 0) {
+    lines.push('');
+    lines.push('Errors:');
+    for (const e of result.errors) lines.push(`  ${e.stage}: ${e.message}`);
+  }
+  return lines.join('\n');
+}
+
 module.exports = {
   DECAY_START_DAYS,
   DECAY_STEP_DAYS,
@@ -527,4 +701,7 @@ module.exports = {
   applySideEffects,
   errorMessage,
   prune,
+  // F-086/AC-3
+  pruneGitignored,
+  formatGitignoredReport,
 };

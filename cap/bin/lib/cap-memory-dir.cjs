@@ -392,6 +392,7 @@ module.exports = {
   readMemoryDirectory,
   readMemoryFile,
   getCrossReference,
+  generateCategoryMarkdown,
   MEMORY_DIR,
   CATEGORY_FILES,
 };

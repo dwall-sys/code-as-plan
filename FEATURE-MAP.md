@@ -1605,32 +1605,36 @@ Der Fix ist gemeinsam — beide Module brauchen denselben Scope-Filter-Layer. Na
 - `tests/cap-scope-filter.test.cjs`
 - `tests/cap-tag-scanner-scope.test.cjs`
 
-### F-086: Extend Scope Filter to Memory Pipeline [planned]
+### F-086: Memory Pipeline Hardening (Dedup + Bundle-Detection + Prune-Stale) [tested]
 
 **Depends on:** F-085
 
-**Motivation:** Real-world Befund auf GoetzeInvest (2026-05-07): nach `/cap:upgrade` enthält `apps/hub/.cap/memory/platform/unassigned.md` Decisions extrahiert aus Build-Output und Bundle-Artefakten:
-- `.next/dev/server/chunks/[root-of-the-server]__0p_l47z._.js:326` (Next.js dev-server bundle)
-- `supabase/migrations/015_pe_invite_trigger_fix.sql:12102` (Line-Number 12102 in einer SQL-Datei = concatenated bundle, nicht echter Source)
+**Motivation:** Real-world Befund auf GoetzeInvest (2026-05-07): nach `/cap:upgrade` enthielt `apps/hub/.cap/memory/platform/unassigned.md` 2308 Noise-Lines (95% der Datei) aus Build-Output (`.next/dev/server/chunks/...`) und Bundle-Artefakten (`supabase/migrations/...sql:12102`). Plus: `@cap-history` Annotations wurden bei jedem Pipeline-Run dupliziert (Beispiel `apps/hub/src/types/hub-types.ts` mit 2 verschiedenen `@cap-history`-Zeilen am File-Header).
 
-F-085 hat den Scope-Filter für `cap-tag-scanner.cjs` und `cap-migrate-tags.cjs` zentralisiert, aber die Memory-Pipeline (`cap-memory-bridge.cjs`, `cap-memory-engine.cjs`, `cap-memory-pipeline.cjs`) hat eigenen Code für File-Walks und Tag-Extraktion, der den neuen `cap-scope-filter.cjs` noch nicht konsumiert. Dadurch landen Build-Artefakte trotz `.gitignore` in `decisions.md`/`pitfalls.md`/`patterns.md` und in den per-feature memory files. Die memory-pipeline muss auf denselben Filter umgezogen werden, damit das Versprechen aus F-085 für ALLE CAP-Tools gilt, nicht nur die zwei explizit migrierten.
+**Investigation (2026-05-07):** F-085 protected den scanner-walk (`scanDirectory`), und der memory-pipeline-hook (`hooks/cap-memory.js`) ruft genau diese Funktion auf. Das heißt der **Source-Walk ist bereits geschützt** — das Verschmutzungsproblem auf GoetzeInvest stammte aus einer pre-F-085 CAP-Installation. Nach Symlink auf den F-085-fähigen Repo-Stand zeigt ein neuer Bootstrap **0 Noise-Lines**. Die ursprünglich gedachten "memory-pipeline-modules adopt scope-filter" ACs sind damit erledigt — keine Code-Änderung nötig, F-085 gilt bereits für den hot-path.
+
+Was offen bleibt sind drei separate Hardening-Punkte:
+
+1. **`@cap-history` dedup-bug**: `cap-annotation-writer.cjs:planFileChanges` matched existing annotations per `entry.content.substring(0, 60)`. Da `entry.content` bei `@cap-history` die changing edit-counts enthält ("Frequently modified — 2 sessions, **5** edits"), schlägt der Match bei jedem Stat-Update fehl und eine NEUE Zeile wird angefügt statt die alte upzudaten.
+2. **Bundle-detection als defense-in-depth**: Falls `.gitignore` mal nicht greift (z.B. user committet Bundles), sollten Files mit Line-Counts >5000 ODER Bundle-typischen Pfad-Patterns (`/chunks/`, `_*._.js`) trotzdem ausgeschlossen werden.
+3. **Pruning vorhandener Memory-Files**: Projekte die mit pre-F-085 CAP gebootstrappt haben, haben verschmutzte memory-files. Ein `cap:memory prune --gitignored`-Subcommand validiert bestehende Einträge gegen den aktuellen Scope-Filter und entfernt Einträge die jetzt out-of-scope wären.
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | Alle Memory-Pipeline-Module (`cap-memory-bridge.cjs`, `cap-memory-engine.cjs`, `cap-pattern-pipeline.cjs`, `cap-snapshot-linkage.cjs`, `cap-memory-prune.cjs`) MÜSSEN `cap-scope-filter.cjs:buildScopeFilter` konsumieren — kein eigener File-Walk mehr |
-| AC-2 | planned | `@cap-history`-Auto-Injection MUSS deduplizieren — wenn der Header bereits eine `@cap-history`-Zeile hat, nicht erneut anhängen, sondern in-place updaten |
-| AC-3 | planned | Memory-Pipeline MUSS Build-Output explizit ausschließen (`.next/`, `.turbo/`, `.cache/`, `dist/`, `coverage/`, `out/`) selbst wenn der user `.gitignore` lokal überschrieben hat (defense-in-depth) |
-| AC-4 | planned | Bundle-Detection: Files mit Line-Numbers >5000 ODER Bundle-typischen Pfad-Patterns (`__*.js`, `chunks/`) MÜSSEN als Bundle erkannt und ausgeschlossen werden |
-| AC-5 | planned | `cap:memory prune --gitignored` Subcommand MUSS bestehende Memory-Einträge gegen den aktuellen Scope-Filter validieren und gefilterte Einträge im Dry-Run anzeigen + auf `--apply` löschen (für nachträgliches Aufräumen wie GoetzeInvest) |
-| AC-6 | planned | Tests MÜSSEN abdecken: scope-filter-aware memory-walk, @cap-history dedup, build-output exclusion, bundle-detection, prune-stale-entries |
+| AC-1 | tested | `cap-annotation-writer.cjs:planFileChanges` MUSS `@cap-history`-Annotations per **tag-name only** matchen (nicht per content-prefix) — pro File darf nur EINE `@cap-history`-Zeile existieren, jede neue Stat ersetzt die alte in-place |
+| AC-2 | tested | `cap-scope-filter.cjs` MUSS um Bundle-Detection erweitert werden: ein File-Path-Pattern-Match auf `**/chunks/**`, `**/__*._*.js`, `**/[root-of-*]*.js` ODER eine Line-Count-Heuristik (>5000 Zeilen) markiert das File als Bundle und schließt es aus — defense-in-depth gegen gitignore-misses |
+| AC-3 | tested | `cap:memory prune --gitignored` Subcommand MUSS implementiert sein. Liest jede Memory-Datei (V5: `decisions.md`/`pitfalls.md`/`patterns.md`/`hotspots.md`; V6: `features/*.md`, `platform/*.md`), parsed die `Files:` / `key_files:` Pfade, und entfernt Einträge deren Pfad jetzt vom Scope-Filter ausgeschlossen wäre. Default: Dry-Run mit Diff. `--apply` schreibt atomic |
+| AC-4 | tested | Verified (no-op): F-085 protected `scanner.scanDirectory`, das ist der einzige Source-Walk im Memory-Pipeline-Hot-Path (`hooks/cap-memory.js:130`). Die übrigen `readdirSync` calls in `cap-memory-bridge`/`cap-memory-migrate`/`cap-pattern-pipeline`/`cap-snapshot-linkage`/`cap-memory-prune` walken interne `.cap/`-Dirs und brauchen keinen Scope-Filter |
+| AC-5 | tested | Tests MÜSSEN abdecken: dedup nach Stat-Update (gleicher tag, andere counts → in-place update), bundle-detection für `chunks/` + line-count, prune-gitignored dry-run + apply, no-regression auf F-085-Tests |
 
 **Files (zu erstellen/anzupassen):**
-- `cap/bin/lib/cap-memory-bridge.cjs`
-- `cap/bin/lib/cap-memory-engine.cjs`
-- `cap/bin/lib/cap-pattern-pipeline.cjs`
-- `cap/bin/lib/cap-snapshot-linkage.cjs`
-- `cap/bin/lib/cap-memory-prune.cjs`
-- `tests/cap-memory-pipeline-scope.test.cjs` (neu)
+- `cap/bin/lib/cap-annotation-writer.cjs` (dedup fix)
+- `cap/bin/lib/cap-scope-filter.cjs` (bundle-detection extension)
+- `cap/bin/lib/cap-memory-prune.cjs` (--gitignored subcommand)
+- `commands/cap/memory.md` (Doku der neuen Flags)
+- `tests/cap-annotation-writer-dedup.test.cjs` (neu)
+- `tests/cap-scope-filter-bundle.test.cjs` (neu)
+- `tests/cap-memory-prune-gitignored.test.cjs` (neu)
 
 ### F-087: Type-Safety Gaps in Migrate-Tags & Snapshots on Monorepos [planned]
 
@@ -1667,4 +1671,4 @@ Beide Bugs sind nur durch Re-Run "verschwunden" — vermutlich race-condition-ar
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T16:25:00.000Z*
+*Last updated: 2026-05-07T16:55:00.000Z*
