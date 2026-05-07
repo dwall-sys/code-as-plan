@@ -449,4 +449,47 @@ describe('hooks/hooks.json (plugin-mode hook registration)', () => {
     assert.ok(fs.existsSync(path.join(ROOT, 'hooks', 'dist', 'cap-memory.js')), 'hooks/dist/cap-memory.js must exist');
     assert.ok(fs.existsSync(path.join(ROOT, 'hooks', 'dist', 'cap-tag-observer.js')), 'hooks/dist/cap-tag-observer.js must exist');
   });
+
+  // @cap-feature(feature:F-084) Stage-2 #1 fix — SessionStart hook registration.
+  // @cap-decision(F-084/iter1) Stage-2 #1 fix: SessionStart hook registered in plugin manifest + dist build + manifest-test.
+  //   "lesson-13" pin: any feature that ships a hook MUST include a manifest-test
+  //   asserting (a) SessionStart entry exists, (b) it points at the right dist
+  //   path, (c) the dist file actually exists on disk. Without all three, the
+  //   hook is unreachable for npx-installed users.
+  it('registers SessionStart for cap-version-check.js (F-084 lesson-13)', () => {
+    const hooks = JSON.parse(fs.readFileSync(HOOKS_MANIFEST, 'utf8'));
+    assert.ok(Array.isArray(hooks.hooks.SessionStart),
+      'hooks.SessionStart must be an array (F-084 advisory hook)');
+    assert.ok(hooks.hooks.SessionStart.length > 0,
+      'hooks.SessionStart must contain at least one entry');
+    // Find an entry that references cap-version-check.js.
+    let found = null;
+    for (const group of hooks.hooks.SessionStart) {
+      const inner = Array.isArray(group.hooks) ? group.hooks : [];
+      for (const h of inner) {
+        if (typeof h.command === 'string' && /cap-version-check\.js$/.test(h.command)) {
+          found = h;
+          break;
+        }
+      }
+      if (found) break;
+    }
+    assert.ok(found, 'SessionStart must register cap-version-check.js');
+    assert.match(found.command, /\$\{CLAUDE_PLUGIN_ROOT\}/,
+      'SessionStart cap-version-check command must use ${CLAUDE_PLUGIN_ROOT}');
+    assert.match(found.command, /\/hooks\/dist\/cap-version-check\.js$/,
+      'SessionStart cap-version-check command must point at hooks/dist/');
+    // Timeout is recommended for SessionStart (non-blocking <2s budget).
+    if ('timeout' in found) {
+      assert.equal(typeof found.timeout, 'number');
+      assert.ok(found.timeout > 0 && found.timeout <= 5,
+        `SessionStart timeout should be 1-5s (got ${found.timeout})`);
+    }
+  });
+
+  it('SessionStart cap-version-check.js dist artifact exists (F-084)', () => {
+    const distFile = path.join(ROOT, 'hooks', 'dist', 'cap-version-check.js');
+    assert.ok(fs.existsSync(distFile),
+      'hooks/dist/cap-version-check.js must exist after build (lesson-13: dist-build must include any hook registered in hooks.json)');
+  });
 });

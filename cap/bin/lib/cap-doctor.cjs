@@ -125,6 +125,11 @@ const CAP_MODULE_MANIFEST = [
   'cap-ui-mind-map.cjs',
   // @cap-feature(feature:F-067) CAP-UI Thread + Cluster Navigator module (extracted from cap-ui.cjs during F-068 hand-off).
   'cap-ui-thread-nav.cjs',
+  // @cap-feature(feature:F-084) Project Onboarding & Migration Orchestrator —
+  //   planner + state-manager for /cap:upgrade. Companion markdown command at
+  //   commands/cap/upgrade.md and SessionStart-hook at hooks/cap-version-check.js.
+  // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
+  'cap-upgrade.cjs',
   'commands.cjs',
   'config.cjs',
   'convention-reader.cjs',

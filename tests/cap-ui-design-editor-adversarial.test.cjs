@@ -894,7 +894,8 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added (shared-constants de-dup).
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs (F-080) + cap-snapshot-linkage.cjs (F-079)
     //   which were on-disk but missing from the manifest).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 88);
+    // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 89);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));

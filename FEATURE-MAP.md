@@ -1543,6 +1543,31 @@
 - `tests/cap-doctor-integrity.test.cjs`
 - `tests/cap-ui-design-editor-adversarial.test.cjs`
 
+### F-084: Project Onboarding & Migration Orchestrator [tested]
+
+**Depends on:** F-076, F-077, F-078, F-079, F-080
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Neuer Command `/cap:upgrade` MUSS die zuletzt aktive CAP-Version aus `.cap/version` lesen (oder absent → first-run/brownfield-onboarding) und alle nötigen Migrationen sequenziell planen |
+| AC-2 | tested | 7-stage migration pipeline: doctor → init-or-skip → annotate → migrate-tags → memory-bootstrap → migrate-snapshots → refresh-docs. Jeder stage MUSS idempotent sein und einzeln skip-able |
+| AC-3 | tested | Dry-run UX MUSS Plan vor execution zeigen mit per-stage delta-summary (was wird hinzugefügt/geändert); user-confirm gate vor jedem stage; `--non-interactive` flag für CI bypassed mit safe defaults. *iter1: per-stage delta-probes implemented (read-only, <2s combined) — surfaced via plan[].delta + summarizePlan "delta:" line.* |
+| AC-4 | tested | Atomic per stage — failed stage MUSS isoliert sein (nur dieser stage skipped, nachfolgende laufen weiter); `.cap/upgrade.log` dokumentiert success/failure pro stage mit timestamp + reason |
+| AC-5 | tested | `.cap/version` marker MUSS installed CAP version + completed-stages array + last-run-timestamp persistieren (atomic write) nach erfolgreichem completion |
+| AC-6 | tested | SessionStart-hook MUSS version-mismatch detecten und advisory message emitten (`Run /cap:upgrade to migrate to CAP X.Y.Z`); non-blocking, max 1× pro Session, suppressible via `.cap/config.json:upgrade.notify=false`. *iter1: hook auto-registered via hooks/hooks.json + cap-version-check.js included in scripts/build-hooks.js HOOKS_TO_COPY + plugin-manifest test pins both (lesson-13).* |
+| AC-7 | tested | Tests MÜSSEN abdecken: fresh-init (kein `.cap/`), mid-version-upgrade (.cap/version vorhanden mit alter Version), partial-state-recovery (vorheriger run abgebrochen), version-marker-corruption, non-interactive mode, per-stage failure-isolation, hook advisory throttling |
+
+**Files:**
+- `cap/bin/lib/cap-upgrade.cjs`
+- `commands/cap/upgrade.md`
+- `hooks/cap-version-check.js`
+- `tests/cap-upgrade.test.cjs`
+- `tests/cap-upgrade-adversarial.test.cjs`
+- `tests/cap-upgrade-e2e.test.cjs`
+- `cap/bin/lib/cap-doctor.cjs`
+- `tests/cap-doctor-integrity.test.cjs`
+- `tests/cap-ui-design-editor-adversarial.test.cjs`
+
 ## Legend
 
 | State | Meaning |
@@ -1553,4 +1578,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T01:05:56.457Z*
+*Last updated: 2026-05-07T12:50:50.905Z*

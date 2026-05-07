@@ -16,6 +16,10 @@ const HOOKS_DIR = path.join(__dirname, '..', 'hooks');
 const DIST_DIR = path.join(HOOKS_DIR, 'dist');
 
 // Hooks to copy (pure Node.js, no bundling needed)
+// @cap-decision(F-084/iter1) Stage-2 #1 fix: SessionStart hook registered in plugin manifest + dist build + manifest-test.
+//   `cap-version-check.js` MUST be in this list so the dist build copies it; otherwise
+//   hooks/hooks.json points at a missing file for npx-installed users (lesson-13: any
+//   feature shipping a hook MUST register it in BOTH hooks.json AND HOOKS_TO_COPY).
 const HOOKS_TO_COPY = [
   'cap-check-update.js',
   'cap-context-monitor.js',
@@ -25,6 +29,7 @@ const HOOKS_TO_COPY = [
   'cap-prompt-guard.js',
   'cap-statusline.js',
   'cap-tag-observer.js',
+  'cap-version-check.js',
   'cap-workflow-guard.js'
 ];
 
