@@ -38,6 +38,15 @@ describe('build-hooks.js — hook build script', () => {
     assert.ok(content.includes('cap-statusline.js'), 'Should include statusline hook');
   });
 
+  // @cap-feature(feature:F-084) Stage-2 #1 fix — F-084 lesson-13 pin: any hook
+  //   shipped via hooks/hooks.json MUST be in HOOKS_TO_COPY or the dist build
+  //   silently omits it.
+  it('includes cap-version-check.js (F-084 lesson-13)', () => {
+    const content = fs.readFileSync(BUILD_SCRIPT_PATH, 'utf8');
+    assert.ok(content.includes('cap-version-check.js'),
+      'HOOKS_TO_COPY must include cap-version-check.js (F-084 SessionStart hook)');
+  });
+
   it('should have a validateSyntax function that uses vm.Script', () => {
     const content = fs.readFileSync(BUILD_SCRIPT_PATH, 'utf8');
     assert.ok(content.includes('validateSyntax'), 'Should define validateSyntax function');
