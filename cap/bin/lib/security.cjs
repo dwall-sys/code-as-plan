@@ -119,39 +119,49 @@ function requireSafePath(filePath, baseDir, label, opts = {}) {
  *
  * Note: This is defense-in-depth — not a complete solution. The primary defense
  * is proper input/output boundaries in agent prompts.
+ *
+ * @cap-decision(security/word-boundaries) Tightened prompt-injection regexes to
+ *   use \b word-boundaries; eliminates false positive on "contract**act** as the
+ *   feature" pattern that surfaced after F-079 shipped.
+ *
+ * Rule: All patterns whose start or end touches a word-character class (a-zA-Z0-9_)
+ * MUST use \b boundaries to avoid substring false-positives (e.g. "contract" +
+ * "act as", "ignored" matching "ignore"). Patterns bounded by non-word characters
+ * such as <, [, > do not need \b because the punctuation itself is a boundary.
  */
 const INJECTION_PATTERNS = [
   // Direct instruction override attempts
-  /ignore\s+(all\s+)?previous\s+instructions/i,
-  /ignore\s+(all\s+)?above\s+instructions/i,
-  /disregard\s+(all\s+)?previous/i,
-  /forget\s+(all\s+)?(your\s+)?instructions/i,
-  /override\s+(system|previous)\s+(prompt|instructions)/i,
+  /\bignore\s+(all\s+)?previous\s+instructions\b/i,
+  /\bignore\s+(all\s+)?above\s+instructions\b/i,
+  /\bdisregard\s+(all\s+)?previous\b/i,
+  /\bforget\s+(all\s+)?(your\s+)?instructions\b/i,
+  /\boverride\s+(system|previous)\s+(prompt|instructions)\b/i,
 
   // Role/identity manipulation
-  /you\s+are\s+now\s+(?:a|an|the)\s+/i,
-  /act\s+as\s+(?:a|an|the)\s+(?!plan|phase|wave)/i,  // allow "act as a plan"
-  /pretend\s+(?:you(?:'re| are)\s+|to\s+be\s+)/i,
-  /from\s+now\s+on,?\s+you\s+(?:are|will|should|must)/i,
+  /\byou\s+are\s+now\s+(?:a|an|the)\s+/i,
+  /\bact\s+as\s+(?:a|an|the)\s+(?!plan|phase|wave)/i,  // allow "act as a plan"
+  /\bpretend\s+(?:you(?:'re| are)\s+|to\s+be\s+)/i,
+  /\bfrom\s+now\s+on,?\s+you\s+(?:are|will|should|must)\b/i,
 
   // System prompt extraction
-  /(?:print|output|reveal|show|display|repeat)\s+(?:your\s+)?(?:system\s+)?(?:prompt|instructions)/i,
-  /what\s+(?:are|is)\s+your\s+(?:system\s+)?(?:prompt|instructions)/i,
+  /\b(?:print|output|reveal|show|display|repeat)\s+(?:your\s+)?(?:system\s+)?(?:prompt|instructions)\b/i,
+  /\bwhat\s+(?:are|is)\s+your\s+(?:system\s+)?(?:prompt|instructions)\b/i,
 
   // Hidden instruction markers (XML/HTML tags that mimic system messages)
   // Note: <instructions> is excluded — GSD uses it as legitimate prompt structure
   // Requires > to close the tag (not just whitespace) to avoid matching generic types like Promise<User | null>
+  // These are bounded by non-word punctuation (<, [, >) and don't need \b.
   /<\/?(?:system|assistant|human)>/i,
   /\[SYSTEM\]/i,
   /\[INST\]/i,
   /<<\s*SYS\s*>>/i,
 
   // Exfiltration attempts
-  /(?:send|post|fetch|curl|wget)\s+(?:to|from)\s+https?:\/\//i,
-  /(?:base64|btoa|encode)\s+(?:and\s+)?(?:send|exfiltrate|output)/i,
+  /\b(?:send|post|fetch|curl|wget)\s+(?:to|from)\s+https?:\/\//i,
+  /\b(?:base64|btoa|encode)\s+(?:and\s+)?(?:send|exfiltrate|output)\b/i,
 
   // Tool manipulation
-  /(?:run|execute|call|invoke)\s+(?:the\s+)?(?:bash|shell|exec|spawn)\s+(?:tool|command)/i,
+  /\b(?:run|execute|call|invoke)\s+(?:the\s+)?(?:bash|shell|exec|spawn)\s+(?:tool|command)\b/i,
 ];
 
 /**
