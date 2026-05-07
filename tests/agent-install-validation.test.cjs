@@ -7,15 +7,71 @@
  * general-purpose, losing specialized instructions.
  */
 
+// @cap-decision(CI/issue-42 Path-2 PR-2.8+2.9) Migrated runGsdTools spawn
+// callsites to direct in-process calls. Pattern follows tests/commands.test.cjs
+// runCmd helper (PR #55).
+
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { createTempProject, cleanup } = require('./helpers.cjs');
+const {
+  cmdInitExecutePhase,
+  cmdInitPlanPhase,
+  cmdInitQuick,
+} = require('../cap/bin/lib/init.cjs');
+const {
+  cmdValidateHealth,
+  cmdValidateAgents,
+} = require('../cap/bin/lib/verify.cjs');
 
 const AGENTS_DIR_NAME = 'agents';
 const MODEL_PROFILES = require('../cap/bin/lib/model-profiles.cjs').MODEL_PROFILES;
 const EXPECTED_AGENTS = Object.keys(MODEL_PROFILES);
+
+/**
+ * In-process equivalent of runGsdTools that captures stdout, stderr, and
+ * process.exit(). Returns the same {success, output, error} shape.
+ */
+function runCmd(fn) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
 
 /**
  * Create a fake GSD install directory structure that mirrors what the installer
@@ -62,7 +118,7 @@ describe('init commands: agents_installed field (#1371)', () => {
     const agentsDir = path.join(configDir, 'agents');
 
     // Agents already exist in the repo root /agents/ dir which is sibling to cap/
-    const result = runGsdTools('init execute-phase 1 --raw', tmpDir);
+    const result = runCmd(() => cmdInitExecutePhase(tmpDir, '1', true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -77,7 +133,7 @@ describe('init commands: agents_installed field (#1371)', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-setup');
     fs.mkdirSync(phaseDir, { recursive: true });
 
-    const result = runGsdTools('init plan-phase 1 --raw', tmpDir);
+    const result = runCmd(() => cmdInitPlanPhase(tmpDir, '1', true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -90,7 +146,7 @@ describe('init commands: agents_installed field (#1371)', () => {
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-setup');
     fs.mkdirSync(phaseDir, { recursive: true });
 
-    const result = runGsdTools('init execute-phase 1 --raw', tmpDir);
+    const result = runCmd(() => cmdInitExecutePhase(tmpDir, '1', true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -99,7 +155,7 @@ describe('init commands: agents_installed field (#1371)', () => {
   });
 
   test('init quick includes agents_installed field', () => {
-    const result = runGsdTools(['init', 'quick', 'test description', '--raw'], tmpDir);
+    const result = runCmd(() => cmdInitQuick(tmpDir, 'test description', true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -146,7 +202,7 @@ describe('validate health: agent installation check W010 (#1371)', () => {
   test('health check reports healthy when agents are installed (repo layout)', () => {
     // In the repo, agents/ exists as a sibling of cap/, so the
     // health check should find them via the cap-tools.cjs path resolution
-    const result = runGsdTools('validate health --raw', tmpDir);
+    const result = runCmd(() => cmdValidateHealth(tmpDir, { repair: false }, true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -170,7 +226,7 @@ describe('validate agents subcommand (#1371)', () => {
   });
 
   test('validate agents returns status with agent list', () => {
-    const result = runGsdTools('validate agents --raw', tmpDir);
+    const result = runCmd(() => cmdValidateAgents(tmpDir, true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -181,7 +237,7 @@ describe('validate agents subcommand (#1371)', () => {
   });
 
   test('validate agents lists all expected agent types', () => {
-    const result = runGsdTools('validate agents --raw', tmpDir);
+    const result = runCmd(() => cmdValidateAgents(tmpDir, true));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);

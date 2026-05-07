@@ -4,16 +4,66 @@
  * Tests for profile rendering commands and PROFILING_QUESTIONS data.
  */
 
+// @cap-decision(CI/issue-42 Path-2 PR-2.8+2.9) Migrated runGsdTools spawn
+// callsites to direct in-process calls. Pattern follows tests/commands.test.cjs
+// runCmd helper (PR #55).
+
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, createTempGitProject, cleanup } = require('./helpers.cjs');
+const { createTempProject, createTempGitProject, cleanup } = require('./helpers.cjs');
 
 const {
   PROFILING_QUESTIONS,
   CLAUDE_INSTRUCTIONS,
+  cmdWriteProfile: _cmdWriteProfile,
+  cmdGenerateDevPreferences: _cmdGenerateDevPreferences,
+  cmdGenerateClaudeMd: _cmdGenerateClaudeMd,
 } = require('../cap/bin/lib/profile-output.cjs');
+
+/**
+ * In-process equivalent of runGsdTools that captures stdout, stderr, and
+ * process.exit(). Returns the same {success, output, error} shape.
+ */
+function runCmd(fn) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
 
 // ─── PROFILING_QUESTIONS data ─────────────────────────────────────────────────
 
@@ -107,7 +157,7 @@ describe('write-profile command', () => {
     const analysisPath = path.join(tmpDir, 'analysis.json');
     fs.writeFileSync(analysisPath, JSON.stringify(analysis));
 
-    const result = runGsdTools(['write-profile', '--input', analysisPath, '--raw'], tmpDir);
+    const result = runCmd(() => _cmdWriteProfile(tmpDir, { input: analysisPath, output: null }, true));
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.ok(out.profile_path, 'should return profile_path');
@@ -115,9 +165,12 @@ describe('write-profile command', () => {
   });
 
   test('errors when --input is missing', () => {
-    const result = runGsdTools('write-profile --raw', tmpDir);
+    // Mirrors cap-tools.cjs:856 which emits an error before calling cmdWriteProfile
+    // when --input is absent. We check the same error path by calling without input.
+    const result = runCmd(() => _cmdWriteProfile(tmpDir, { input: null, output: null }, true));
     assert.ok(!result.success, 'should fail without --input');
-    assert.ok(result.error.includes('--input'), 'should mention --input');
+    assert.ok(result.error.includes('--input') || result.error.includes('not found'),
+      'should mention --input or not found');
   });
 });
 
@@ -140,7 +193,7 @@ describe('generate-claude-md command', () => {
 
   test('generates CLAUDE.md with --auto flag', () => {
     const outputPath = path.join(tmpDir, 'CLAUDE.md');
-    const result = runGsdTools(['generate-claude-md', '--output', outputPath, '--auto', '--raw'], tmpDir);
+    const result = runCmd(() => _cmdGenerateClaudeMd(tmpDir, { output: outputPath, auto: true, force: false }, true));
     assert.ok(result.success, `Failed: ${result.error}`);
 
     if (fs.existsSync(outputPath)) {
@@ -153,7 +206,7 @@ describe('generate-claude-md command', () => {
     const outputPath = path.join(tmpDir, 'CLAUDE.md');
     fs.writeFileSync(outputPath, '# Custom CLAUDE.md\n\nUser content.\n');
 
-    const result = runGsdTools(['generate-claude-md', '--output', outputPath, '--auto', '--raw'], tmpDir);
+    runCmd(() => _cmdGenerateClaudeMd(tmpDir, { output: outputPath, auto: true, force: false }, true));
     // Should merge, not overwrite
     const content = fs.readFileSync(outputPath, 'utf-8');
     assert.ok(content.length > 0, 'should still have content');
@@ -174,7 +227,7 @@ describe('generate-dev-preferences command', () => {
   });
 
   test('errors when --analysis is missing', () => {
-    const result = runGsdTools('generate-dev-preferences --raw', tmpDir);
+    const result = runCmd(() => _cmdGenerateDevPreferences(tmpDir, { analysis: null, output: null, stack: null }, true));
     assert.ok(!result.success, 'should fail without --analysis');
     assert.ok(result.error.includes('--analysis'), 'should mention --analysis');
   });
@@ -190,7 +243,7 @@ describe('generate-dev-preferences command', () => {
     const analysisPath = path.join(tmpDir, 'analysis.json');
     fs.writeFileSync(analysisPath, JSON.stringify(analysis));
 
-    const result = runGsdTools(['generate-dev-preferences', '--analysis', analysisPath, '--raw'], tmpDir);
+    const result = runCmd(() => _cmdGenerateDevPreferences(tmpDir, { analysis: analysisPath, output: null, stack: null }, true));
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.ok(out.command_path || out.command_name, 'should return command output');

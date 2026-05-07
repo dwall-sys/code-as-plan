@@ -8,13 +8,62 @@
  * - Workflow spawns gsd-phase-researcher for research
  */
 
+// @cap-decision(CI/issue-42 Path-2 PR-2.8+2.9) Migrated runGsdTools spawn
+// callsites to direct in-process calls. Pattern follows tests/commands.test.cjs
+// runCmd helper (PR #55).
+
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { createTempProject, cleanup } = require('./helpers.cjs');
+const { cmdInitQuick } = require('../cap/bin/lib/init.cjs');
+const { cmdVerifyPathExists } = require('../cap/bin/lib/commands.cjs');
 
 const WORKFLOWS_DIR = path.join(__dirname, '..', 'cap', 'workflows');
+
+/**
+ * In-process equivalent of runGsdTools that captures stdout, stderr, and
+ * process.exit(). Returns the same {success, output, error} shape.
+ */
+function runCmd(fn) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
 
 // NOTE: commands/gsd/quick.md was removed during GSD→CAP migration.
 // Command-level tests removed; workflow tests below still apply.
@@ -133,7 +182,7 @@ describe('quick task: research file in task directory', () => {
   });
 
   test('init quick returns valid task_dir for research file placement', () => {
-    const result = runGsdTools('init quick "Add caching layer"', tmpDir);
+    const result = runCmd(() => cmdInitQuick(tmpDir, 'Add caching layer', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -161,10 +210,7 @@ describe('quick task: research file in task directory', () => {
       '# Research\n\nFindings for test task.\n'
     );
 
-    const result = runGsdTools(
-      'verify-path-exists .planning/quick/1-test-task/1-RESEARCH.md',
-      tmpDir
-    );
+    const result = runCmd(() => cmdVerifyPathExists(tmpDir, '.planning/quick/1-test-task/1-RESEARCH.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -176,10 +222,7 @@ describe('quick task: research file in task directory', () => {
     const quickTaskDir = path.join(tmpDir, '.planning', 'quick', '1-test-task');
     fs.mkdirSync(quickTaskDir, { recursive: true });
 
-    const result = runGsdTools(
-      'verify-path-exists .planning/quick/1-test-task/1-RESEARCH.md',
-      tmpDir
-    );
+    const result = runCmd(() => cmdVerifyPathExists(tmpDir, '.planning/quick/1-test-task/1-RESEARCH.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -203,9 +246,8 @@ describe('quick task: research file in task directory', () => {
     }
 
     for (const artifact of artifacts) {
-      const result = runGsdTools(
-        `verify-path-exists .planning/quick/1-add-caching/${artifact}`,
-        tmpDir
+      const result = runCmd(() =>
+        cmdVerifyPathExists(tmpDir, `.planning/quick/1-add-caching/${artifact}`, false)
       );
       assert.ok(result.success, `Command failed for ${artifact}: ${result.error}`);
       const output = JSON.parse(result.output);
