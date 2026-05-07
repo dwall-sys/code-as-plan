@@ -4,3 +4,6 @@ debug/
 
 # Latest review report — overwritten on each cap:review run, not a historical artefact
 REVIEW.md
+
+# F-080 Claude-native bridge cache — derived from ~/.claude/projects/, regenerated on read
+memory/.claude-native-index.json

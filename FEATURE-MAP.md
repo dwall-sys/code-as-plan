@@ -1450,18 +1450,26 @@
 - `tests/cap-snapshot-linkage.test.cjs`
 - `tests/cap-snapshot-linkage-adversarial.test.cjs`
 
-### F-080: Bridge to Claude-native Memory [planned]
+### F-080: Bridge to Claude-native Memory [tested]
 
 **Depends on:** F-076
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | pending | Eine neue Pipeline-Stage `cap/bin/lib/cap-memory-bridge.cjs` muss `~/.claude/projects/<project-slug>/memory/MEMORY.md` ausschließlich lesend konsumieren — keine Writes in das Claude-native-Verzeichnis. |
-| AC-2 | pending | Die Bridge muss einen Cache unter `.cap/memory/.claude-native-index.json` erstellen mit Mtime-basiertem Invalidierungs-Check (kein Re-Parse bei unveränderter Quelldatei). |
-| AC-3 | pending | Fehlendes oder unzugängliches Claude-native-Verzeichnis muss zu silent skip führen (Log-Eintrag auf debug-Level, kein Error, kein Fail). |
-| AC-4 | pending | `/cap:start` und `/cap:status` müssen die Bridge-Daten surface'n im Format `Claude-native erinnert: <bullet-titles für active feature + related features>`. |
-| AC-5 | pending | Surface-Output muss auf max. 5 Bullets pro Run begrenzt sein, priorisiert nach: activeFeature direkt → related_features aus Per-Feature-File → letzte 2 globale Einträge. |
-| AC-6 | pending | Tests müssen mit Fixture-Claude-native-MEMORY.md verifizieren: Parse, Cache-Invalidierung, graceful-skip bei missing dir, Surface-Limitierung. |
+| AC-1 | tested | Eine neue Pipeline-Stage `cap/bin/lib/cap-memory-bridge.cjs` muss `~/.claude/projects/<project-slug>/memory/MEMORY.md` ausschließlich lesend konsumieren — keine Writes in das Claude-native-Verzeichnis. |
+| AC-2 | tested | Die Bridge muss einen Cache unter `.cap/memory/.claude-native-index.json` erstellen mit Mtime-basiertem Invalidierungs-Check (kein Re-Parse bei unveränderter Quelldatei). |
+| AC-3 | tested | Fehlendes oder unzugängliches Claude-native-Verzeichnis muss zu silent skip führen (Log-Eintrag auf debug-Level, kein Error, kein Fail). |
+| AC-4 | tested | `/cap:start` und `/cap:status` müssen die Bridge-Daten surface'n im Format `Claude-native erinnert: <bullet-titles für active feature + related features>`. |
+| AC-5 | tested | Surface-Output muss auf max. 5 Bullets pro Run begrenzt sein, priorisiert nach: activeFeature direkt → related_features aus Per-Feature-File → letzte 2 globale Einträge. |
+| AC-6 | tested | Tests müssen mit Fixture-Claude-native-MEMORY.md verifizieren: Parse, Cache-Invalidierung, graceful-skip bei missing dir, Surface-Limitierung. |
+
+**Files:**
+- `cap/bin/lib/cap-memory-bridge.cjs`
+- `commands/cap/start.md`
+- `commands/cap/status.md`
+- `tests/cap-memory-bridge.test.cjs`
+- `tests/cap-memory-bridge-adversarial.test.cjs`
+- `tests/cap-memory-bridge-e2e.test.cjs`
 
 ### F-081: Extend Feature Map Parser for Multi-Format Support [shipped]
 
@@ -1545,4 +1553,4 @@
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T00:47:27.534Z*
+*Last updated: 2026-05-07T01:05:56.457Z*
