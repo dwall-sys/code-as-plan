@@ -5,14 +5,85 @@
  * init functions and integration with gsd-tools routing.
  */
 
+// @cap-decision(CI/issue-42 Path-2 PR-2.8+2.9) Migrated runGsdTools spawn
+// callsites to direct in-process calls. This is the FINAL Path 2 batch —
+// long-tail across small files. After this PR, the only remaining
+// runGsdTools usage is for CLI-arg-parsing tests (e.g. --pick, --cwd).
+// Pattern follows tests/commands.test.cjs runCmd helper (PR #55). The
+// HOME env override used to sandbox ~/gsd-workspaces lookups is now done
+// by mutating process.env in the runCmd wrapper and restoring on completion.
+
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
-const { runGsdTools, createTempDir, cleanup } = require('./helpers.cjs');
-const { detectChildRepos } = require('../cap/bin/lib/init.cjs');
+const { createTempDir, cleanup } = require('./helpers.cjs');
+const {
+  detectChildRepos,
+  cmdInitNewWorkspace,
+  cmdInitListWorkspaces,
+  cmdInitRemoveWorkspace,
+} = require('../cap/bin/lib/init.cjs');
+
+/**
+ * In-process equivalent of runGsdTools that captures stdout, stderr, and
+ * process.exit(). Optionally overrides process.env entries (e.g. HOME) for
+ * the duration of the call. Returns the same {success, output, error} shape.
+ */
+function runCmd(fn, envOverride = null) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  const savedEnv = {};
+  if (envOverride) {
+    for (const k of Object.keys(envOverride)) {
+      savedEnv[k] = process.env[k];
+      process.env[k] = envOverride[k];
+    }
+  }
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+    if (envOverride) {
+      for (const k of Object.keys(savedEnv)) {
+        if (savedEnv[k] === undefined) delete process.env[k];
+        else process.env[k] = savedEnv[k];
+      }
+    }
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
 
 // ─── detectChildRepos ────────────────────────────────────────────────────────
 
@@ -89,7 +160,7 @@ describe('init new-workspace', () => {
   });
 
   test('returns expected JSON fields', () => {
-    const result = runGsdTools('init new-workspace', tmpDir);
+    const result = runCmd(() => cmdInitNewWorkspace(tmpDir, false));
     assert.ok(result.success, `init failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.ok('default_workspace_base' in data);
@@ -106,14 +177,14 @@ describe('init new-workspace', () => {
     fs.mkdirSync(repo);
     execSync('git init', { cwd: repo, stdio: 'pipe' });
 
-    const result = runGsdTools('init new-workspace', tmpDir);
+    const result = runCmd(() => cmdInitNewWorkspace(tmpDir, false));
     const data = JSON.parse(result.output);
     assert.strictEqual(data.child_repo_count, 1);
     assert.strictEqual(data.child_repos[0].name, 'my-repo');
   });
 
   test('reports no git repo when cwd is not a git repo', () => {
-    const result = runGsdTools('init new-workspace', tmpDir);
+    const result = runCmd(() => cmdInitNewWorkspace(tmpDir, false));
     const data = JSON.parse(result.output);
     assert.strictEqual(data.is_git_repo, false);
   });
@@ -133,7 +204,7 @@ describe('init list-workspaces', () => {
   });
 
   test('returns empty list when no workspaces exist', () => {
-    const result = runGsdTools('init list-workspaces', tmpDir, { HOME: tmpDir });
+    const result = runCmd(() => cmdInitListWorkspaces(tmpDir, false), { HOME: tmpDir });
     assert.ok(result.success, `init failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.workspace_count, 0);
@@ -157,7 +228,7 @@ describe('init list-workspaces', () => {
       '| hr-ui | /tmp/hr-ui | workspace/feature-a | worktree |',
     ].join('\n'));
 
-    const result = runGsdTools('init list-workspaces', tmpDir, { HOME: tmpDir });
+    const result = runCmd(() => cmdInitListWorkspaces(tmpDir, false), { HOME: tmpDir });
     const data = JSON.parse(result.output);
     assert.strictEqual(data.workspace_count, 1);
     assert.strictEqual(data.workspaces[0].name, 'feature-a');
@@ -180,13 +251,13 @@ describe('init remove-workspace', () => {
   });
 
   test('errors when no name provided', () => {
-    const result = runGsdTools('init remove-workspace', tmpDir);
+    const result = runCmd(() => cmdInitRemoveWorkspace(tmpDir, undefined, false));
     assert.strictEqual(result.success, false);
     assert.ok(result.error.includes('workspace name required'));
   });
 
   test('errors when workspace not found', () => {
-    const result = runGsdTools('init remove-workspace nonexistent', tmpDir, { HOME: tmpDir });
+    const result = runCmd(() => cmdInitRemoveWorkspace(tmpDir, 'nonexistent', false), { HOME: tmpDir });
     assert.strictEqual(result.success, false);
     assert.ok(result.error.includes('Workspace not found'));
   });
@@ -208,7 +279,7 @@ describe('init remove-workspace', () => {
       '| api | /tmp/api | workspace/test-ws | clone |',
     ].join('\n'));
 
-    const result = runGsdTools('init remove-workspace test-ws', tmpDir, { HOME: tmpDir });
+    const result = runCmd(() => cmdInitRemoveWorkspace(tmpDir, 'test-ws', false), { HOME: tmpDir });
     assert.ok(result.success, `init failed: ${result.error}`);
     const data = JSON.parse(result.output);
     assert.strictEqual(data.workspace_name, 'test-ws');
