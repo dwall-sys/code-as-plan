@@ -1605,6 +1605,58 @@ Der Fix ist gemeinsam — beide Module brauchen denselben Scope-Filter-Layer. Na
 - `tests/cap-scope-filter.test.cjs`
 - `tests/cap-tag-scanner-scope.test.cjs`
 
+### F-086: Extend Scope Filter to Memory Pipeline [planned]
+
+**Depends on:** F-085
+
+**Motivation:** Real-world Befund auf GoetzeInvest (2026-05-07): nach `/cap:upgrade` enthält `apps/hub/.cap/memory/platform/unassigned.md` Decisions extrahiert aus Build-Output und Bundle-Artefakten:
+- `.next/dev/server/chunks/[root-of-the-server]__0p_l47z._.js:326` (Next.js dev-server bundle)
+- `supabase/migrations/015_pe_invite_trigger_fix.sql:12102` (Line-Number 12102 in einer SQL-Datei = concatenated bundle, nicht echter Source)
+
+F-085 hat den Scope-Filter für `cap-tag-scanner.cjs` und `cap-migrate-tags.cjs` zentralisiert, aber die Memory-Pipeline (`cap-memory-bridge.cjs`, `cap-memory-engine.cjs`, `cap-memory-pipeline.cjs`) hat eigenen Code für File-Walks und Tag-Extraktion, der den neuen `cap-scope-filter.cjs` noch nicht konsumiert. Dadurch landen Build-Artefakte trotz `.gitignore` in `decisions.md`/`pitfalls.md`/`patterns.md` und in den per-feature memory files. Die memory-pipeline muss auf denselben Filter umgezogen werden, damit das Versprechen aus F-085 für ALLE CAP-Tools gilt, nicht nur die zwei explizit migrierten.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Alle Memory-Pipeline-Module (`cap-memory-bridge.cjs`, `cap-memory-engine.cjs`, `cap-pattern-pipeline.cjs`, `cap-snapshot-linkage.cjs`, `cap-memory-prune.cjs`) MÜSSEN `cap-scope-filter.cjs:buildScopeFilter` konsumieren — kein eigener File-Walk mehr |
+| AC-2 | planned | `@cap-history`-Auto-Injection MUSS deduplizieren — wenn der Header bereits eine `@cap-history`-Zeile hat, nicht erneut anhängen, sondern in-place updaten |
+| AC-3 | planned | Memory-Pipeline MUSS Build-Output explizit ausschließen (`.next/`, `.turbo/`, `.cache/`, `dist/`, `coverage/`, `out/`) selbst wenn der user `.gitignore` lokal überschrieben hat (defense-in-depth) |
+| AC-4 | planned | Bundle-Detection: Files mit Line-Numbers >5000 ODER Bundle-typischen Pfad-Patterns (`__*.js`, `chunks/`) MÜSSEN als Bundle erkannt und ausgeschlossen werden |
+| AC-5 | planned | `cap:memory prune --gitignored` Subcommand MUSS bestehende Memory-Einträge gegen den aktuellen Scope-Filter validieren und gefilterte Einträge im Dry-Run anzeigen + auf `--apply` löschen (für nachträgliches Aufräumen wie GoetzeInvest) |
+| AC-6 | planned | Tests MÜSSEN abdecken: scope-filter-aware memory-walk, @cap-history dedup, build-output exclusion, bundle-detection, prune-stale-entries |
+
+**Files (zu erstellen/anzupassen):**
+- `cap/bin/lib/cap-memory-bridge.cjs`
+- `cap/bin/lib/cap-memory-engine.cjs`
+- `cap/bin/lib/cap-pattern-pipeline.cjs`
+- `cap/bin/lib/cap-snapshot-linkage.cjs`
+- `cap/bin/lib/cap-memory-prune.cjs`
+- `tests/cap-memory-pipeline-scope.test.cjs` (neu)
+
+### F-087: Type-Safety Gaps in Migrate-Tags & Snapshots on Monorepos [planned]
+
+**Depends on:** F-047, F-079, F-082
+
+**Motivation:** GoetzeInvest `/cap:upgrade` Run am 2026-05-07 hat zwei Crashes in den Migrations-Stages produziert, die sich beim Re-Run selbst geheilt haben:
+
+1. **`cap-migrate-tags`**: `paths[0] argument must be of type string. Received an instance of Object` — `path.resolve`/`path.join` bekam ein Object statt String. Vermutlich monorepo-spezifisch, wo eine Workspace-Struktur Objects liefert wo Single-Repo strings hatte.
+2. **`cap-snapshot-linkage` (processSnapshots)**: `topic.replace is not a function` — `topic` war kein String. Vermutlich frontmatter-Parsing das in monorepo-Kontext einen anderen Type liefert (Array? Object? undefined?).
+
+Beide Bugs sind nur durch Re-Run "verschwunden" — vermutlich race-condition-artiges Verhalten oder lazy-init das beim 2. Run state hatte. Sie sind reproduzierbar nicht-deterministisch, was auf eine schlecht typisierte Schnittstelle hindeutet. Type-Safety-Audit fällig.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | `cap-migrate-tags.cjs` MUSS alle `path.*`-Calls mit `assertString(arg, 'argName')`-Guard absichern und einen klaren `MIGRATE_PATH_TYPE`-Error werfen statt eine kryptische Node-Internal zu propagieren |
+| AC-2 | planned | `cap-snapshot-linkage.cjs:processSnapshots` MUSS frontmatter-Felder (`topic`, `feature`, `prefix`) validieren bevor String-Methoden aufgerufen werden — bei type-mismatch klarer Fehler mit Filename + erwartet-vs-gefunden |
+| AC-3 | planned | Reproducer-Test: simuliere monorepo mit `apps/*` workspaces + `.cap/SESSION.json:activeApp` gesetzt + Snapshot mit fehlendem topic-Feld; planProjectMigration und processSnapshots MÜSSEN mit klaren Errors antworten, nicht intern crashen |
+| AC-4 | planned | Beide Module MÜSSEN idempotent sein: derselbe Input liefert dasselbe Output ohne hidden state. Wenn Re-Run anders Verhalten zeigt als First-Run, ist das ein Bug |
+| AC-5 | planned | Tests MÜSSEN abdecken: missing/wrong-type frontmatter, monorepo workspace path resolution, idempotency assertion (n×Run = identisches Output) |
+
+**Files (zu erstellen/anzupassen):**
+- `cap/bin/lib/cap-migrate-tags.cjs`
+- `cap/bin/lib/cap-snapshot-linkage.cjs`
+- `tests/cap-migrate-tags-monorepo.test.cjs` (neu)
+- `tests/cap-snapshot-linkage-type-safety.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
@@ -1615,4 +1667,4 @@ Der Fix ist gemeinsam — beide Module brauchen denselben Scope-Filter-Layer. Na
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-07T15:50:24.716Z*
+*Last updated: 2026-05-07T16:25:00.000Z*
