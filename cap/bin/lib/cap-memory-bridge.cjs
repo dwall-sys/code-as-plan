@@ -135,6 +135,13 @@ function getProjectSlug(projectRoot) {
 
 // @cap-todo(ac:F-080/AC-1) getClaudeNativeDir builds the absolute path to the Claude-native
 //   auto-memory directory: ~/.claude/projects/<slug>/memory/.
+// @cap-risk(reason:claude-native-layout-dependency) Bridge depends on Claude Code's
+//   ~/.claude/projects/<slug>/memory/ layout convention. If Claude Code changes this (e.g. to
+//   XDG_CONFIG_HOME or a per-user data directory), the bridge will silent-skip but produce no
+//   surface data. The silent-skip contract masks the failure, so a layout change would degrade
+//   without a visible error. Track via test fixture against a known-stable layout assumption;
+//   when Claude Code's filesystem conventions change, surface the new path here and bump the
+//   cache schema version to invalidate stale caches.
 /**
  * @param {string} projectRoot
  * @returns {string} absolute path to ~/.claude/projects/<slug>/memory/
@@ -183,7 +190,13 @@ function getCachePath(projectRoot) {
 // Tolerate both em-dash (—), en-dash (–) and regular hyphen (-) as separator (mirrors the
 // F-082 em-dash lesson). A line that doesn't match the bullet shape is silently skipped —
 // MEMORY.md may have prose interspersed (header notes, comments).
-const MEMORY_MD_LINE_RE = /^-\s*\[([^\]]+)\]\(([^)]+)\)\s*[—–-]\s*(.+?)\s*$/;
+// @cap-decision(F-080/followup) F-080-FIX-B: MEMORY_MD_LINE_RE requires surrounding spaces
+//   for hyphen. Previously the separator class `[—–-]` matched a hyphen with no required
+//   surrounding whitespace, which could ambiguously split titles that contain a hyphen
+//   (e.g. `[Foo-Bar](file.md) Description`). Em-dash (—) and en-dash (–) are multi-byte and
+//   unambiguous, but the hyphen branch now requires `\s+-\s+` for consistency. The em/en-dash
+//   branch retains its existing `\s*[—–]\s*` tolerance to avoid breaking existing fixtures.
+const MEMORY_MD_LINE_RE = /^-\s*\[([^\]]+)\]\(([^)]+)\)(?:\s*[—–]\s*|\s+-\s+)(.+?)\s*$/;
 
 // @cap-todo(ac:F-080/AC-1) parseMemoryMd parses the index file into structured entries.
 //   Frontmatter on sibling files is read via parseSiblingFrontmatter.
@@ -226,13 +239,20 @@ function parseMemoryMd(memoryDir) {
     if (seenFiles.has(fileRel)) continue;  // dedup by file
     seenFiles.add(fileRel);
     const sibling = parseSiblingFrontmatter(memoryDir, fileRel);
+    // @cap-decision(F-080/followup) F-080-FIX-A: _safeForOutput at parse-time, not surface-time.
+    //   Previously only entry titles were sanitized (at the surface step). Hook + description
+    //   strings flowed through unsanitized into entries[]. Today only formatSurface consumes
+    //   entries (and it sanitizes titles), so this isn't an active vulnerability — but a future
+    //   caller pulling raw entries (e.g. a verbose mode, debug command, LLM context block) would
+    //   render ANSI bytes verbatim. Sanitize at the storage assembly step so EVERY consumer of
+    //   entries[] gets pre-sanitized data.
     entries.push({
-      title,
+      title: _safeForOutput(title),
       file: fileRel,
-      hook,
+      hook: _safeForOutput(hook),
       type: sibling.type,
       fileMtime: sibling.mtime,
-      description: sibling.description,
+      description: sibling.description == null ? null : _safeForOutput(sibling.description),
     });
   }
   return entries;
@@ -317,13 +337,17 @@ function loadCachedIndex(projectRoot) {
     if (typeof e.title !== 'string' || typeof e.file !== 'string') continue;
     if (RESERVED.has(e.file)) continue;
     if (e.file.includes('/') || e.file.includes('\\') || e.file.includes('..')) continue;
+    // @cap-decision(F-080/followup) F-080-FIX-A: _safeForOutput at parse-time, not surface-time.
+    //   Cache is a derived artifact — but a malicious or corrupted cache could carry ANSI bytes
+    //   if a previous version (or a third party) wrote them. Sanitize on load symmetrically with
+    //   parseMemoryMd so entries[] are uniformly safe regardless of source path.
     safeEntries.push({
-      title: e.title,
+      title: _safeForOutput(e.title),
       file: e.file,
-      hook: typeof e.hook === 'string' ? e.hook : '',
+      hook: typeof e.hook === 'string' ? _safeForOutput(e.hook) : '',
       type: typeof e.type === 'string' ? e.type : null,
       fileMtime: typeof e.fileMtime === 'string' ? e.fileMtime : null,
-      description: typeof e.description === 'string' ? e.description : null,
+      description: typeof e.description === 'string' ? _safeForOutput(e.description) : null,
     });
   }
   return {
@@ -426,13 +450,61 @@ function refreshCache(projectRoot) {
   const tmpPath = `${cachePath}.tmp.${process.pid}.${Date.now()}`;
   try {
     fs.writeFileSync(tmpPath, JSON.stringify(cachePayload, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, cachePath);
-  } catch (_e) {
+    _renameWithRetry(tmpPath, cachePath);
+  } catch (e) {
     // Cleanup tmp file if it exists.
     try { fs.unlinkSync(tmpPath); } catch (_e2) { /* ignore */ }
+    // @cap-decision(F-080/followup) F-080-FIX-C: rename retry on EBUSY/EPERM with backoff.
+    //   When _renameWithRetry exhausts its retries on Windows EBUSY/EPERM, surface a single
+    //   warning to stderr (NOT silent-skip — this is a write failure, deserves visibility).
+    //   Other rename errors fall through to the same warning path. The hook caller still
+    //   continues normally; the "best-effort, never block" contract is upheld via the
+    //   non-throwing return value.
+    if (e && (e.code === 'EBUSY' || e.code === 'EPERM')) {
+      try {
+        process.stderr.write(`cap-memory-bridge: cache write failed after retries (${e.code}); continuing with stale cache\n`);
+      } catch (_e3) { /* ignore */ }
+    }
     return { written: false, entries, reason: 'cache-write-failed' };
   }
   return { written: true, entries, reason: 'wrote' };
+}
+
+// @cap-decision(F-080/followup) F-080-FIX-C: rename retry on EBUSY/EPERM with backoff.
+//   On Windows, fs.renameSync can fail with EBUSY (target file open by another process) or
+//   EPERM (UAC + concurrent reader). Retry up to 3 times with backoff (50ms, 100ms, 200ms).
+//   If the final attempt still fails, throw — the caller logs a warning and discards the tmp.
+//   Other error codes (ENOENT, EACCES on the directory, etc.) throw immediately on first try
+//   because retry won't help and the caller has its own cleanup path.
+// @cap-risk(reason:sync-backoff-blocks-event-loop) The backoff uses Atomics.wait on a fresh
+//   Int32Array as a sync sleep primitive. This is acceptable here because (a) refreshCache is
+//   already a synchronous filesystem operation, (b) the maximum total wait is 350ms, and
+//   (c) the call site is hook-driven, not user-interactive.
+function _renameWithRetry(srcPath, destPath) {
+  const RETRYABLE = new Set(['EBUSY', 'EPERM']);
+  const backoffsMs = [50, 100, 200];
+  let lastErr = null;
+  for (let attempt = 0; attempt <= backoffsMs.length; attempt++) {
+    try {
+      fs.renameSync(srcPath, destPath);
+      return;
+    } catch (e) {
+      lastErr = e;
+      if (!e || !RETRYABLE.has(e.code)) throw e;
+      if (attempt === backoffsMs.length) break;
+      // Sync sleep: Atomics.wait on a fresh shared int32 — guaranteed to time out.
+      try {
+        const buf = new Int32Array(new SharedArrayBuffer(4));
+        Atomics.wait(buf, 0, 0, backoffsMs[attempt]);
+      } catch (_e) {
+        // SharedArrayBuffer / Atomics may be unavailable in some sandboxed environments —
+        // fall back to a busy-loop. Bounded by the same backoff window.
+        const deadline = Date.now() + backoffsMs[attempt];
+        while (Date.now() < deadline) { /* spin */ }
+      }
+    }
+  }
+  throw lastErr;
 }
 
 // -------- Bridge data assembly --------
@@ -688,4 +760,5 @@ module.exports = {
   // Test seams
   _readRelatedFeatures,
   _safeForOutput,
+  _renameWithRetry,
 };

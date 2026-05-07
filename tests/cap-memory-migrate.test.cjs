@@ -680,6 +680,63 @@ describe('AC-5: Classifier priority', () => {
     const decision = classifySnapshot(snap, ctx);
     assert.equal(decision.destination, 'unassigned');
   });
+
+  // @cap-decision(F-079/followup) F-079-FIX-D: explicit secondary sort for tie-break determinism.
+  //   Pin: classifySnapshot must produce identical output across 100 random shuffles of the
+  //   featureState input (which seeds a Map). The previous implementation relied implicitly on
+  //   Map iteration order + V8 stable sort. Now the explicit `featureId.localeCompare` secondary
+  //   sort key locks the contract — even if a future refactor uses a different container.
+  it('F-079-FIX-D: deterministic tie-break across 100 random shuffles of equally-close transitions', () => {
+    // 5 features, all with the SAME transitionAt — guarantees every candidate has dh = 0 and
+    // forces the secondary sort to kick in for every classifySnapshot call.
+    const transitionAt = '2026-05-06T00:00:00.000Z';
+    const featureIds = ['F-079', 'F-070', 'F-074', 'F-077', 'F-061'];
+    const snap = {
+      fileName: 'x.md', sourcePath: '/x/x.md', feature: null,
+      date: transitionAt, title: 'no F-id in title', bodyHash: 'h',
+    };
+
+    // First run: insertion order = featureIds as-given (call this the reference).
+    const refState = new Map();
+    for (const fid of featureIds) refState.set(fid, { state: 'shipped', transitionAt });
+    const refDecision = classifySnapshot(snap, {
+      features: [], fileToFeatureId: new Map(), featureState: refState,
+    });
+    assert.equal(refDecision.destination, 'feature', 'all candidates within window → feature destination');
+    // Expected first feature is the lex-smallest: 'F-061'.
+    assert.equal(refDecision.featureId, 'F-061', 'lex-smallest featureId wins on tie');
+    // Multi-candidate path emits top-3 candidates ordered by the same comparator.
+    assert.ok(Array.isArray(refDecision.candidates), 'candidates array surfaced');
+    const refCandidateOrder = refDecision.candidates.map((c) => c.featureId).join(',');
+
+    // 100 random shuffles. Each shuffle changes the Map insertion order; the secondary sort
+    // must produce the same top-1 + same top-3 ordering every time.
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    for (let trial = 0; trial < 100; trial++) {
+      const shuffled = shuffle(featureIds);
+      const state = new Map();
+      for (const fid of shuffled) state.set(fid, { state: 'shipped', transitionAt });
+      const dec = classifySnapshot(snap, {
+        features: [], fileToFeatureId: new Map(), featureState: state,
+      });
+      assert.equal(
+        dec.featureId, refDecision.featureId,
+        `trial ${trial}: top-1 featureId differed under shuffle ${shuffled.join(',')}`
+      );
+      const order = dec.candidates.map((c) => c.featureId).join(',');
+      assert.equal(
+        order, refCandidateOrder,
+        `trial ${trial}: candidate ordering drifted under shuffle ${shuffled.join(',')}`
+      );
+    }
+  });
 });
 
 // --- AC-6: Interactive prompt ---

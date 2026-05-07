@@ -406,11 +406,16 @@ function resolveLinkageOptions(projectRoot, options) {
   }
 
   // AC-3: no activeFeature → soft-warn + unassigned.
+  // @cap-decision(F-079/followup) F-079-FIX-A: warning rephrase to only mention real CLI flags.
+  //   Previously the warning advertised `--feature/--platform/--unassigned`, but `--feature`
+  //   is NOT a real CLI flag — it was renamed to the `_explicitFeatureOverride` test-seam in
+  //   F-079/iter1 to keep the public CLI surface aligned with AC-2 (exactly two flags). The
+  //   warning text now only mentions the actual user-facing flags.
   return {
     kind: 'unassigned',
     featureId: null,
     topic: null,
-    warning: 'cap:save: no activeFeature set in SESSION.json and no --feature/--platform/--unassigned flag; snapshot will be saved without linkage',
+    warning: 'cap:save: no activeFeature set in SESSION.json and no --platform/--unassigned flag; snapshot will be saved without linkage',
     frontmatterPatch: {},
   };
 }

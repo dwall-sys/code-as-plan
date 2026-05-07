@@ -44,6 +44,12 @@ const CAP_MODULE_MANIFEST = [
   'cap-divergence-detector.cjs',
   'cap-doctor.cjs',
   'cap-feature-map.cjs',
+  // @cap-feature(feature:F-083) Shared internals module — hosts constants/primitives both
+  //   cap-feature-map.cjs and cap-feature-map-monorepo.cjs need without forcing a lazy-require
+  //   just to read a string literal.
+  // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs
+  //   was added (de-duplicates `FEATURE_MAP_FILE` between core and monorepo modules).
+  'cap-feature-map-internals.cjs',
   // @cap-feature(feature:F-083) Monorepo aggregation module extracted from cap-feature-map.cjs.
   // @cap-decision(F-083) Bumped 84 -> 85 when cap-feature-map-monorepo.cjs was added.
   'cap-feature-map-monorepo.cjs',
@@ -58,6 +64,10 @@ const CAP_MODULE_MANIFEST = [
   'cap-learning-signals.cjs',
   'cap-loader.cjs',
   'cap-logger.cjs',
+  // @cap-feature(feature:F-080) Bridge to Claude-native Memory — read-only consumer of ~/.claude/projects/<slug>/memory/.
+  // @cap-decision(F-083/followup) Manifest sync: cap-memory-bridge.cjs (F-080) was on disk but missing from the manifest;
+  //   added during the F-083-FIX-A internals extraction work to keep the on-disk-vs-manifest contract green.
+  'cap-memory-bridge.cjs',
   'cap-memory-confidence.cjs',
   'cap-memory-dir.cjs',
   'cap-memory-engine.cjs',
@@ -91,6 +101,10 @@ const CAP_MODULE_MANIFEST = [
   'cap-semantic-pipeline.cjs',
   'cap-session-extract.cjs',
   'cap-session.cjs',
+  // @cap-feature(feature:F-079) Wire Snapshot Linkage to Features and Platform — resolveLinkageOptions + processSnapshots.
+  // @cap-decision(F-083/followup) Manifest sync: cap-snapshot-linkage.cjs (F-079) was on disk but missing from the manifest;
+  //   added during the F-083-FIX-A internals extraction work to keep the on-disk-vs-manifest contract green.
+  'cap-snapshot-linkage.cjs',
   'cap-stack-docs.cjs',
   'cap-tag-observer.cjs',
   'cap-tag-scanner.cjs',
