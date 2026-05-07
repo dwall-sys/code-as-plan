@@ -4,6 +4,77 @@ All notable changes to CAP (Code as Plan) will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [6.0.0] - 2026-05-07
+
+Major release: V5 Self-Learning Stack + V6 Memory Foundation + V6.1 Format-Tolerance + V6.2 Onboarding-Orchestrator. Closes the gap between code and project knowledge — every decision, pitfall, and pattern lives in a structured memory layer that agents consume automatically.
+
+### Added — V5: Self-Learning Stack
+
+- **Token Telemetry (F-061)** — per-session token counts, agent-spawn-times, tool-call-rates, error-rates. Observability foundation for the learning loop.
+- **Learning Signal Collection (F-070)** — subprocess-hook-state via persistent ledger in `.cap/learning/signals.jsonl`. E2E spawnSync-Tests for hook-state-leak detection.
+- **Pattern Extraction (F-071)** — heuristic-layer + LLM-layer (via Skill-Briefing-Pattern, no SDK). Extracts recurring patterns from session signals.
+- **Two-Layer Fitness Score (F-072)** — statistical (success-rate over N runs) + semantic (LLM-judge). 3-layer determinism probes via @cap-risk pattern.
+- **Pattern Review (F-073)** — manual `cap:learn` gate for patterns above confidence threshold. Promote / reject / defer; promoted patterns persisted to `.cap/learning/applied-state.json`.
+- **Pattern Unlearn (F-074)** — auto-retract on 3 consecutive fitness drops. Defense-in-depth at git-modules, atomic-write for runtime-config, sandbox-discipline pinned.
+- **Trust-Mode Configuration (F-075)** — config slot for trust-level governance.
+
+### Added — V6: Memory Foundation
+
+- **Per-Feature Memory Format (F-076)** — `.cap/memory/F-NNN.md` files with frontmatter + Auto/Manual-block split. Auto-block is reproducible (pipeline can re-generate); Manual-block is user-authored and never overwritten. Round-trip byte-identical.
+- **V6 Memory Migration Tool (F-077)** — hybrid classifier with atomic writes + dry-run UX. Title-prefix-heuristic with occurrence-threshold (D7) for legacy → V6 migration.
+- **Platform-Bucket for Cross-Cutting Decisions (F-078)** — `.cap/memory/platform/<topic>.md` for decisions that don't belong to a single feature. Explicit-only promotion via `@cap-decision platform:<topic>` (no auto-promotion). Extends-resolver with cycle-detection (full chain in error message). Subsystem-checklists at `platform/checklists/<subsystem>.md`.
+
+### Added — V6 Konsumenten
+
+- **Snapshot-Linkage to Features and Platform (F-079)** — `cap:save` reads `activeFeature` from SESSION.json by default; flags `--unassigned` and `--platform=<topic>` for explicit targeting. Memory pipeline references snapshots in Auto-block under `linked_snapshots` section, idempotent re-run. Orphan snapshots aggregated under `platform/snapshots-unassigned.md`.
+- **Bridge to Claude-native Memory (F-080)** — read-only consumer of `~/.claude/projects/<slug>/memory/MEMORY.md`. Cache at `.cap/memory/.claude-native-index.json` with mtime-invalidation. `/cap:start` and `/cap:status` surface up to 5 prioritized bullets per active feature (3-tier priority: activeFeature direct → related_features → globals). Hard read-only contract pinned by stat/sha probe in tests.
+
+### Added — V6.1: Format-Tolerance + Monorepo
+
+- **Multi-Format Parser (F-081)** — long-form feature IDs (`F-HUB-AUTH`, `F-PAYMENT-CHECKOUT`), bullet-style ACs (`- [ ] AC-1: Description`), per-block format-detection, `.cap/config.json:featureMapStyle` override, safe-mode opt-in (`{safe: true}`) for non-throwing duplicate handling.
+- **Monorepo Aggregation (F-082)** — hard contract `### Rescoped Feature Maps` header lists sub-app paths; opt-in directory walk via `featureMaps.discover: "auto"|"table-only"`. Cross-sub-app resilience: parseError in one sub-app no longer blocks healthy others. Header-separator tolerance: colon, em-dash, en-dash, hyphen-with-whitespace.
+- **Monorepo Module Extraction (F-083)** — refactor: `cap-feature-map.cjs` 2336 → 1495 LOC; new `cap-feature-map-monorepo.cjs` (882 LOC) holds aggregation concerns. Lazy-require cycle-resolution with identity-preservation. Zero behavior change.
+
+### Added — V6.2: Onboarding-Orchestrator
+
+- **`/cap:upgrade` Command (F-084)** — single command for first-run onboarding in existing repos OR after CAP major-update. 7-stage idempotent pipeline: doctor → init-or-skip → annotate → migrate-tags → memory-bootstrap → migrate-snapshots → refresh-docs. Dry-run-first UX with per-stage delta-probes (read-only, <2s combined). User-confirm gate per stage; `--non-interactive` for CI; `--skip-stages=…`; `--dry-run-only`; `--force-rerun`.
+- **`.cap/version` Marker** — atomic-written marker tracks installed CAP version + completed-stages + last-run timestamp. Re-run after CAP update detects only missing migrations.
+- **`.cap/upgrade.log`** — JSONL audit-trail, one line per stage attempt with timestamp + success/failure + reason.
+- **SessionStart Version-Check Hook** — non-blocking advisory at session start when version mismatch detected. Max 1× per session via `.cap/.session-advisories.json` mtime throttle. Suppressible via `.cap/config.json:upgrade.notify=false`.
+
+### Added — Quality &amp; Infrastructure
+
+- **F-082 post-ship hardening** — 4 micro-fixes (cross-sub-app blast radius, partial-write-logging, ANSI-defense in console.warn, addFeature asymmetry doc).
+- **CI Path 2 — 552 spawnSync→in-process migrations** across 14 test files (commands, state, config, init, phase, verify-health, workstream, workspace, agent-skills, profile-output, quick-research, agent-install-validation, claude-md, plus long-tail). 2-30× speedup per file on plain `npm test` runs.
+- **Security regex word-boundaries** — 12 of 18 prompt-injection patterns tightened with `\b` boundaries to eliminate substring false-positives (e.g. `contract**act** as` no longer fires the `act\s+as` pattern).
+- **Empirical CI #42 documentation** — Path 1 (drop `--experimental-test-isolation=none`) tested 4× and rejected (native pre/post Path 2 + c8 + Node 22/23/24/25 sweep). Root cause is Node's worker-coverage-aggregator, not subprocess fixtures. Documented in `scripts/run-tests.cjs` for future investigators.
+
+### Added — Stage-2 Class Lessons (12 patterns, applied upfront on F-080+)
+
+Proto-pollution defense · ANSI-injection defense at every user-controlled interpolation site · path-traversal (slug-regex, NUL-bytes, traversal) · silent-skip is REAL silent (capture stdout+stderr) · cache TOCTOU benign + documented · atomic writes via tmpfile+rename · round-trip byte-identity · surface-limit hard-cap (not best-effort) · priority tie-break determinism · missing/empty/malformed input graceful handling · realistic fixtures (mkdtempSync, no synthetic-only blindspots) · read-only contracts pinned in tests.
+
+### Changed
+
+- **Memory architecture** — from flat per-thread graph (V4) to structured wissensgraph with per-feature/platform/checklists/snapshots/claude-native bridge.
+- **`cap-feature-map.cjs` split** — monorepo concerns moved to dedicated module; `cap-feature-map-internals.cjs` holds shared constants.
+- **`scripts/run-tests.cjs`** — `@cap-decision(CI/issue-42)` block documents 4× Path 1 rejection with measurements.
+
+### Fixed
+
+- **F-082 em-dash header-separator regression** — synthetic fixtures had only colon-separator; real-world GoetzeInvest uses em-dash. Iter-2 fix widens `featureHeaderRE` to accept colon, em-dash, en-dash, hyphen-with-whitespace.
+- **`prompt-injection-scan` false-positive** on `cap-snapshot-linkage.cjs:692` (substring `contract**act** as` matched `act\s+as`).
+- **CI timeout** raised 10 → 20 minutes (bridge fix while real CI #42 investigation ran).
+
+### Migration Path
+
+For users on v4.x or v5.x: run `/cap:upgrade` once. The orchestrator detects your state, plans only the missing migrations, and atomically applies them. No manual command sequencing needed.
+
+For first-time users in existing brownfield projects: same — `/cap:upgrade` works as onboarding entry-point.
+
+### Documentation
+
+- **`docs/CAP-STATUS-UND-MIGRATION.html`** — comprehensive single-file HTML status snapshot covering architecture, all V5/V6/V6.1/V6.2 features, workflows, best practices, anti-patterns, and step-by-step migration guide for existing projects.
+
 ## [4.0.0] - 2026-04-06
 
 ### Added
