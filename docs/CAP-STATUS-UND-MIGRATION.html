@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAP — Status, Architektur, Workflows, Migration · 2026-05-07</title>
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --bg: #fafafa;
+    --muted: #6c6c6c;
+    --accent: #0066cc;
+    --accent-soft: #e8f1fb;
+    --warn: #b04d00;
+    --warn-soft: #fcf2e8;
+    --ok: #1d6b3a;
+    --ok-soft: #e8f5ec;
+    --danger: #a31515;
+    --danger-soft: #fbecec;
+    --code-bg: #f4f4f4;
+    --border: #e5e5e5;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .layout { display: flex; max-width: 1280px; margin: 0 auto; }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    width: 280px;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 24px 16px;
+    border-right: 1px solid var(--border);
+    background: #fff;
+    font-size: 13px;
+  }
+  nav.toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-top: 0; }
+  nav.toc ol { padding-left: 20px; margin: 0; }
+  nav.toc ol ol { margin: 4px 0 8px; padding-left: 16px; font-size: 12px; }
+  nav.toc a { color: var(--fg); text-decoration: none; }
+  nav.toc a:hover { color: var(--accent); }
+  main { flex: 1; padding: 40px 48px; max-width: 880px; }
+  h1 { font-size: 32px; margin: 0 0 8px; line-height: 1.2; }
+  h1 + .subtitle { color: var(--muted); margin-bottom: 32px; font-size: 15px; }
+  h2 { font-size: 24px; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); }
+  h3 { font-size: 18px; margin-top: 32px; }
+  h4 { font-size: 15px; margin-top: 24px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { background: var(--code-bg); padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.5; border: 1px solid var(--border); }
+  pre code { background: transparent; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { background: #f0f0f0; font-weight: 600; }
+  tbody tr:hover { background: #fafafa; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; vertical-align: middle; }
+  .badge-shipped { background: var(--ok-soft); color: var(--ok); }
+  .badge-tested { background: var(--accent-soft); color: var(--accent); }
+  .badge-prototyped { background: var(--warn-soft); color: var(--warn); }
+  .badge-planned { background: #f0f0f0; color: var(--muted); }
+  .callout {
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-left: 3px solid;
+    border-radius: 0 4px 4px 0;
+    font-size: 14px;
+  }
+  .callout-info { background: var(--accent-soft); border-color: var(--accent); }
+  .callout-warn { background: var(--warn-soft); border-color: var(--warn); }
+  .callout-ok { background: var(--ok-soft); border-color: var(--ok); }
+  .callout-danger { background: var(--danger-soft); border-color: var(--danger); }
+  .callout strong { display: block; margin-bottom: 4px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .card { background: #fff; padding: 16px; border-radius: 6px; border: 1px solid var(--border); }
+  .card h4 { margin-top: 0; }
+  .ascii { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 1.4; white-space: pre; background: var(--code-bg); padding: 12px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+  .feature-list { list-style: none; padding-left: 0; }
+  .feature-list li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .feature-list .fid { font-family: monospace; font-weight: 600; min-width: 60px; color: var(--accent); }
+  @media (max-width: 980px) {
+    .layout { flex-direction: column; }
+    nav.toc { position: static; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+    main { padding: 24px; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  .meta-pill { display: inline-block; padding: 2px 10px; background: #fff; border: 1px solid var(--border); border-radius: 12px; font-size: 12px; color: var(--muted); margin-right: 8px; }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+<h2>Inhalt</h2>
+<ol>
+  <li><a href="#was-ist-cap">Was ist CAP?</a></li>
+  <li><a href="#aktueller-stand">Aktueller Stand 2026-05-07</a></li>
+  <li><a href="#architektur">Architektur</a>
+    <ol>
+      <li><a href="#tag-system">Tag-System</a></li>
+      <li><a href="#agenten">5 Agents</a></li>
+      <li><a href="#commands">22 Commands</a></li>
+      <li><a href="#artefakte">Artefakte</a></li>
+    </ol>
+  </li>
+  <li><a href="#workflow">Standard-Workflow</a></li>
+  <li><a href="#memory-system">Memory-System (V6)</a>
+    <ol>
+      <li><a href="#mem-f076">F-076 Per-Feature Format</a></li>
+      <li><a href="#mem-f077">F-077 Migration Tool</a></li>
+      <li><a href="#mem-f078">F-078 Platform-Bucket</a></li>
+      <li><a href="#mem-f079">F-079 Snapshot-Linkage</a></li>
+      <li><a href="#mem-f080">F-080 Claude-native Bridge</a></li>
+    </ol>
+  </li>
+  <li><a href="#self-learning">Self-Learning Stack (V5)</a>
+    <ol>
+      <li><a href="#sl-f061">F-061 Token Telemetry</a></li>
+      <li><a href="#sl-f070">F-070 Signal Collection</a></li>
+      <li><a href="#sl-f071">F-071 Pattern Extraction</a></li>
+      <li><a href="#sl-f072">F-072 Fitness Score</a></li>
+      <li><a href="#sl-f073">F-073 Pattern Review</a></li>
+      <li><a href="#sl-f074">F-074 Pattern Unlearn</a></li>
+    </ol>
+  </li>
+  <li><a href="#monorepo">V6.1 Monorepo + Multi-Format</a></li>
+  <li><a href="#quality-gates">Quality-Gates &amp; Stage-2</a></li>
+  <li><a href="#best-practices">Best Practices</a></li>
+  <li><a href="#anti-patterns">Anti-Patterns</a></li>
+  <li><a href="#migration">Migration nach GoetzeInvest</a>
+    <ol>
+      <li><a href="#mig-vorbereitung">Vorbereitung</a></li>
+      <li><a href="#mig-easy-path"><strong>Easy: /cap:upgrade</strong></a></li>
+      <li><a href="#mig-init">Init &amp; Tag-Migration (manuell)</a></li>
+      <li><a href="#mig-monorepo">Monorepo-Setup</a></li>
+      <li><a href="#mig-memory">Memory-Layer aktivieren</a></li>
+      <li><a href="#mig-validation">Real-World Validierung</a></li>
+    </ol>
+  </li>
+  <li><a href="#offene-fragen">Offene Tracks</a></li>
+  <li><a href="#anhang">Anhang: Feature-Liste</a></li>
+</ol>
+</nav>
+
+<main>
+<h1>CAP — Code as Plan</h1>
+<p class="subtitle">
+<span class="meta-pill">Status: 2026-05-07</span>
+<span class="meta-pill">81 Features</span>
+<span class="meta-pill">59 shipped · 21 tested · 1 prototyped</span>
+<span class="meta-pill">~7100 Tests</span>
+<span class="meta-pill">22 Commands · 6 Agents · 60+ Lib-Module</span>
+</p>
+
+<div class="callout callout-info">
+<strong>Was du in diesem Dokument findest:</strong>
+Vollständiger Status-Snapshot von CAP — Architektur, alle Memory- und Self-Learning-Bricks, Workflows, Best Practices, Anti-Patterns, plus eine konkrete Schritt-für-Schritt-Migrationsanleitung für bestehende Projekte (am Beispiel GoetzeInvest).
+</div>
+
+<h2 id="was-ist-cap">1 · Was ist CAP?</h2>
+
+<p><strong>CAP — Code as Plan</strong> ist ein Developer-Framework für Claude Code, das die <em>Code-First</em>-Philosophie umsetzt. Statt Document-Heavy Planning vorne dranzustellen, wird zuerst Code gebaut. Strukturiertes Planning entsteht <em>aus</em> dem annotierten Code, nicht davor.</p>
+
+<h4>Kern-These</h4>
+<blockquote>
+Die Codebase ist die Spec. Tags wie <code>@cap-feature</code> und <code>@cap-todo</code> verlinken die Implementierung mit der <code>FEATURE-MAP.md</code>. Jede Architektur-Entscheidung lebt als <code>@cap-decision</code> direkt am Ort der Wahrheit.
+</blockquote>
+
+<p>Aligned mit Dave Farleys <em>Modern Software Engineering</em> — optimiere für <em>Lernen</em> und <em>Komplexitäts-Management</em>, nicht für Vollständigkeit der Anforderungs-Dokumentation.</p>
+
+<h4>Constraints</h4>
+<ul>
+<li><strong>Tech-Stack:</strong> Pure JavaScript/Node.js (CJS), Markdown, JSON</li>
+<li><strong>Distribution:</strong> <code>npx code-as-plan@latest</code></li>
+<li><strong>Zero runtime deps:</strong> Keine externen npm-Packages zur Laufzeit</li>
+<li><strong>Node.js:</strong> &gt;=20.0.0</li>
+</ul>
+
+<h2 id="aktueller-stand">2 · Aktueller Stand 2026-05-07</h2>
+
+<p>In den letzten zwei Tagen sind drei große Tracks komplett gelandet:</p>
+
+<table>
+<thead><tr><th>Track</th><th>Features</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><strong>V5 Self-Learning Stack</strong></td><td>F-061 + F-070..F-074</td><td><span class="badge badge-shipped">shipped</span> — End-to-end Lernschleife schließt</td></tr>
+<tr><td><strong>V6 Memory Foundation</strong></td><td>F-076 + F-077 + F-078</td><td><span class="badge badge-shipped">shipped</span> — per-feature + platform-bucket + extends</td></tr>
+<tr><td><strong>V6.1 Format-Tolerance</strong></td><td>F-081 + F-082 + em-dash</td><td><span class="badge badge-shipped">shipped</span> — long-form IDs + bullet ACs + monorepo</td></tr>
+<tr><td><strong>V6 Konsumenten</strong></td><td>F-079 + F-080</td><td><span class="badge badge-tested">tested</span> — snapshot-linkage + claude-native bridge</td></tr>
+<tr><td><strong>F-083 Refactor</strong></td><td>cap-feature-map split</td><td><span class="badge badge-tested">tested</span> — 2336 LOC → 1495 + 882</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-ok">
+<strong>Stage-2-Streak: 7-for-7</strong>
+Jedes V6-Class-Feature seit F-076 hat im Stage-2-Review foot-guns produziert, die der Prototyper akzeptiert hatte. F-080 war das erste Feature, das alle 12 V6-Lessons <em>upfront</em> appliert hat — Reife-Indikator.
+</div>
+
+<h4>Echte Validierung: GoetzeInvest Real-World Canary</h4>
+<p>V6.1 wurde gegen GoetzeInvest (echtes Monorepo) gemessen: <strong>0% → 96% Feature-Discovery</strong> nach Em-Dash-Header-Toleranz-Fix. Synthetic-only-Fixtures hätten das nie gefunden.</p>
+
+<h2 id="architektur">3 · Architektur</h2>
+
+<h3 id="tag-system">3.1 Tag-System</h3>
+
+<p>CAP-Tags sind structured Comments, die die Codebase mit der <code>FEATURE-MAP.md</code> verlinken. Sie sind sprach-agnostisch und werden via Regex-Scanner extrahiert.</p>
+
+<h4>Primary Tags (mandatory)</h4>
+<table>
+<thead><tr><th>Tag</th><th>Zweck</th><th>Beispiel</th></tr></thead>
+<tbody>
+<tr><td><code>@cap-feature</code></td><td>Markiert die Implementierung eines Features</td><td><code>// @cap-feature(feature:F-078, primary:true) Platform-Bucket</code></td></tr>
+<tr><td><code>@cap-todo</code></td><td>Verlinkt Code mit einem AC</td><td><code>// @cap-todo(ac:F-078/AC-3) extends-Resolver single-pass</code></td></tr>
+</tbody>
+</table>
+
+<h4>Subtypes / Optional</h4>
+<table>
+<thead><tr><th>Tag</th><th>Zweck</th></tr></thead>
+<tbody>
+<tr><td><code>@cap-decision</code></td><td>Architektur-Entscheidung mit Kontext (warum dieser Weg, nicht jener)</td></tr>
+<tr><td><code>@cap-risk</code></td><td>Bekanntes Risiko, soll bei Änderungen mitgedacht werden</td></tr>
+<tr><td><code>@cap-pattern</code></td><td>Wiederkehrendes Muster (für F-071 Pattern-Extraction)</td></tr>
+<tr><td><code>@cap-context</code></td><td>Erklärt einen Code-Block für Future-Reader</td></tr>
+</tbody>
+</table>
+
+<h4>Anchor-Block-Format (F-047)</h4>
+<pre><code>// @cap-anchor(F-079)
+// title: Snapshot-Linkage
+// state: tested
+// acs: 6
+// @cap-feature(feature:F-079, primary:true) Snapshot-Linkage to features and platform
+// @cap-decision(F-079/AC-4) marker convention separate from F-076 cap:auto:start/end
+//                            for zero blast radius
+// @cap-risk(reason:heuristic-misassignment) snapshots near state-transition
+//                                            boundaries may match wrong feature
+function processSnapshots(root) { ... }
+</code></pre>
+
+<h3 id="agenten">3.2 Sechs spezialisierte Agents</h3>
+
+<table>
+<thead><tr><th>Agent</th><th>Rolle</th><th>Modi</th></tr></thead>
+<tbody>
+<tr><td><code>cap-brainstormer</code></td><td>Conversational Feature-Discovery</td><td>8-12 Q&amp;As → Feature-Map-Entries mit ACs</td></tr>
+<tr><td><code>cap-prototyper</code></td><td>Code generieren / iterieren</td><td>4 Modi: <em>prototype</em>, <em>iterate</em>, <em>architecture</em>, <em>annotate</em></td></tr>
+<tr><td><code>cap-tester</code></td><td>RED-GREEN adversarial Tests gegen ACs</td><td>Pinning + Edge-Cases</td></tr>
+<tr><td><code>cap-reviewer</code></td><td>Two-Stage-Review: AC-Compliance + Code-Quality</td><td>Stage 1 → Stage 2 nur wenn Stage 1 grün</td></tr>
+<tr><td><code>cap-debugger</code></td><td>Wissenschaftliche Methode mit persistent state</td><td>Hypothese-Test-Schleife über Context-Resets hinweg</td></tr>
+<tr><td><code>cap-designer</code></td><td>DESIGN.md + Anti-Slop-Check</td><td>Aesthetic-Picker, Family-Locks</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-info">
+<strong>Lose Kopplung</strong>
+Agents kommunizieren nur über shared Artefakte (FEATURE-MAP.md, SESSION.json, Code-Tags). Keine direkten API-Calls zwischen Agents. Die Feature-ID ist der einzige geteilte Schlüssel.
+</div>
+
+<h3 id="commands">3.3 22 Slash-Commands</h3>
+
+<h4>Workflow-Commands (linear, re-entrant)</h4>
+<table>
+<thead><tr><th>Command</th><th>Zweck</th></tr></thead>
+<tbody>
+<tr><td><code>/cap:init</code></td><td>Projekt initialisieren — FEATURE-MAP.md + .cap/ anlegen</td></tr>
+<tr><td><code>/cap:brainstorm</code></td><td>Conversational Feature-Discovery → Feature-Map</td></tr>
+<tr><td><code>/cap:prototype</code></td><td>Code für Feature bauen (4 Modi)</td></tr>
+<tr><td><code>/cap:iterate</code></td><td>Existing Prototype refinen basierend auf Feedback</td></tr>
+<tr><td><code>/cap:test</code></td><td>RED-GREEN adversarial Tests gegen Feature-Map ACs</td></tr>
+<tr><td><code>/cap:review</code></td><td>Two-Stage-Review (AC-Compliance + Code-Quality)</td></tr>
+<tr><td><code>/cap:debug</code></td><td>Wissenschaftliche Debug-Schleife mit persistent state</td></tr>
+</tbody>
+</table>
+
+<h4>Memory- &amp; State-Commands</h4>
+<table>
+<thead><tr><th>Command</th><th>Zweck</th></tr></thead>
+<tbody>
+<tr><td><code>/cap:start</code></td><td>Session initialisieren, active feature wählen, bridge-data surfaces</td></tr>
+<tr><td><code>/cap:status</code></td><td>Feature-Map summary + active feature + bridge surface</td></tr>
+<tr><td><code>/cap:save</code></td><td>Snapshot erstellen (mit auto-linkage zu activeFeature)</td></tr>
+<tr><td><code>/cap:continue</code></td><td>Snapshot in neue Session laden — null compression-loss</td></tr>
+<tr><td><code>/cap:checkpoint</code></td><td>Advisory checkpoint — nudge zu /compact bei natural breakpoints</td></tr>
+<tr><td><code>/cap:memory</code></td><td>Memory-Pipeline manage (bootstrap, run, pin, status)</td></tr>
+</tbody>
+</table>
+
+<h4>Discovery- &amp; Reporting-Commands</h4>
+<table>
+<thead><tr><th>Command</th><th>Zweck</th></tr></thead>
+<tbody>
+<tr><td><code>/cap:scan</code></td><td>Tag-Scanner — extract @cap-* tags, find orphans, enrich Feature-Map</td></tr>
+<tr><td><code>/cap:annotate</code></td><td>Retroactively existierenden Code annotieren</td></tr>
+<tr><td><code>/cap:trace</code></td><td>Call-Graph für eine AC über alle contributing files</td></tr>
+<tr><td><code>/cap:deps</code></td><td>Feature-Dependencies aus Imports inferieren + Mermaid-Graph</td></tr>
+<tr><td><code>/cap:report</code></td><td>Human-Readable Project-Report für Devs + Stakeholder</td></tr>
+<tr><td><code>/cap:reconcile</code></td><td>Status-Drift-Reconciliation — promote ACs, fix feature-states</td></tr>
+<tr><td><code>/cap:completeness</code></td><td>F-048 Implementation-Completeness-Score (4 Signale per AC)</td></tr>
+<tr><td><code>/cap:test-audit</code></td><td>Test-Quality: Assertion-Density, Coverage, Mutation, Anti-Patterns</td></tr>
+</tbody>
+</table>
+
+<h4>Self-Learning &amp; Stack-Commands</h4>
+<table>
+<thead><tr><th>Command</th><th>Zweck</th></tr></thead>
+<tbody>
+<tr><td><code>/cap:learn</code></td><td>Patterns reviewen aus self-learning ledger (F-073)</td></tr>
+<tr><td><code>/cap:cluster</code></td><td>Neural Memory Cluster anzeigen — Drift &amp; Affinity</td></tr>
+<tr><td><code>/cap:refresh-docs</code></td><td>Stack-Docs via Context7 fetchen (Library-Docs in .cap/stack-docs/)</td></tr>
+<tr><td><code>/cap:design</code></td><td>DESIGN.md erstellen mit Aesthetic-Picker (F-062)</td></tr>
+<tr><td><code>/cap:doctor</code></td><td>Tool-Check (welche CAP-Tools installiert + funktionieren)</td></tr>
+<tr><td><code>/cap:upgrade</code> <span class="badge badge-tested">F-084</span></td><td><strong>Onboarding-Orchestrator</strong> — 7-stage atomic migration für Brownfield-Projekte oder nach CAP-Update</td></tr>
+<tr><td><code>/cap:migrate</code></td><td>Migrate v1.x → v2.0 (GSD-Code-First → CAP)</td></tr>
+<tr><td><code>/cap:migrate-tags</code></td><td>Migrate fragmented tags zu unified anchor blocks (F-047)</td></tr>
+<tr><td><code>/cap:switch-app</code></td><td>Switch active app im Monorepo</td></tr>
+</tbody>
+</table>
+
+<h3 id="artefakte">3.4 Artefakte</h3>
+
+<table>
+<thead><tr><th>Artefakt</th><th>Zweck</th><th>Lifecycle</th></tr></thead>
+<tbody>
+<tr><td><code>FEATURE-MAP.md</code></td><td>Single source of truth — ersetzt Roadmap + Requirements</td><td>Append-only, structured</td></tr>
+<tr><td><code>.cap/SESSION.json</code></td><td>Ephemeral workflow-state (active feature, last command)</td><td>Per-Session, gitignored</td></tr>
+<tr><td><code>.cap/snapshots/*.md</code></td><td>Frozen-in-time context snapshots (cap:save)</td><td>Append-only</td></tr>
+<tr><td><code>.cap/memory/&lt;F-NNN&gt;.md</code></td><td>Per-Feature Memory mit Auto/Manual-Split (F-076)</td><td>Auto-block reproduzierbar, Manual-block manuell</td></tr>
+<tr><td><code>.cap/memory/platform/&lt;topic&gt;.md</code></td><td>Cross-Cutting Decisions (F-078)</td><td>Explicit-only Promotion via @cap-decision platform:</td></tr>
+<tr><td><code>.cap/memory/platform/checklists/&lt;subsystem&gt;.md</code></td><td>Subsystem-spanning Pitfalls (F-078 AC-4)</td><td>Manual</td></tr>
+<tr><td><code>.cap/memory/.claude-native-index.json</code></td><td>Cache für ~/.claude/projects/&lt;slug&gt;/memory/MEMORY.md (F-080)</td><td>Mtime-invalidated</td></tr>
+<tr><td><code>.cap/stack-docs/*.md</code></td><td>Context7-fetched Library-Docs für Agent-Kontext</td><td>30-day refresh</td></tr>
+</tbody>
+</table>
+
+<h2 id="workflow">4 · Standard-Workflow</h2>
+
+<p>Fünf Schritte, linear by default, re-entrant by design:</p>
+
+<div class="ascii">
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │  brainstorm  │→ │  prototype   │→ │   iterate    │→ │     test     │→ │    review    │
+   │              │  │              │  │              │  │              │  │              │
+   │ ACs locked   │  │ tags +       │  │ refine       │  │ adversarial  │  │ stage 1+2    │
+   │ in F-Map     │  │ proto code   │  │ + memory     │  │ pinning      │  │ → ship/iter  │
+   └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+                                                                                  │
+                                ┌─────────────────────────────────────────────────┘
+                                ▼
+                          ┌──────────┐         iterate-then-ship loop
+                          │ iterate  │  ◄──────  bei findings (häufig)
+                          └──────────┘
+</div>
+
+<h4>Re-entry-Punkte</h4>
+<ul>
+<li><strong>Mid-prototype hat Spec-Lücke?</strong> → <code>@cap-decision(spec-gap)</code> + weitermachen, nicht zurück zu brainstorm</li>
+<li><strong>Stage-2 findet foot-gun?</strong> → <code>iterate</code> mit konkretem Briefing → re-review</li>
+<li><strong>Real-world canary scheitert?</strong> → siehe F-082 em-dash: post-merge fix als micro-PR</li>
+<li><strong>Coverage-Gap?</strong> → <code>cap:test-audit</code> + zusätzliche adversarial tests</li>
+</ul>
+
+<h2 id="memory-system">5 · Memory-System (V6 + V6.1)</h2>
+
+<p>V6 transformiert CAP von <em>code-anchored memory</em> zu einem <em>strukturierten Wissensgraph</em>. Alle Decisions, Pitfalls, Patterns leben kanonisch in <code>.cap/memory/</code> und werden automatisch von Agents konsumiert (<code>cap-memory.md</code> Rule).</p>
+
+<h3 id="mem-f076">5.1 F-076 — Per-Feature Memory Format</h3>
+
+<p>Pro Feature genau eine Memory-File: <code>.cap/memory/F-NNN.md</code></p>
+
+<h4>Struktur</h4>
+<pre><code>---
+feature: F-079
+title: Snapshot-Linkage to Features and Platform
+state: tested
+related_features: [F-076, F-078]
+extends: platform/observability   # F-078 reference
+---
+
+&lt;!-- cap:auto:start --&gt;
+## Decisions (auto-extracted from @cap-decision tags)
+
+- (F-079/AC-4) marker convention separate from F-076 cap:auto:start/end
+- (F-079/AC-2) mutually-exclusive flags = HARD-fail (TypeError before IO)
+- (F-079/iter1 AC-5) Option A consolidation; F-077 classifySnapshot is canonical
+
+## Pitfalls (auto-extracted from @cap-risk tags)
+
+- heuristic-misassignment: snapshots near state-transition boundaries
+- shared mutable references via shallow Object.assign — F-082 lesson
+&lt;!-- cap:auto:end --&gt;
+
+## Manual Notes
+
+Real-world canary auf GoetzeInvest deckte em-dash header separator auf —
+synthetic fixtures hatten alle colon-separator. Iter-2 fix: regex widening
+in featureHeaderRE.
+</code></pre>
+
+<h4>Auto/Manual-Split-Contract</h4>
+<ul>
+<li><strong>Auto-block</strong> ist reproducible — Pipeline kann es jederzeit re-generieren ohne Daten zu verlieren</li>
+<li><strong>Manual-block</strong> ist user-authored — wird vom Auto-Pipeline NIE überschrieben</li>
+<li>Round-trip ist byte-identisch (heavily tested gegen proto-pollution / empty-block injection)</li>
+</ul>
+
+<h3 id="mem-f077">5.2 F-077 — Migration Tool</h3>
+
+<p>Hybrid Classifier mit atomic writes + dry-run UX. Migriert legacy memory zu V6-Format.</p>
+
+<ul>
+<li><strong>Title-prefix-Heuristik (D7):</strong> Occurrence-Threshold-basierte Feature-ID-Inferenz</li>
+<li><strong>Date + State-Transitions (AC-5):</strong> snapshot-date → damaliges activeFeature-Mapping (F-079 nutzt das)</li>
+<li><strong>Dry-run-First:</strong> Plan zeigen, dann user-confirm, dann atomic apply</li>
+</ul>
+
+<h3 id="mem-f078">5.3 F-078 — Platform-Bucket</h3>
+
+<p>Cross-cutting Decisions, die nicht zu einem Feature gehören.</p>
+
+<h4>Layout</h4>
+<pre><code>.cap/memory/
+├── F-079.md                              ← per-feature
+├── F-080.md                              ← per-feature
+├── platform/
+│   ├── observability.md                  ← topic-bucket
+│   ├── security.md                       ← topic-bucket
+│   ├── snapshots-unassigned.md           ← F-079 AC-6 fallback
+│   └── checklists/
+│       ├── auth.md                       ← subsystem-checklist
+│       └── deployment.md                 ← subsystem-checklist
+</code></pre>
+
+<h4>Promotion-Contract: explicit-only</h4>
+<p>Eine Decision landet NUR im platform-bucket, wenn sie EXPLICIT mit <code>@cap-decision platform:&lt;topic&gt;</code> getaggt ist:</p>
+<pre><code>// @cap-decision platform:observability
+// Token telemetry uses session-scoped sampling at 1% to avoid
+// flooding the analytics pipeline. Auto-promotion would scatter
+// this across F-061 + F-070 + F-071 — keep it cross-cutting.
+</code></pre>
+
+<p>Plain <code>@cap-decision</code> bleibt im per-feature file. Beide gleichzeitig (<code>feature:F-070, platform:observability</code>) → Loud Parse-Error.</p>
+
+<h4>Extends-Resolver (AC-3)</h4>
+<p>Per-feature files können platform-topics referenzieren:</p>
+<pre><code>---
+feature: F-070
+extends: platform/observability
+---</code></pre>
+
+<p>Reader resolved die Kette in <em>einer</em> lookup-pass. Cycle-Detection mit voller Pfad-Anzeige im Error-Message:</p>
+<pre><code>Cycle detected: F-070 → platform/observability → platform/telemetry → platform/observability</code></pre>
+
+<h3 id="mem-f079">5.4 F-079 — Snapshot-Linkage</h3>
+
+<p>Verlinkt <code>.cap/snapshots/*.md</code> mit dem zugehörigen Feature- oder Platform-File.</p>
+
+<h4>cap:save Flow</h4>
+<table>
+<thead><tr><th>Trigger</th><th>Effekt</th></tr></thead>
+<tbody>
+<tr><td><code>cap:save 2026-05-07-v6-stack</code></td><td>Liest <code>activeFeature</code> aus SESSION.json, schreibt frontmatter <code>feature: F-080</code></td></tr>
+<tr><td><code>cap:save --unassigned X</code></td><td>Snapshot ohne feature-binding (soft-warn auf stderr)</td></tr>
+<tr><td><code>cap:save --platform=observability X</code></td><td>Snapshot bindet an platform-topic</td></tr>
+<tr><td>kein <code>activeFeature</code> in SESSION</td><td>Soft-warn, snapshot wird trotzdem erstellt → landet später in <code>snapshots-unassigned.md</code></td></tr>
+</tbody>
+</table>
+
+<h4>Pipeline-Step (idempotent)</h4>
+<p><code>processSnapshots()</code> läuft im Memory-Pipeline-Hook und schreibt:</p>
+<pre><code>&lt;!-- @auto-block linked_snapshots --&gt;
+- 2026-05-06-v61-complete (2026-05-06, branch: main)
+- 2026-05-07-v6-stack-complete (2026-05-07, branch: main)
+&lt;!-- /@auto-block --&gt;</code></pre>
+
+<p>Re-Run produziert byte-identische Output (sort+dedup).</p>
+
+<h3 id="mem-f080">5.5 F-080 — Claude-native Bridge</h3>
+
+<p><strong>Read-only</strong> consumer von <code>~/.claude/projects/&lt;slug&gt;/memory/MEMORY.md</code> (Anthropic's auto-memory).</p>
+
+<h4>Surface in cap:start / cap:status</h4>
+<pre><code>=== CAP Status ===
+Active feature: F-080 (Bridge to Claude-native Memory) [tested]
+
+Claude-native erinnert:
+  • F-078 Platform-Bucket — explicit-only promotion + extends-resolver
+  • V6 Foundation Complete — F-076 + F-077 + F-078 shipped 2026-05-07
+  • Diagnose empirisch verifizieren — Issue-Body ist Hypothese, nicht Fakt
+  • V6.1 Complete — GoetzeInvest 0% → 96% feature-discovery</code></pre>
+
+<h4>Priority-Order (max 5 bullets)</h4>
+<ol>
+<li>Tier 1: <strong>Active feature</strong> direkt (z.B. F-080 entries)</li>
+<li>Tier 2: <strong>related_features</strong> aus Per-Feature-File frontmatter</li>
+<li>Tier 3: <strong>Letzte 2 globalen Einträge</strong> (Recency-Cap, hard-capped to 2)</li>
+</ol>
+
+<h4>Read-only Contract</h4>
+<div class="callout callout-danger">
+<strong>NEVER writes to ~/.claude/projects/...</strong>
+Live AC-1 probe verifiziert Zero-stat/sha-drift across full bridge run. Ist im adversarial-test-suite gepinnt.
+</div>
+
+<h2 id="self-learning">6 · Self-Learning Stack (V5)</h2>
+
+<p>Geschlossener Lernkreislauf — CAP lernt aus seinen eigenen Sessions, was funktioniert hat und was nicht. Sechs Bricks bilden zusammen die end-to-end-Loop.</p>
+
+<div class="ascii">
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                                                                     │
+   │  F-061 Token-Telemetrie  ───►  F-070 Signal-Sammlung               │
+   │  (per session)                  (token, latency, errors,            │
+   │                                  patterns-applied, success-rate)    │
+   │                                          │                          │
+   │  F-071 Pattern-Extraction   ◄────────────┘                          │
+   │  (heuristic + LLM via Skill-Briefing)                               │
+   │           │                                                         │
+   │           ▼                                                         │
+   │  F-072 Two-Layer Fitness Score                                      │
+   │  (statistical + semantic, 3 deterministic probes)                   │
+   │           │                                                         │
+   │           ▼                                                         │
+   │  F-074 Auto-Retract  ──►  F-073 Pattern Review (cap:learn)          │
+   │  (atomic-write,            (manual gates for patterns above         │
+   │   defense-in-depth)         confidence threshold)                   │
+   │                                                                     │
+   └─────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3 id="sl-f061">6.1 F-061 — Token Telemetry</h3>
+<p>Observability-Fundament. Per-session token-counts, agent-spawn-times, tool-call-rates, error-rates. Ohne Telemetry kein Signal → kein Pattern.</p>
+
+<h3 id="sl-f070">6.2 F-070 — Collect Learning Signals</h3>
+<p>Subprocess-Hook-State via persistent ledger. Signals werden in <code>.cap/learning/signals.jsonl</code> persistiert. E2E spawnSync-Tests sind Pflicht — pure unit-tests entdecken hook-state-leaks nicht.</p>
+
+<h3 id="sl-f071">6.3 F-071 — Pattern Extraction</h3>
+<p>Heuristik-Layer + LLM-Layer. <strong>Wichtig:</strong> LLM via Skill-Briefing-Pattern (kein SDK-Call). Stage-2-Review fängt foot-guns die der Prototyp akzeptiert hat — V6-class-lesson #0.</p>
+
+<h3 id="sl-f072">6.4 F-072 — Fitness Score</h3>
+<p>Two-Layer-Score: <em>statistical</em> (success-rate über N runs) + <em>semantic</em> (LLM-judge: passt das pattern zur situation). 3-Layer-Determinismus-Probes: gleiche inputs → gleiche outputs (alphabetic sort-locks via @cap-risk-Pattern).</p>
+
+<h3 id="sl-f073">6.5 F-073 — Pattern Review (cap:learn)</h3>
+<p>Manual-Gate für Patterns über confidence-threshold. User reviewed pattern, kann promoten / reject / defer. Promoted patterns landen in <code>.cap/learning/applied-state.json</code> und werden vom prototyper at session-start gelesen.</p>
+
+<h3 id="sl-f074">6.6 F-074 — Pattern Unlearn &amp; Auto-Retract</h3>
+<p>Wenn ein promoted pattern in 3 consecutive sessions zu fitness-drop führt → auto-retract. Defense-in-depth bei git-modulen, atomic-write für runtime-config, sandbox-discipline pinned.</p>
+
+<h2 id="monorepo">7 · V6.1 — Monorepo + Multi-Format</h2>
+
+<p>Real-world readiness: F-081 + F-082 ermöglichen CAP in heterogenen Codebases.</p>
+
+<h3>F-081 — Multi-Format Parser</h3>
+<ul>
+<li><strong>Long-form IDs:</strong> <code>F-HUB-AUTH</code>, <code>F-PAYMENT-CHECKOUT</code> (Union-Regex <code>/^F-(\d{3,}|[A-Z][A-Z0-9_-]*)$/</code>)</li>
+<li><strong>Bullet-style ACs:</strong> <code>- [ ] AC-1: Description</code> als Alternative zu pipe-tables</li>
+<li><strong>Format-Detection:</strong> Heuristic-first + explicit override via <code>.cap/config.json:featureMapStyle</code></li>
+<li><strong>Safe-Mode:</strong> <code>{safe: true}</code> opt-in macht parser non-throwing bei duplicates (returns <code>{features, parseError}</code>)</li>
+</ul>
+
+<h3>F-082 — Monorepo-Aggregation</h3>
+<ul>
+<li><strong>Hard contract:</strong> <code>### Rescoped Feature Maps</code>-Header listet sub-app paths</li>
+<li><strong>Opt-in directory walk:</strong> <code>featureMaps.discover: "auto" | "table-only"</code></li>
+<li><strong>Header-Separator-Tolerance:</strong> Colon, em-dash, en-dash, hyphen-with-whitespace</li>
+<li><strong>Cross-sub-app-Resilience:</strong> parseError in einem sub-app blockt nicht die anderen</li>
+</ul>
+
+<h3>F-083 — File Extraction</h3>
+<p>Refactor: <code>cap-feature-map.cjs</code> 2336 → 1495 LOC, monorepo-Concerns in <code>cap-feature-map-monorepo.cjs</code> (882 LOC). Lazy-require Cycle-Resolution mit Identity-Preservation. Zero behavior change.</p>
+
+<h2 id="quality-gates">8 · Quality-Gates &amp; Stage-2-Review</h2>
+
+<p>Jedes V6-Class-Feature durchläuft den gleichen Pipeline:</p>
+
+<table>
+<thead><tr><th>Stage</th><th>Wer</th><th>Was</th></tr></thead>
+<tbody>
+<tr><td>1. Brainstorm</td><td>cap-brainstormer</td><td>8-12 Q&amp;As → ACs locked, Schnitt entschieden</td></tr>
+<tr><td>2. Prototype</td><td>cap-prototyper PROTOTYPE</td><td>Code + Tags + happy/adversarial tests</td></tr>
+<tr><td>3. Stage-1 Review</td><td>cap-reviewer</td><td>Per-AC Verdict (PASS/PARTIAL/FAIL)</td></tr>
+<tr><td>4. Stage-2 Review</td><td>cap-reviewer (only if Stage-1 ≥ all PASS)</td><td>12-Punkt-Class-Lesson-Audit</td></tr>
+<tr><td>5. Iterate</td><td>cap-prototyper ITERATE</td><td>Findings adressieren, nicht mehr</td></tr>
+<tr><td>6. Re-Verify</td><td>cap-reviewer</td><td>Per-Fix VERIFIED/PARTIAL/REGRESSION</td></tr>
+<tr><td>7. Ship</td><td>git + gh pr</td><td>Squash-merge mit conventional commit</td></tr>
+</tbody>
+</table>
+
+<h3>Die 12 V6-Class-Lessons (apply UPFRONT, nicht warten auf review)</h3>
+<ol>
+<li><strong>Proto-pollution defense</strong> — frontmatter, JSON-parse, Cache-Reads</li>
+<li><strong>ANSI-injection defense</strong> — JEDER user-controlled interpolation-site (nicht nur main)</li>
+<li><strong>Path-traversal</strong> — slug-regex, NUL-bytes, <code>../etc/passwd</code></li>
+<li><strong>Silent-skip ist REAL silent</strong> — capture stdout+stderr, debug to file not console</li>
+<li><strong>Cache TOCTOU</strong> benign + documented (never silent)</li>
+<li><strong>Atomic writes</strong> via tmp+rename</li>
+<li><strong>Round-trip stability</strong> — write → read → write byte-identisch</li>
+<li><strong>Surface-Limit HARD-cap</strong> (nicht best-effort)</li>
+<li><strong>Priority tie-break determinism</strong> (lexical or mtime)</li>
+<li><strong>Missing/empty/malformed input</strong> graceful handling</li>
+<li><strong>Realistic fixtures</strong> — synthetic-only-blindspot lesson aus F-082-iter2</li>
+<li><strong>Read-only contracts</strong> in tests pinned (mtime+content+size unchanged)</li>
+</ol>
+
+<div class="callout callout-warn">
+<strong>Stage-2-Streak: 7-for-7</strong>
+F-076, F-078, F-079, F-081, F-082, F-082-iter2 hatten alle 3+ findings. F-080 war das erste 0-finding-Feature, weil alle 12 Lessons UPFRONT applied wurden. Die Klasse hat eine 100%-Hit-Rate auf Foot-Guns die der Prototyper akzeptiert.
+</div>
+
+<h2 id="best-practices">9 · Best Practices</h2>
+
+<div class="grid-2">
+
+<div class="card">
+<h4>1. Code-First, immer</h4>
+<p>Build first. Wenn du dich beim Schreiben von Spec-Documenten ertappst — wechsel zu Code mit Tags. Tags sind die Spec.</p>
+</div>
+
+<div class="card">
+<h4>2. Stage-2 ist nicht optional</h4>
+<p>Auch bei "trivialen" Features. Die 7-for-7-Streak zeigt: prototyper sieht foot-guns nicht, die ein independent reviewer sofort erkennt.</p>
+</div>
+
+<div class="card">
+<h4>3. Real-world canary</h4>
+<p>Synthetic fixtures haben blindspots. Mindestens ein Smoke-Test gegen echte Daten (z.B. Live-Repo dry-run) bevor ein V6-Feature shipped.</p>
+</div>
+
+<div class="card">
+<h4>4. Memory-driven decisions</h4>
+<p>Bei jedem nicht-trivialen Choice: memory durchsuchen ob ein platform-topic oder per-feature-decision das schon entschieden hat.</p>
+</div>
+
+<div class="card">
+<h4>5. Atomic writes</h4>
+<p>Tempfile + rename. Nie in-place. Defense-in-depth bei git-Module (F-074-Lesson). cap-memory-migrate.cjs hat den canonical helper.</p>
+</div>
+
+<div class="card">
+<h4>6. Diagnose empirisch verifizieren</h4>
+<p>Issue-body ist Hypothese, nicht Fakt. CI #42-Lesson: 4× Path 1 abgelehnt, weil 4× empirisch reproduziert. Nicht raten — messen.</p>
+</div>
+
+<div class="card">
+<h4>7. Spec-gap dokumentieren</h4>
+<p>Wenn der Prototyper mid-flow eine Lücke sieht: <code>@cap-decision(F-NNN/spec-gap) reasoning</code> — nicht zurück zu brainstorm.</p>
+</div>
+
+<div class="card">
+<h4>8. Snapshot vor /compact</h4>
+<p>Jede non-trivial Session endet mit <code>cap:save</code>. Cross-session-continuity ohne compression-loss. Auto-linkage zu activeFeature.</p>
+</div>
+
+</div>
+
+<h4>Git-Workflow</h4>
+<ul>
+<li><strong>Feature-Branches</strong> für neue Features (<code>feature/F-079-snapshot-linkage</code>)</li>
+<li><strong>Direct main</strong> für small fixes (one-line CI bumps, regex fixes)</li>
+<li><strong>Squash-merge</strong> für PRs — <code>feat(F-079): wire snapshot linkage to features and platform (#49)</code></li>
+<li><strong>Manual Tests</strong> am Gruppen-Ende, nicht pro Feature (V5-Präferenz)</li>
+<li><strong>Pre-Push:</strong> <code>npm run test:coverage</code> lokal — nicht nur <code>npm test</code></li>
+</ul>
+
+<h2 id="anti-patterns">10 · Anti-Patterns &amp; Lessons-Learned</h2>
+
+<table>
+<thead><tr><th>Anti-Pattern</th><th>Was passiert</th><th>Erkannt durch</th></tr></thead>
+<tbody>
+<tr><td>Auto-promotion ohne explicit tag</td><td>platform-bucket füllt sich mit per-feature decisions, Trust collapse</td><td>F-078 design (rejected upfront)</td></tr>
+<tr><td>Shallow <code>Object.assign(...)</code> auf parsed data</td><td>Caller-mutations korrumpieren source-files</td><td>F-082-Stage-2-finding (deep-clone fix)</td></tr>
+<tr><td>Bare <code>indexOf(marker)</code> für auto-block parsing</td><td>In-prose mentions in manual-block triggers parser</td><td>F-079-Stage-2-finding (mirror F-076 _countMarkerLines)</td></tr>
+<tr><td>Synthetic-only test fixtures</td><td>Real-world em-dash header separators slip through</td><td>F-082 GoetzeInvest dry-run (post-merge regression)</td></tr>
+<tr><td>Subprocess-fixtures in coverage runs</td><td>Coverage artefakt collapses under per-file isolation</td><td>CI #42 forensic (4× empirisch validated)</td></tr>
+<tr><td><code>console.warn</code> ohne ANSI-strip</td><td>Log-injection via user-controlled paths</td><td>F-078-iter1, F-082 follow-ups (centralized _safeForError)</td></tr>
+<tr><td>Silent state-update returning void</td><td>Caller weiß nicht ob update happened</td><td>F-082 lesson — alle return <code>{updated, reason, path}</code></td></tr>
+<tr><td>Issue-Body-Diagnose blind übernehmen</td><td>Stunden auf workstream.test.cjs verschwendet (CI #42 Promise-leak hypothesis war falsch)</td><td>Path-1 forensic — empirically reproduce first</td></tr>
+</tbody>
+</table>
+
+<h2 id="migration">11 · Migration nach GoetzeInvest</h2>
+
+<p>Schritt-für-Schritt-Anleitung um CAP in einem bestehenden Monorepo wie GoetzeInvest auf das aktuelle V6.1-Niveau zu bringen.</p>
+
+<div class="callout callout-info">
+<strong>Voraussetzungen:</strong>
+Node.js ≥20.0.0 · Git-Repository · Markdown-fähiger Editor · ~30 min für initial setup, ~1 Stunde für vollständige Memory-Migration.
+</div>
+
+<div class="callout callout-ok">
+<strong>Easy-Path (empfohlen seit F-084 ab CAP &ge;v2.x):</strong> Statt manuell durch alle Stages zu gehen, gibt es jetzt <code>/cap:upgrade</code> — ein einzelner Command der alles orchestriert. Siehe <a href="#mig-easy-path">11.1.1</a> unten. Manueller Schritt-für-Schritt-Flow (11.2-11.5) bleibt für Power-User dokumentiert.
+</div>
+
+<h3 id="mig-vorbereitung">11.1 Vorbereitung</h3>
+
+<ol>
+<li><strong>CAP installieren / aktualisieren</strong>:
+<pre><code>cd ~/path/to/goetze-invest
+npx code-as-plan@latest
+# alternativ: globale install
+npm install -g code-as-plan@latest
+cap --version</code></pre></li>
+
+<li><strong>Working Branch anlegen</strong>:
+<pre><code>git checkout -b cap/initial-migration</code></pre></li>
+</ol>
+
+<h3 id="mig-easy-path">11.1.1 Easy-Path: <code>/cap:upgrade</code> (F-084)</h3>
+
+<p>Ein Befehl, alles drin. Erkennt automatisch deinen state, plant alle nötigen Migrationen, führt sie atomic aus, schreibt einen Version-Marker, läuft beim nächsten CAP-Update wieder genau das was fehlt.</p>
+
+<pre><code>/cap:upgrade</code></pre>
+
+<p><strong>Was passiert:</strong></p>
+
+<div class="ascii">
+   Stage 1: doctor              ✓ Node v24.14.0, jq present, gh present
+   Stage 2: init-or-skip        ✓ .cap/ + FEATURE-MAP.md absent → init
+                                  Will create: .cap/, FEATURE-MAP.md (skeleton)
+   Stage 3: annotate            ⊝ skipped (--skip-annotate flag)
+                                  Tip: run /cap:annotate manually later
+   Stage 4: migrate-tags        ⊝ skipped (zero fragmented tags found)
+   Stage 5: memory-bootstrap    ✓ Will create: 12 per-feature memory files
+   Stage 6: migrate-snapshots   ✓ Will link 38 snapshots to features
+                                  (heuristic: date + state-transitions)
+   Stage 7: refresh-docs        ✓ Will fetch: react, prisma, next.js, tailwind
+
+   Confirm execution? [y/N]
+</div>
+
+<h4>Flags</h4>
+<table>
+<thead><tr><th>Flag</th><th>Effekt</th></tr></thead>
+<tbody>
+<tr><td><code>--non-interactive</code></td><td>Skip user-prompts; safe defaults (overspringt annotate + refresh-docs)</td></tr>
+<tr><td><code>--skip-stages=annotate,refresh-docs</code></td><td>Spezifische Stages auslassen (allowlist-validated)</td></tr>
+<tr><td><code>--dry-run-only</code></td><td>Plan zeigen, nicht ausführen</td></tr>
+<tr><td><code>--force-rerun</code></td><td>Marker ignorieren, alle Stages laufen lassen</td></tr>
+</tbody>
+</table>
+
+<h4>Was geschrieben wird</h4>
+<ul>
+<li><code>.cap/version</code> — atomic-written marker mit installed CAP version + completed-stages array + last-run timestamp</li>
+<li><code>.cap/upgrade.log</code> — JSONL audit-trail, eine Zeile pro Stage-Attempt mit timestamp + success/failure + reason</li>
+<li>Plus alles, was die einzelnen Stages anlegen (siehe Stages-Tabelle in <a href="#workflow">Abschnitt 4</a>)</li>
+</ul>
+
+<h4>SessionStart-Advisory</h4>
+<p>Nach <code>npm install -g code-as-plan@latest</code> mit neuer Major-Version: beim nächsten Claude-Code-Start in dem Repo zeigt der Hook eine Advisory:</p>
+<pre><code>Run /cap:upgrade to migrate to CAP v2.5.0 (current: v2.3.1, 2 stages pending)</code></pre>
+<p>Non-blocking, max 1× pro Session. Suppressible via <code>.cap/config.json</code>:</p>
+<pre><code>{
+  "upgrade": {
+    "notify": false
+  }
+}</code></pre>
+
+<h4>Atomic per Stage</h4>
+<p>Falls eine Stage fehlschlägt (z.B. Stage 3 annotate timeout), wird sie isoliert geloggt — nachfolgende Stages laufen weiter. Nach dem Fehler einfach <code>/cap:upgrade</code> erneut aufrufen, der Marker zeigt die noch-zu-machenden Stages, der Rest läuft idempotent durch.</p>
+
+<div class="callout callout-warn">
+<strong>Wann manuell statt /cap:upgrade?</strong>
+Wenn du custom-tuning brauchst — z.B. nur einzelne Migrations-Schritte selektiv anwenden, oder zwischendrin manuelle Reviews brauchst. Sonst <code>/cap:upgrade</code> verwenden, ist robuster (atomic-Pipeline + Version-Marker + audit-log).
+</div>
+
+<h3>11.1.2 Manuelles Path (Power-User)</h3>
+
+<ol>
+<li><strong>CAP-Doctor laufen lassen</strong> — checkt was fehlt:
+<pre><code>cap doctor
+# oder via Claude Code
+/cap:doctor</code></pre>
+Erwartet: Node-Version OK, jq optional, gh CLI optional.</li>
+</ol>
+
+<h3 id="mig-init">11.2 Init &amp; Tag-Migration</h3>
+
+<ol>
+<li><strong>Brownfield-Init</strong>:
+<pre><code>/cap:init</code></pre>
+Was passiert:
+<ul>
+<li>Erstellt <code>.cap/</code>-Verzeichnis</li>
+<li>Erstellt <code>FEATURE-MAP.md</code> mit Skeleton</li>
+<li>Erstellt <code>.cap/config.json</code></li>
+<li>Erstellt <code>.gitignore</code>-Eintrag für <code>.cap/SESSION.json</code></li>
+<li>Brownfield-Analyse: scannt existing code, schlägt initiale Features vor</li>
+<li>Detektiert Dependencies via Context7 → <code>.cap/stack-docs/</code></li>
+</ul>
+</li>
+
+<li><strong>Existing Code annotieren</strong> (retroactive):
+<pre><code>/cap:annotate
+# Modi:
+# - default: agent identifies natural feature boundaries + tags them
+# - --features=F-001,F-002,...: scope to specific features
+# - --interactive: pause nach jedem file</code></pre>
+Erwartung: ~50-200 <code>@cap-feature</code> + <code>@cap-todo</code> tags je nach Codebase-Größe.</li>
+
+<li><strong>Tags zu Anchor-Blocks migrieren</strong> (F-047):
+<pre><code>/cap:migrate-tags
+# additiv: legacy tags bleiben preserved
+# konsolidiert fragmented @cap-feature/@cap-todo zu unified @cap-anchor blocks</code></pre>
+</li>
+
+<li><strong>Initial Scan</strong>:
+<pre><code>/cap:scan
+# extract @cap-* tags, find orphans, enrich Feature-Map mit file-references</code></pre>
+</li>
+
+<li><strong>Health-Check</strong>:
+<pre><code>/cap:status
+# zeigt Feature-Count, Coverage-Lücken, orphan-tags
+/cap:reconcile
+# proposes AC-promotions + feature-state corrections (dry-run)</code></pre>
+</li>
+</ol>
+
+<h3 id="mig-monorepo">11.3 Monorepo-Setup (V6.1 F-082)</h3>
+
+<p>Wenn GoetzeInvest mehrere sub-apps hat (z.B. <code>apps/web</code>, <code>apps/api</code>, <code>apps/admin</code>):</p>
+
+<ol>
+<li><strong>Rescoped-Feature-Maps-Header</strong> in der Root-FEATURE-MAP.md:
+<pre><code>## Rescoped Feature Maps
+
+- apps/web/FEATURE-MAP.md
+- apps/api/FEATURE-MAP.md
+- apps/admin/FEATURE-MAP.md
+</code></pre>
+</li>
+
+<li><strong>Per-Sub-App-Init</strong> (in jedem app dir):
+<pre><code>cd apps/web && /cap:init
+cd ../api && /cap:init
+cd ../admin && /cap:init</code></pre>
+</li>
+
+<li><strong>Config für Discovery-Mode</strong> (in <code>.cap/config.json</code> der Root):
+<pre><code>{
+  "featureMaps": {
+    "discover": "auto"
+  },
+  "featureMapStyle": "auto"
+}</code></pre>
+<code>discover: "auto"</code> erlaubt directory-walk beyond expliziter Header. <code>"table-only"</code> ist conservative default.</li>
+
+<li><strong>Active App umschalten</strong>:
+<pre><code>/cap:switch-app apps/api</code></pre>
+SESSION.json wird mit <code>activeApp: "apps/api"</code> aktualisiert. Folgende cap:scan / cap:prototype ops scopen automatisch zu der app.</li>
+
+<li><strong>Aggregation testen</strong>:
+<pre><code>/cap:status
+# zeigt alle features across alle sub-apps + per-sub-app counts</code></pre>
+</li>
+</ol>
+
+<div class="callout callout-warn">
+<strong>Em-Dash-Header-Tolerance:</strong>
+Falls deine bestehende FEATURE-MAP.md <code>### F-001 — Title [shipped]</code> nutzt (mit em-dash statt colon): das funktioniert seit F-082-iter2 out of the box. Nicht umstellen.
+</div>
+
+<h3 id="mig-memory">11.4 Memory-Layer aktivieren (V6)</h3>
+
+<ol>
+<li><strong>Memory-Pipeline initial run</strong>:
+<pre><code>/cap:memory bootstrap
+# erstellt .cap/memory/-Struktur
+# läuft initial classifier auf existing tags
+# erzeugt per-feature memory files</code></pre>
+</li>
+
+<li><strong>Existing Snapshots migrieren</strong> (F-077 + F-079):
+<pre><code>/cap:memory migrate-snapshots
+# heuristic: snapshot-date + FEATURE-MAP state-transitions
+# → snapshots werden ihrem damaligen activeFeature zugeordnet
+# → unzuordbare landen in platform/snapshots-unassigned.md</code></pre>
+GoetzeInvest hatte ~38 orphan snapshots — ist exakt der Use-Case.</li>
+
+<li><strong>Platform-Topics anlegen</strong> (manuell, basierend auf cross-cutting concerns):
+<pre><code>mkdir -p .cap/memory/platform/checklists
+touch .cap/memory/platform/observability.md
+touch .cap/memory/platform/auth.md
+touch .cap/memory/platform/deployment.md</code></pre>
+Frontmatter siehe Abschnitt 5.3.</li>
+
+<li><strong>Existing Decisions retro-taggen</strong>:
+<pre><code># Suche nach decisions im code die platform-relevant sind:
+grep -r "@cap-decision" --include="*.{ts,js,cjs}" | head -20
+
+# Wenn eine decision cross-cutting ist:
+# Vorher: // @cap-decision rate-limit at edge, not service
+# Nachher: // @cap-decision platform:performance rate-limit at edge, not service</code></pre>
+</li>
+
+<li><strong>Claude-native Bridge testen</strong> (F-080):
+<pre><code>/cap:start
+# erwartet: "Claude-native erinnert: ..." erscheint nach activeFeature
+# falls leer: bridge findet ~/.claude/projects/&lt;slug&gt;/memory/ nicht
+# debug:
+node -e "console.log(require('./cap/bin/lib/cap-memory-bridge').getBridgeData(process.cwd()))"</code></pre>
+</li>
+
+<li><strong>Re-Run Pipeline</strong> (idempotent check):
+<pre><code>/cap:memory run
+# zweimal hintereinander → byte-identisch (F-079 contract)</code></pre>
+</li>
+</ol>
+
+<h3 id="mig-validation">11.5 Real-World Validierung</h3>
+
+<ol>
+<li><strong>Coverage messen</strong>:
+<pre><code>/cap:status
+# zeigt total features vs. tagged features
+# target nach migration: ≥80% feature-discovery (V6.1-Benchmark)</code></pre>
+GoetzeInvest erreichte 96% nach em-dash-fix.</li>
+
+<li><strong>Test-Audit</strong>:
+<pre><code>/cap:test-audit
+# assertion-density, coverage, mutation, anti-patterns, trust-score
+# baseline für ongoing improvements</code></pre>
+</li>
+
+<li><strong>Completeness-Score</strong> (F-048):
+<pre><code>/cap:completeness
+# 4 Signale per AC: tests, code-tags, coverage, integration-presence
+# → markdown audit für PR-attachments</code></pre>
+</li>
+
+<li><strong>Self-Learning aktivieren</strong> (V5):
+<pre><code>/cap:learn --review
+# zeigt patterns die auto-extrahiert wurden
+# manuell promoten / reject / defer
+# nach 3-5 sessions baseline → fitness-score wird stabil</code></pre>
+</li>
+
+<li><strong>Ongoing-Workflow etablieren</strong>:
+<pre><code># Pro Session (Konvention):
+/cap:start                           # ← surfaces bridge data
+# ... arbeit ...
+/cap:scan                            # ← keep tags in sync
+/cap:save 2026-MM-DD-topic           # ← snapshot mit auto-linkage</code></pre>
+</li>
+</ol>
+
+<h3>Migrations-Checkliste</h3>
+
+<table>
+<thead><tr><th>Schritt</th><th>Befehl</th><th>Erwartung</th></tr></thead>
+<tbody>
+<tr><td><strong>Easy-Path</strong></td><td><code>/cap:upgrade</code></td><td><strong>Alles in einem</strong> — 7 stages atomic, marker geschrieben</td></tr>
+<tr><td>Init</td><td><code>/cap:init</code></td><td>.cap/ + FEATURE-MAP.md erstellt</td></tr>
+<tr><td>Annotate</td><td><code>/cap:annotate</code></td><td>50-200 tags je nach Codebase</td></tr>
+<tr><td>Anchors</td><td><code>/cap:migrate-tags</code></td><td>fragmented → unified blocks</td></tr>
+<tr><td>Scan</td><td><code>/cap:scan</code></td><td>Feature-Map enriched</td></tr>
+<tr><td>Reconcile</td><td><code>/cap:reconcile</code></td><td>state-drift entfernt</td></tr>
+<tr><td>Monorepo</td><td><code>/cap:switch-app</code></td><td>multi-app discovery aktiv</td></tr>
+<tr><td>Memory</td><td><code>/cap:memory bootstrap</code></td><td>per-feature files erstellt</td></tr>
+<tr><td>Snapshots</td><td><code>/cap:memory migrate-snapshots</code></td><td>orphans zugeordnet</td></tr>
+<tr><td>Bridge</td><td><code>/cap:start</code></td><td>"Claude-native erinnert: ..." surface</td></tr>
+<tr><td>Self-Learn</td><td><code>/cap:learn --review</code></td><td>baseline patterns</td></tr>
+<tr><td>Audit</td><td><code>/cap:test-audit</code></td><td>baseline trust-score</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-ok">
+<strong>Erwartetes Ergebnis nach Migration:</strong>
+≥80% Feature-Discovery (Benchmark V6.1) · alle major decisions im memory-layer · cross-session continuity via snapshots · self-learning baseline aktiv · stage-2-pipeline verfügbar für nächste features.
+</div>
+
+<h2 id="offene-fragen">12 · Offene Tracks (low urgency)</h2>
+
+<ul>
+<li><strong>CI #42 final remediation</strong> — Path 1 ist 4× empirisch abgelehnt (Node 22-25 alle haben den worker-coverage-aggregator-bug). Status quo: 21min coverage runs, 97.4% coverage. Echter Fix erfordert upstream Node bug filing.</li>
+<li><strong>Phase 4 Test-Migration</strong> — 248 callsites in 9 weiteren files (dispatcher, frontmatter-cli, milestone, roadmap, template, verify, uat, profile-pipeline, init-manager). Würde plain-test-speed verbessern, aber NICHT den coverage-gap schließen. Optional refactor-track.</li>
+<li><strong>V6.2 Self-Improving Meta-Loop</strong> — Plan-C-Draft in <code>.cap/PLAN-V6.2-audit-as-signals.md</code>. CAP audited sich selbst und produziert signals für die self-learning pipeline. Brainstorm-Track ausstehend.</li>
+<li><strong>F-077 → tested promotion</strong> — aktuell prototyped, AC-5-wiring zu cap-memory-migrate ist mit F-079 done aber state-update ausständig.</li>
+<li><strong>F-082 follow-ups</strong> — 4× non-blocking notes aus Stage-2 (cross-sub-app blast radius / atomic batch writes / addFeature asymmetry doc / iter-3 file extraction → F-083 done). Iter-3 ist gemerged, andere sind <a href="#">PR #51</a>.</li>
+</ul>
+
+<h2 id="anhang">13 · Anhang: Vollständige Feature-Liste</h2>
+
+<p>81 Features total — 59 shipped, 21 tested, 1 prototyped.</p>
+
+<h4>V0-V4: Foundation (F-001 bis F-060)</h4>
+<p>Tag-Scanner, Feature-Map-Parser, Five-Step-Workflow, Agents, Commands, Tools-Manifest, Brownfield-Analyse, Threading, CAP-UI, Design-Module. <em>Alle shipped</em>.</p>
+
+<h4>V5: Self-Learning (F-061 + F-070..F-074)</h4>
+<ul class="feature-list">
+<li><span class="fid">F-061</span> Token Telemetry <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-070</span> Collect Learning Signals <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-071</span> Pattern Extraction (Heuristic + LLM) <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-072</span> Two-Layer Fitness Score <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-073</span> Pattern Review (cap:learn) <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-074</span> Auto-Retract &amp; Pattern Unlearn <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-075</span> Trust-Mode Configuration Slot <span class="badge badge-shipped">shipped</span></li>
+</ul>
+
+<h4>V6: Memory Foundation (F-076 + F-077 + F-078)</h4>
+<ul class="feature-list">
+<li><span class="fid">F-076</span> Per-Feature Memory Format Schema <span class="badge badge-tested">tested</span></li>
+<li><span class="fid">F-077</span> V6 Memory Migration Tool <span class="badge badge-prototyped">prototyped</span></li>
+<li><span class="fid">F-078</span> Platform-Bucket for Cross-Cutting Decisions <span class="badge badge-tested">tested</span></li>
+</ul>
+
+<h4>V6 Konsumenten (F-079 + F-080)</h4>
+<ul class="feature-list">
+<li><span class="fid">F-079</span> Snapshot-Linkage to Features and Platform <span class="badge badge-tested">tested</span></li>
+<li><span class="fid">F-080</span> Bridge to Claude-native Memory <span class="badge badge-tested">tested</span></li>
+</ul>
+
+<h4>V6.1: Format-Tolerance + Monorepo (F-081 + F-082 + F-083)</h4>
+<ul class="feature-list">
+<li><span class="fid">F-081</span> Multi-Format Parser (long-form IDs + bullet ACs) <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-082</span> Monorepo Aggregation + em-dash header tolerance <span class="badge badge-shipped">shipped</span></li>
+<li><span class="fid">F-083</span> Extract Monorepo Module (refactor) <span class="badge badge-tested">tested</span></li>
+</ul>
+
+<h4>V6.2: Onboarding-Orchestrator (F-084)</h4>
+<ul class="feature-list">
+<li><span class="fid">F-084</span> Project Onboarding &amp; Migration Orchestrator (<code>/cap:upgrade</code>) <span class="badge badge-tested">tested</span></li>
+</ul>
+
+<hr>
+
+<p style="color: var(--muted); font-size: 13px; margin-top: 48px;">
+Generiert 2026-05-07 · CAP main: commit 7215141 · 22 PRs in der Session 2026-05-07 gemerged · V6 Stack komplett · Stage-2-Streak 7-for-7 · Path-1-Quadruple-rejection (CI #42 final).
+</p>
+
+</main>
+</div>
+</body>
+</html>
