@@ -5,13 +5,62 @@
  * and the repair path.
  */
 
+// @cap-decision(CI/issue-42 Path-2 PR-2.6) Migrated 70 runGsdTools spawn
+// callsites to direct cmdVerify*/cmdValidate* in-process calls.
+
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { runGsdTools, createTempProject, cleanup } = require('./helpers.cjs');
+const { createTempProject, cleanup } = require('./helpers.cjs');
 const verify = require('../cap/bin/lib/verify.cjs');
+
+/**
+ * In-process equivalent of runGsdTools that captures stdout, stderr, and
+ * process.exit(). Returns the same {success, output, error} shape so the
+ * existing test bodies need no further changes beyond swapping the call.
+ *
+ * Pattern follows tests/commands.test.cjs:41-78 runCmd helper (PR #55).
+ */
+function runCmd(fn) {
+  const origWriteSync = fs.writeSync;
+  const origExit = process.exit;
+  let stdout = '';
+  let stderr = '';
+  let exited = false;
+  let exitCode = 0;
+
+  fs.writeSync = (fd, data, ...rest) => {
+    const str = String(data);
+    if (fd === 1) { stdout += str; return Buffer.byteLength(str); }
+    if (fd === 2) { stderr += str; return Buffer.byteLength(str); }
+    return origWriteSync.call(fs, fd, data, ...rest);
+  };
+  process.exit = (code) => {
+    exited = true;
+    exitCode = code || 0;
+    throw new Error('__CMD_EXIT__');
+  };
+
+  let thrown = null;
+  try {
+    fn();
+  } catch (e) {
+    if (e && e.message !== '__CMD_EXIT__') thrown = e;
+  } finally {
+    fs.writeSync = origWriteSync;
+    process.exit = origExit;
+  }
+
+  if (thrown) {
+    return { success: false, output: stdout.trim(), error: (stderr.trim() || thrown.message) };
+  }
+  if (exited && exitCode !== 0) {
+    return { success: false, output: stdout.trim(), error: stderr.trim() };
+  }
+  return { success: true, output: stdout.trim(), error: null };
+}
 
 // ─── Helpers for setting up minimal valid projects ────────────────────────────
 
@@ -67,7 +116,7 @@ describe('validate health command', () => {
     // createTempProject creates .planning/phases — remove it entirely
     fs.rmSync(path.join(tmpDir, '.planning'), { recursive: true, force: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -88,7 +137,7 @@ describe('validate health command', () => {
     // Create valid phase dir so no W007
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -109,7 +158,7 @@ describe('validate health command', () => {
     writeValidConfigJson(tmpDir);
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -128,7 +177,7 @@ describe('validate health command', () => {
     writeValidConfigJson(tmpDir);
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -150,7 +199,7 @@ describe('validate health command', () => {
     writeValidConfigJson(tmpDir);
     // No ROADMAP.md
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -169,7 +218,7 @@ describe('validate health command', () => {
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
     // No STATE.md
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -189,7 +238,7 @@ describe('validate health command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -207,7 +256,7 @@ describe('validate health command', () => {
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
     // No config.json
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -226,7 +275,7 @@ describe('validate health command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -246,7 +295,7 @@ describe('validate health command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -274,7 +323,7 @@ describe('validate health command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -298,7 +347,7 @@ describe('validate health command', () => {
     // Create a badly named dir
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', 'bad_name'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -321,7 +370,7 @@ describe('validate health command', () => {
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
     // No 01-01-SUMMARY.md
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -344,7 +393,7 @@ describe('validate health command', () => {
     writeValidConfigJson(tmpDir);
     // No phase dirs
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -366,7 +415,7 @@ describe('validate health command', () => {
     // Orphan phase dir not in ROADMAP
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '99-orphan'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -389,7 +438,7 @@ describe('validate health command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -410,7 +459,7 @@ describe('validate health command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -436,7 +485,7 @@ describe('validate health command', () => {
     );
     // No VALIDATION.md
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -463,7 +512,7 @@ describe('validate health command', () => {
       '# Validation\n\nValidation content.\n'
     );
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -487,7 +536,7 @@ describe('validate health command', () => {
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Summary\n');
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -503,7 +552,7 @@ describe('validate health command', () => {
     // No config.json → W003 (warning, not error)
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-a'), { recursive: true });
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -540,7 +589,7 @@ describe('validate health --repair command', () => {
     const configPath = path.join(tmpDir, '.planning', 'config.json');
     if (fs.existsSync(configPath)) fs.unlinkSync(configPath);
 
-    const result = runGsdTools('validate health --repair', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, { repair: true }, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -572,7 +621,7 @@ describe('validate health --repair command', () => {
     const configPath = path.join(tmpDir, '.planning', 'config.json');
     fs.writeFileSync(configPath, '{broken json');
 
-    const result = runGsdTools('validate health --repair', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, { repair: true }, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -597,7 +646,7 @@ describe('validate health --repair command', () => {
     const statePath = path.join(tmpDir, '.planning', 'STATE.md');
     if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
 
-    const result = runGsdTools('validate health --repair', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, { repair: true }, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -624,7 +673,7 @@ describe('validate health --repair command', () => {
       originalContent
     );
 
-    const result = runGsdTools('validate health --repair', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, { repair: true }, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -651,7 +700,7 @@ describe('validate health --repair command', () => {
       JSON.stringify({ model_profile: 'balanced', workflow: { research: true } }, null, 2)
     );
 
-    const result = runGsdTools('validate health --repair', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, { repair: true }, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -676,7 +725,7 @@ describe('validate health --repair command', () => {
     if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
 
     // Run WITHOUT --repair to just check repairable_count
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -693,7 +742,7 @@ describe('validate health --repair command', () => {
       '# Session State\n\nPhase 99 is the current phase.\n'
     );
 
-    const result = runGsdTools('validate health', tmpDir);
+    const result = runCmd(() => verify.cmdValidateHealth(tmpDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -721,7 +770,7 @@ describe('verify-plan-structure command', () => {
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, '# Plan\n\nSome content.\n');
 
-    const result = runGsdTools(['verify', 'plan-structure', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPlanStructure(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -730,7 +779,7 @@ describe('verify-plan-structure command', () => {
   });
 
   test('returns error for nonexistent file', () => {
-    const result = runGsdTools(['verify', 'plan-structure', 'nonexistent.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPlanStructure(tmpDir, 'nonexistent.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -759,7 +808,7 @@ must_haves: {}
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'plan-structure', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPlanStructure(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -786,7 +835,7 @@ must_haves: {}
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'plan-structure', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPlanStructure(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -810,7 +859,7 @@ describe('verify-references command', () => {
   });
 
   test('returns error for nonexistent file', () => {
-    const result = runGsdTools(['verify', 'references', 'nonexistent.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyReferences(tmpDir, 'nonexistent.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -826,7 +875,7 @@ describe('verify-references command', () => {
     const docFile = path.join(tmpDir, 'doc.md');
     fs.writeFileSync(docFile, 'See `src/app.js` for details.\n');
 
-    const result = runGsdTools(['verify', 'references', 'doc.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyReferences(tmpDir, 'doc.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -837,7 +886,7 @@ describe('verify-references command', () => {
     const docFile = path.join(tmpDir, 'doc.md');
     fs.writeFileSync(docFile, 'See `src/nonexistent.js` for details.\n');
 
-    const result = runGsdTools(['verify', 'references', 'doc.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyReferences(tmpDir, 'doc.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -862,7 +911,7 @@ describe('validate-agents command', () => {
   });
 
   test('returns agent installation status', () => {
-    const result = runGsdTools('validate agents', tmpDir);
+    const result = runCmd(() => verify.cmdValidateAgents(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -889,7 +938,7 @@ describe('verify-summary command', () => {
   });
 
   test('returns failed when summary file does not exist', () => {
-    const result = runGsdTools(['verify-summary', 'nonexistent-SUMMARY.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifySummary(tmpDir, 'nonexistent-SUMMARY.md', 2, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -900,7 +949,7 @@ describe('verify-summary command', () => {
   test('passes with a valid summary containing no file references', () => {
     fs.writeFileSync(path.join(tmpDir, 'SUMMARY.md'), '# Summary\n\nAll work completed.\n');
 
-    const result = runGsdTools(['verify-summary', 'SUMMARY.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifySummary(tmpDir, 'SUMMARY.md', 2, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -911,7 +960,7 @@ describe('verify-summary command', () => {
     const content = '# Summary\n\n## Self-Check\n\nAll pass. Everything succeeded.\n';
     fs.writeFileSync(path.join(tmpDir, 'SUMMARY.md'), content);
 
-    const result = runGsdTools(['verify-summary', 'SUMMARY.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifySummary(tmpDir, 'SUMMARY.md', 2, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -922,7 +971,7 @@ describe('verify-summary command', () => {
     const content = '# Summary\n\n## Self-Check\n\nSome tests fail here.\n';
     fs.writeFileSync(path.join(tmpDir, 'SUMMARY.md'), content);
 
-    const result = runGsdTools(['verify-summary', 'SUMMARY.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifySummary(tmpDir, 'SUMMARY.md', 2, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -934,7 +983,7 @@ describe('verify-summary command', () => {
     const content = '# Summary\n\nCreated: `src/nonexistent.js`\nModified: `lib/missing.ts`\n';
     fs.writeFileSync(path.join(tmpDir, 'SUMMARY.md'), content);
 
-    const result = runGsdTools(['verify-summary', 'SUMMARY.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifySummary(tmpDir, 'SUMMARY.md', 2, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -958,7 +1007,7 @@ describe('verify artifacts command', () => {
   });
 
   test('returns error for nonexistent plan file', () => {
-    const result = runGsdTools(['verify', 'artifacts', 'nonexistent.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'nonexistent.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -969,7 +1018,7 @@ describe('verify artifacts command', () => {
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, '---\nmust_haves: {}\n---\n# Plan\n');
 
-    const result = runGsdTools(['verify', 'artifacts', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -994,7 +1043,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'artifacts', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1013,7 +1062,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'artifacts', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1035,7 +1084,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'artifacts', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1057,7 +1106,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'artifacts', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1081,7 +1130,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'artifacts', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyArtifacts(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1106,7 +1155,7 @@ describe('verify key-links command', () => {
   });
 
   test('returns error for nonexistent plan file', () => {
-    const result = runGsdTools(['verify', 'key-links', 'nonexistent.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'nonexistent.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1117,7 +1166,7 @@ describe('verify key-links command', () => {
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, '---\nmust_haves: {}\n---\n# Plan\n');
 
-    const result = runGsdTools(['verify', 'key-links', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1140,7 +1189,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'key-links', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1164,7 +1213,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'key-links', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1183,7 +1232,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'key-links', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1208,7 +1257,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'key-links', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1231,7 +1280,7 @@ must_haves:
     const planFile = path.join(tmpDir, 'test-PLAN.md');
     fs.writeFileSync(planFile, planContent);
 
-    const result = runGsdTools(['verify', 'key-links', 'test-PLAN.md'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyKeyLinks(tmpDir, 'test-PLAN.md', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1256,7 +1305,7 @@ describe('verify commits command', () => {
   });
 
   test('reports invalid commit hashes', () => {
-    const result = runGsdTools(['verify', 'commits', 'aaaaaaa', 'bbbbbbb'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyCommits(tmpDir, ['aaaaaaa', 'bbbbbbb'], false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1287,7 +1336,7 @@ describe('verify phase-completeness command', () => {
   });
 
   test('returns error when phase not found', () => {
-    const result = runGsdTools(['verify', 'phase-completeness', '99'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPhaseCompleteness(tmpDir, '99', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1299,7 +1348,7 @@ describe('verify phase-completeness command', () => {
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
 
-    const result = runGsdTools(['verify', 'phase-completeness', '1'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPhaseCompleteness(tmpDir, '1', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1313,7 +1362,7 @@ describe('verify phase-completeness command', () => {
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
     fs.writeFileSync(path.join(phaseDir, '01-01-SUMMARY.md'), '# Summary\n');
 
-    const result = runGsdTools(['verify', 'phase-completeness', '1'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPhaseCompleteness(tmpDir, '1', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1325,7 +1374,7 @@ describe('verify phase-completeness command', () => {
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, 'orphan-SUMMARY.md'), '# Summary\n');
 
-    const result = runGsdTools(['verify', 'phase-completeness', '1'], tmpDir);
+    const result = runCmd(() => verify.cmdVerifyPhaseCompleteness(tmpDir, '1', false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1349,7 +1398,7 @@ describe('validate consistency command', () => {
   });
 
   test('returns failed when ROADMAP.md is missing', () => {
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1363,7 +1412,7 @@ describe('validate consistency command', () => {
       '# Roadmap\n\n### Phase 5: Future Phase\n'
     );
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1377,7 +1426,7 @@ describe('validate consistency command', () => {
     );
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '99-orphan'), { recursive: true });
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1392,7 +1441,7 @@ describe('validate consistency command', () => {
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '01-one'), { recursive: true });
     fs.mkdirSync(path.join(tmpDir, '.planning', 'phases', '03-three'), { recursive: true });
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1409,7 +1458,7 @@ describe('validate consistency command', () => {
     fs.writeFileSync(path.join(phaseDir, 'setup-01-PLAN.md'), '# Plan 1\n');
     fs.writeFileSync(path.join(phaseDir, 'setup-03-PLAN.md'), '# Plan 3\n');
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1425,7 +1474,7 @@ describe('validate consistency command', () => {
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, 'orphan-SUMMARY.md'), '# Summary\n');
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1441,7 +1490,7 @@ describe('validate consistency command', () => {
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, 'setup-01-PLAN.md'), '---\ntype: execute\n---\n# Plan\n');
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1458,7 +1507,7 @@ describe('validate consistency command', () => {
     fs.writeFileSync(path.join(phaseDir, 'setup-01-PLAN.md'), '---\nwave: 1\n---\n# Plan\n');
     fs.writeFileSync(path.join(phaseDir, 'setup-01-SUMMARY.md'), '# Summary\n');
 
-    const result = runGsdTools('validate consistency', tmpDir);
+    const result = runCmd(() => verify.cmdValidateConsistency(tmpDir, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
@@ -1472,7 +1521,7 @@ describe('validate consistency command', () => {
 describe('validate health — home directory guard', () => {
   test('detects when CWD is the home directory', () => {
     const homeDir = os.homedir();
-    const result = runGsdTools('validate health', homeDir);
+    const result = runCmd(() => verify.cmdValidateHealth(homeDir, {}, false));
     assert.ok(result.success, `Command failed: ${result.error}`);
 
     const output = JSON.parse(result.output);
