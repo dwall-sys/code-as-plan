@@ -1,3 +1,4 @@
+// @cap-history(sessions:2, edits:3, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 3 edits
 /**
  * GSD Tools Tests - Copilot Install Plumbing
  *

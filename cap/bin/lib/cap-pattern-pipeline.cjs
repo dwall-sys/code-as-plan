@@ -1,4 +1,5 @@
 // @cap-context CAP F-071 Extract Patterns via Heuristics and LLM — pure-compute pipeline that turns
+// @cap-history(sessions:2, edits:17, since:2026-05-05, learned:2026-05-06) Frequently modified — 2 sessions, 17 edits
 //                 raw F-070 learning signals into actionable P-NNN patterns. Stage 1 is deterministic
 //                 (TF-IDF / RegEx clustering / frequency); Stage 2 is the LLM stage triggered when a
 //                 candidate hits the threshold (≥ 3 similar overrides OR ≥ 1 regret). All LLM-bound

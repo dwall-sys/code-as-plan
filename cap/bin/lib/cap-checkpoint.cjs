@@ -1,4 +1,5 @@
 // @cap-context CAP v2.0 checkpoint detector -- advisory logic for /cap:checkpoint slash command.
+// @cap-history(sessions:2, edits:5, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 5 edits
 // Detects natural breakpoints in the workflow so the user can be nudged toward /compact before
 // auto-compact degrades context quality.
 

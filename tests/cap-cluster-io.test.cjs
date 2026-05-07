@@ -1,6 +1,7 @@
 'use strict';
 
 // @cap-feature(feature:F-050) Tests for cap-cluster-io.cjs -- I/O layer with structured diagnostics.
+// @cap-history(sessions:2, edits:13, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 13 edits
 // Targets ≥70% line coverage on the io module per F-050/AC-3.
 // Verifies F-050/AC-2: each catch-block emits a structured diagnostic via cap-logger when CAP_DEBUG is set.
 

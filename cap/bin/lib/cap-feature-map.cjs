@@ -10,6 +10,7 @@
 // @cap-feature(feature:F-081) Multi-Format Feature Map Parser — Union ID regex (F-NNN | F-LONGFORM), bullet-style ACs, config-driven format selection
 // @cap-feature(feature:F-082) Aggregate Feature Maps Across Monorepo Sub-Apps — readFeatureMap transparently merges sub-app maps via Rescoped Table or opt-in directory walk
 
+// @cap-history(sessions:3, edits:5, since:2026-04-20, learned:2026-05-06) Frequently modified — 3 sessions, 5 edits
 const fs = require('node:fs');
 const path = require('node:path');
 

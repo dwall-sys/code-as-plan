@@ -1,5 +1,6 @@
 // @cap-feature(feature:F-075) Adversarial tests for Trust-Mode Configuration Slot.
 // @cap-context Extends baseline coverage with mutation-safety, shape-exactness, unicode degradation,
+// @cap-history(sessions:2, edits:4, since:2026-04-22, learned:2026-05-05) Frequently modified — 2 sessions, 4 edits
 //              rate-limit evasion attempts, atomic-write concurrency, session-sync corner cases, and
 //              defense-in-depth for AC-7 (the open-closed invariant consumed by F-071/F-073/F-074).
 // @cap-decision(F-075/AC-7) Shape frozen-ness is non-negotiable. If a consumer can mutate the result
