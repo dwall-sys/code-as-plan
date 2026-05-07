@@ -120,6 +120,47 @@ if (wantsCoverage) {
   // Until Path 2 lands: the flag stays. The 552 in-process migrations from
   // PRs #54-#61 remain net wins (faster `npm test` runs locally + cleaner test
   // architecture) but neither they nor c8 close the coverage gap on Path 1.
+  //
+  // @cap-decision(CI/issue-42 quadruple-rejection) Path 1 also rejected on
+  // Node 22, 23, 25 — confirms the bug is structural, not version-specific.
+  //
+  // Empirical Node-version sweep (2026-05-07): tested Path 1 across all four
+  // current Node majors with both flag forms:
+  //
+  //   Node 22.22.2 + Path 1 (--experimental-...=none removed) .. 55.22% lines, 23s
+  //   Node 23.11.1 + Path 1 ........................................ 55.84% lines, 23s
+  //   Node 24.15.0 + Path 1 ........................................ 55.11% lines, 26s
+  //   Node 25.9.0  + Path 1 ........................................ 55.04% lines, 26s
+  //   Node 23.11.1 + --test-isolation=process (stabilised flag) ... 55.43% lines, 26s
+  //   Node 25.9.0  + --test-isolation=process (stabilised flag) ... 55.15% lines, 28s
+  //
+  // Hot-file numbers were BYTE-IDENTICAL across all 6 Path-1 runs. This is
+  // deterministic missing-aggregation, not flaky measurement. The bug is
+  // present in Node 22 through 25 and survives both flag forms.
+  //
+  // What this eliminates:
+  //   - "Node 23+ has worker-coverage-merge fixes" — wrong, v23 has the bug.
+  //   - "Upgrade fixes it" — wrong, v25 has the bug.
+  //   - "Use the stabilised flag" — wrong, same bug under both forms.
+  //
+  // Final remediation set: Status quo only. The
+  // --experimental-test-isolation=none flag stays. ~21 min CI runs, ~97.4%
+  // coverage. F-052-class race detection sacrificed by design under coverage
+  // but covered by plain `npm test` worker-isolation. The 552 in-process
+  // migrations from PRs #54-#61 remain net wins for plain-test speed but did
+  // NOT enable Path 1.
+  //
+  // If a future investigator considers re-trying Path 1: don't. It has been
+  // rejected FOUR times with empirical data:
+  //   1. native pre-Path-2 (PR #62, ~40pp drop)
+  //   2. native post-Path-2 (PR #62, ~42pp drop, byte-identical hot files)
+  //   3. c8 v10 (PR #63, ~42pp drop, same hot files)
+  //   4. Node 22/23/24/25 sweep (this commit, ~42pp drop on every Node major)
+  //
+  // The actionable next step (NOT this commit, low urgency) is filing an
+  // upstream Node bug with a minimal repro showing alphabetically-early
+  // workers missing from the native coverage aggregator under per-file
+  // isolation. Until that lands and ships in some Node version: status quo.
   nodeArgs.push(
     '--experimental-test-isolation=none',
     '--experimental-test-coverage',
