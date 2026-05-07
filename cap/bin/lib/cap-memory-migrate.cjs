@@ -758,7 +758,12 @@ function classifySnapshot(snap, context) {
         };
       }
       if (candidates.length > 1) {
-        candidates.sort((a, b) => a.dh - b.dh);
+        // @cap-decision(F-079/followup) F-079-FIX-D: explicit secondary sort for tie-break determinism.
+        //   Previously the tie-break for equally-close transitions relied implicitly on Map iteration
+        //   order + V8's stable sort. The contract worked today but wasn't pinned. If a future refactor
+        //   switches to a Set or a non-stable sort, the determinism would break silently. The explicit
+        //   `localeCompare` on featureId locks the contract: equal `dh` → lexicographic featureId order.
+        candidates.sort((a, b) => a.dh - b.dh || a.featureId.localeCompare(b.featureId));
         const top = candidates.slice(0, 3);
         reasons.push(`date-proximity-multi:${top.map((c) => c.featureId).join(',')}`);
         return {

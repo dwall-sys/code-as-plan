@@ -513,3 +513,240 @@ describe('Stage-2 #10: missing / empty / malformed siblings', () => {
     }
   });
 });
+
+// -------- F-080-FIX-A: _safeForOutput at parse-time --------
+
+// @cap-decision(F-080/followup) F-080-FIX-A: _safeForOutput at parse-time, not surface-time.
+//   Pin: ANSI bytes in the hook field → entries[N].hook does NOT contain `\x1b`.
+describe('F-080-FIX-A: parse-time sanitization of hook + description', () => {
+  it('ANSI bytes in hook field are stripped at parse-time (entries[].hook is safe)', () => {
+    const { projectRoot, claudeNativeDir, restoreHome } = makeSandboxProject();
+    try {
+      const ansiHook = 'safe-prefix\x1b[31mEVIL\x1b[0msuffix';
+      const ansiDescription = 'desc\x1b[2mhidden\x1b[0m';
+      writeSimple(claudeNativeDir,
+        [`- [Title](file.md) — ${ansiHook}`],
+        { 'file.md': `---\nname: x\ntype: project\ndescription: ${ansiDescription}\n---\n` }
+      );
+      const entries = bridge.parseMemoryMd(claudeNativeDir);
+      assert.equal(entries.length, 1, 'one entry parsed');
+      assert.doesNotMatch(entries[0].hook, /\x1b/, 'hook field has no escape bytes');
+      assert.match(entries[0].hook, /safe-prefix/, 'safe prefix retained in hook');
+      assert.doesNotMatch(entries[0].description || '', /\x1b/, 'description has no escape bytes');
+      // Title is also safe (already covered by Stage-2 #2 but pinned here for symmetry).
+      assert.doesNotMatch(entries[0].title, /\x1b/, 'title has no escape bytes');
+    } finally {
+      restoreHome();
+    }
+  });
+
+  it('ANSI bytes are stripped on cache-load too (loadCachedIndex sanitizes)', () => {
+    const { projectRoot, claudeNativeDir, restoreHome } = makeSandboxProject();
+    try {
+      // Manually write a poisoned cache (simulating an older version that didn't sanitize).
+      const cachePath = bridge.getCachePath(projectRoot);
+      const ansiTitle = 'Title\x1b[31mEVIL\x1b[0m';
+      const ansiHook = 'hook\x1b[2mhidden\x1b[0m';
+      const ansiDescription = 'desc\x1b[31mEVIL\x1b[0m';
+      const poisoned = {
+        schemaVersion: bridge.CACHE_SCHEMA_VERSION,
+        sourceRoot: claudeNativeDir,
+        memoryMdMtime: '2026-05-07T00:00:00.000Z',
+        entries: [
+          { title: ansiTitle, file: 'a.md', hook: ansiHook, type: 'project', fileMtime: null, description: ansiDescription },
+        ],
+      };
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      fs.writeFileSync(cachePath, JSON.stringify(poisoned), 'utf8');
+      const cached = bridge.loadCachedIndex(projectRoot);
+      assert.ok(cached, 'cache loaded');
+      assert.equal(cached.entries.length, 1);
+      assert.doesNotMatch(cached.entries[0].title, /\x1b/, 'title sanitized on cache load');
+      assert.doesNotMatch(cached.entries[0].hook, /\x1b/, 'hook sanitized on cache load');
+      assert.doesNotMatch(cached.entries[0].description || '', /\x1b/, 'description sanitized on cache load');
+    } finally {
+      restoreHome();
+    }
+  });
+});
+
+// -------- F-080-FIX-B: MEMORY_MD_LINE_RE requires surrounding spaces for hyphen --------
+
+// @cap-decision(F-080/followup) F-080-FIX-B: hyphen separator now requires surrounding whitespace.
+describe('F-080-FIX-B: hyphen-in-title disambiguation', () => {
+  it('title containing inner hyphen does NOT split at the inner hyphen', () => {
+    const { projectRoot, claudeNativeDir, restoreHome } = makeSandboxProject();
+    try {
+      // The title bracket is delimited by `]`, so a hyphen inside is captured by the title group.
+      // What we want to pin: a line like `- [Foo-Bar](file.md) Description with-no-separator`
+      //   does NOT match (no real separator), and a line like `- [Foo-Bar](file.md) - hook`
+      //   DOES match with hook='hook' (surrounding spaces around hyphen).
+      writeSimple(claudeNativeDir,
+        [
+          '- [Foo-Bar](safe.md) - hook with hyphen',
+          '- [No-Sep-Foo](nosep.md) inline-text-no-sep',
+        ],
+        {
+          'safe.md': '---\nname: x\n---\n',
+          'nosep.md': '---\nname: y\n---\n',
+        }
+      );
+      const entries = bridge.parseMemoryMd(claudeNativeDir);
+      // The hyphen-with-spaces line MUST parse, with title intact.
+      const safe = entries.find((e) => e.file === 'safe.md');
+      assert.ok(safe, 'space-padded hyphen separator parsed');
+      assert.equal(safe.title, 'Foo-Bar', 'title is `Foo-Bar` (NOT `Foo` with separator at inner hyphen)');
+      assert.match(safe.hook, /hook with hyphen/, 'hook captured correctly');
+      // The no-separator line must NOT parse (no hook means no real bullet entry shape).
+      const nosep = entries.find((e) => e.file === 'nosep.md');
+      assert.equal(nosep, undefined, 'no-separator line silently dropped (not a valid bullet)');
+    } finally {
+      restoreHome();
+    }
+  });
+
+  it('em-dash (—) and en-dash (–) still parse without requiring extra whitespace', () => {
+    const { projectRoot, claudeNativeDir, restoreHome } = makeSandboxProject();
+    try {
+      writeSimple(claudeNativeDir,
+        [
+          '- [Em](em.md) — em hook',
+          '- [En](en.md) – en hook',
+        ],
+        {
+          'em.md': '---\nname: x\n---\n',
+          'en.md': '---\nname: y\n---\n',
+        }
+      );
+      const entries = bridge.parseMemoryMd(claudeNativeDir);
+      assert.equal(entries.length, 2, 'both em/en-dash forms parse');
+      const em = entries.find((e) => e.file === 'em.md');
+      const en = entries.find((e) => e.file === 'en.md');
+      assert.equal(em && em.title, 'Em');
+      assert.equal(en && en.title, 'En');
+    } finally {
+      restoreHome();
+    }
+  });
+});
+
+// -------- F-080-FIX-C: rename retry on EBUSY/EPERM with backoff --------
+
+// @cap-decision(F-080/followup) F-080-FIX-C: pin retry behavior.
+describe('F-080-FIX-C: rename retry on EBUSY/EPERM with backoff', () => {
+  it('_renameWithRetry retries up to 3 times on EBUSY, then succeeds', () => {
+    // Build a tmp file then mock fs.renameSync via dependency-injection-by-monkey-patch.
+    const tmpRoot = fs.mkdtempSync(path.join(SANDBOX, 'rename-retry-'));
+    const src = path.join(tmpRoot, 'src');
+    const dst = path.join(tmpRoot, 'dst');
+    fs.writeFileSync(src, 'payload');
+    const orig = fs.renameSync;
+    let calls = 0;
+    fs.renameSync = (a, b) => {
+      calls++;
+      if (calls < 3) {
+        const err = new Error('ebusy mock');
+        err.code = 'EBUSY';
+        throw err;
+      }
+      return orig.call(fs, a, b);
+    };
+    try {
+      bridge._renameWithRetry(src, dst);
+      assert.equal(calls, 3, 'rename called 3 times (2 EBUSY + 1 success)');
+      assert.ok(fs.existsSync(dst), 'destination file exists after success');
+    } finally {
+      fs.renameSync = orig;
+      try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_e) { /* ignore */ }
+    }
+  });
+
+  it('_renameWithRetry throws after 3 retries when EBUSY persists', () => {
+    const tmpRoot = fs.mkdtempSync(path.join(SANDBOX, 'rename-fail-'));
+    const src = path.join(tmpRoot, 'src');
+    const dst = path.join(tmpRoot, 'dst');
+    fs.writeFileSync(src, 'payload');
+    const orig = fs.renameSync;
+    let calls = 0;
+    fs.renameSync = () => {
+      calls++;
+      const err = new Error('ebusy persistent');
+      err.code = 'EBUSY';
+      throw err;
+    };
+    try {
+      assert.throws(
+        () => bridge._renameWithRetry(src, dst),
+        (e) => e && e.code === 'EBUSY',
+        'final attempt re-throws the EBUSY'
+      );
+      assert.equal(calls, 4, 'rename called 4 times (3 retries + 1 initial)');
+    } finally {
+      fs.renameSync = orig;
+      try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_e) { /* ignore */ }
+    }
+  });
+
+  it('refreshCache emits stderr warning + cleans tmp when rename fails persistently', () => {
+    const { projectRoot, claudeNativeDir, restoreHome } = makeSandboxProject();
+    const orig = fs.renameSync;
+    const origStderrWrite = process.stderr.write.bind(process.stderr);
+    let stderrCaptured = '';
+    process.stderr.write = (chunk) => {
+      stderrCaptured += String(chunk);
+      return true;
+    };
+    let calls = 0;
+    fs.renameSync = () => {
+      calls++;
+      const err = new Error('ebusy persistent');
+      err.code = 'EBUSY';
+      throw err;
+    };
+    try {
+      writeSimple(claudeNativeDir,
+        ['- [Title](a.md) — hook'],
+        { 'a.md': '---\nname: x\n---\n' }
+      );
+      const result = bridge.refreshCache(projectRoot);
+      assert.equal(result.written, false, 'refresh signals write failure');
+      assert.equal(result.reason, 'cache-write-failed');
+      assert.equal(calls, 4, '4 rename attempts (3 retries + 1 initial)');
+      assert.match(stderrCaptured, /cache write failed after retries/, 'stderr warning emitted');
+      assert.match(stderrCaptured, /EBUSY/, 'stderr warning includes errno');
+      // Verify tmp is cleaned up.
+      const cacheDir = path.dirname(bridge.getCachePath(projectRoot));
+      const tmpFiles = fs.readdirSync(cacheDir).filter((n) => n.includes('.tmp.'));
+      assert.equal(tmpFiles.length, 0, 'no .tmp files left after failure');
+    } finally {
+      fs.renameSync = orig;
+      process.stderr.write = origStderrWrite;
+      restoreHome();
+    }
+  });
+
+  it('non-retryable errors (e.g. ENOENT) throw immediately on first attempt', () => {
+    const tmpRoot = fs.mkdtempSync(path.join(SANDBOX, 'rename-enoent-'));
+    const src = path.join(tmpRoot, 'src-missing');  // does not exist
+    const dst = path.join(tmpRoot, 'dst');
+    const orig = fs.renameSync;
+    let calls = 0;
+    fs.renameSync = () => {
+      calls++;
+      const err = new Error('enoent');
+      err.code = 'ENOENT';
+      throw err;
+    };
+    try {
+      assert.throws(
+        () => bridge._renameWithRetry(src, dst),
+        (e) => e && e.code === 'ENOENT',
+        'ENOENT re-thrown immediately'
+      );
+      assert.equal(calls, 1, 'only 1 attempt — no retries on ENOENT');
+    } finally {
+      fs.renameSync = orig;
+      try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_e) { /* ignore */ }
+    }
+  });
+});

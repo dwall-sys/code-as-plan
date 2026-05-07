@@ -12,7 +12,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const FEATURE_MAP_FILE = 'FEATURE-MAP.md';
+// @cap-decision(F-083/followup) F-083-FIX-A: shared constants moved to cap-feature-map-internals.cjs
+//   to eliminate the duplicated `FEATURE_MAP_FILE` declaration with cap-feature-map.cjs.
+//   Single source of truth — future-drift impossible by construction.
+const { FEATURE_MAP_FILE } = require('./cap-feature-map-internals.cjs');
 
 // @cap-todo(ac:F-083/AC-6) Lazy accessor for cap-feature-map.cjs — required INSIDE function
 //   bodies, NEVER at module top-level. Memoized so cached-require cost is paid once per process.

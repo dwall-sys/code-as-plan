@@ -188,10 +188,37 @@ function run(options = {}) {
   // populated linked_snapshots block on every pipeline run. Idempotent: byte-identical on
   // re-run because processSnapshots groups by target and writes ONE upsert per target with
   // the FULL set. Wrapped in try/catch so a snapshot-linkage failure never blocks memory.
+  // @cap-decision(F-079/followup) F-079-FIX-C: hook surfaces processSnapshots skip-count.
+  //   Previously the hook ignored the `skipped` field from the result. If a snapshot fails
+  //   to be linked (parse-error, malformed frontmatter), it silently disappeared from the
+  //   diagnostic surface. Now we summarize the skipped names + reasons via the project's
+  //   debug logger (CAP_DEBUG=1 surfaces it; default path stays silent to honor the
+  //   "best-effort, never block" contract). Surfaced as a single line for grep-friendliness.
   const linkage = tryRequire(path.join(capLib, 'cap-snapshot-linkage.cjs'));
   if (linkage && linkage.processSnapshots) {
     try {
-      linkage.processSnapshots(cwd, {});
+      const result = linkage.processSnapshots(cwd, {});
+      if (result && Array.isArray(result.skipped) && result.skipped.length > 0) {
+        const logger = tryRequire(path.join(capLib, 'cap-logger.cjs'));
+        if (logger && typeof logger.debug === 'function') {
+          const summary = result.skipped.map((s) => {
+            const name = (s && typeof s.name === 'string') ? s.name : '<unknown>';
+            const reason = (s && typeof s.reason === 'string') ? s.reason : '<no-reason>';
+            return `${name}=${reason}`;
+          }).join(',');
+          logger.debug({
+            op: 'cap-memory-hook.processSnapshots',
+            errorType: 'snapshot-skipped',
+            errorMessage: `processSnapshots skipped ${result.skipped.length} snapshot(s): ${summary}`,
+            recoveryAction: 'continued pipeline; per-feature/platform writes succeeded for non-skipped snapshots',
+          });
+        } else if (process.env.CAP_DEBUG) {
+          // Fallback when logger isn't available (defense-in-depth — CAP_DEBUG users still see something).
+          try {
+            process.stderr.write(`[cap:debug] processSnapshots skipped ${result.skipped.length} snapshot(s)\n`);
+          } catch (_eDbg) { /* ignore */ }
+        }
+      }
     } catch (_e) {
       // Snapshot linkage is best-effort; never block the rest of the pipeline.
     }
