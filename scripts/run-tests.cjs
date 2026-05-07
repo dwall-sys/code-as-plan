@@ -39,6 +39,20 @@ if (wantsCoverage) {
   // Discovered during the 2026-04-21 F-054..F-059 batch: every feature PR
   // merged with red CI because this mismatch failed the runner before a single
   // test executed.
+  //
+  // @cap-decision(CI/issue-42) Path 1 rejected (2026-05-07). Dropping
+  // --experimental-test-isolation=none cuts wall-time 43× (1437s → 33s) but
+  // collapses line coverage from 96.95% to 56.31% (-40.64pp on all-files).
+  // Per-file deltas on hot files: cap-feature-map.cjs 99→27, cap-tag-scanner.cjs
+  // 98→37, cap-memory-migrate.cjs 95→26. Root cause: under default per-file
+  // isolation, modules loaded transitively via `runGsdTools` subprocess fixtures
+  // (helpers.cjs:21) are not counted by the native --experimental-test-coverage
+  // aggregator on Node 22 — only modules required INSIDE the test worker are
+  // counted. The slow 5-7 min of process-creation overhead (~700 spawnSync
+  // callsites stacked on one OS process) is the price we pay for accurate
+  // coverage. Bridge fix in PR #46 raised CI timeout 10→20 min. Long-term
+  // remediation = Path 2 (migrate hot test fixtures to in-process module
+  // calls), tracked as follow-up to issue #42.
   nodeArgs.push(
     '--experimental-test-isolation=none',
     '--experimental-test-coverage',
