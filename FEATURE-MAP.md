@@ -1886,6 +1886,43 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - `cap/bin/lib/cap-tag-scanner.cjs` — `extractTags()` Continuation-Pickup, neue Helper `matchCommentContinuation`/`detectCommentTokenAt`, opt-out via `isMultilineCaptureEnabled()`
 - `tests/cap-tag-scanner-multiline.test.cjs` (neu)
 
+### F-093: V6 Memory-Pipeline Layout-Switch [shipped]
+
+**Depends on:** F-076 (V6 schema), F-077 (one-shot migration tool with code-tag reverse-index classifier)
+
+**Motivation:** F-077 ist eine ein-malige Migration — sie überträgt existierende V5-Daten ins V6-Format. Aber die laufende Memory-Pipeline (`hooks/cap-memory.js` + `cap-memory-dir.cjs:writeMemoryDirectory`) schreibt weiterhin **V5-monolithic** (`decisions.md`, `pitfalls.md`, ...). Real-world Hub-Befund (post-F-077-apply 2026-05-08):
+
+- 195 V6-Per-Feature-Files via F-077 erstellt
+- Aber Top-Level decisions.md (584 KB), pitfalls.md (77 KB) sind weiterhin im Layout
+- Beim nächsten Hub-Memory-Hook-Run würden V5-Files überschrieben, V6-Files veralten
+- Agent-Read-Pfad (`.claude/rules/cap-memory.md`) zeigt noch auf V5
+
+→ F-077 alleine schafft nur einen "stale snapshot". F-093 macht V6 zur Standard-Schreibweise UND schaltet den Read-Pfad um.
+
+**Strategie:** Opt-in via `.cap/config.json: { memory: { layout: 'v6' } }`. Im V6-Mode:
+
+1. `writeMemoryDirectory` klassifiziert jeden Entry via F-077-Classifier (re-uses sourceFileToFeatureId Code-Tag-Reverse + key_files), gruppiert nach destination, schreibt features/F-XXX-<topic>.md + platform/<topic>.md.
+2. Top-Level `decisions.md`/`pitfalls.md` werden zu Index-Files (auto-generated, eine Zeile pro Feature mit `F-XXX | n decisions | m pitfalls`) — Agent liest diese erst, dann gezielt ein Feature.
+3. `.claude/rules/cap-memory.md` wird upgedated mit V6-Aware-Reading-Instructions (Index lesen, nur das aktive Feature on-demand).
+4. V5-Mode (Default ohne config flag) bleibt unverändert — alle Bestandsprojekte unbeeinträchtigt.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | `.cap/config.json: { memory: { layout: 'v6' } }` aktiviert V6-Pipeline-Mode. Default 'v5' bei fehlendem Flag (backwards-compat). |
+| AC-2 | tested | Im V6-Mode schreibt `writeMemoryDirectory` per-feature Files unter `features/F-XXX-<topic>.md` statt monolithic `decisions.md`/`pitfalls.md`. |
+| AC-3 | tested | Top-Level `decisions.md`/`pitfalls.md` werden auto-generated Index-Files (Tabelle: feature-id, count). Im V6-Mode keine entries-payload mehr darin. |
+| AC-4 | tested | V6-Mode nutzt F-077 Classifier (`buildClassifierContext` + `classifyEntry`) für Per-Entry-Routing. Heuristic-extracted entries (kein `metadata.features`) werden klassifiziert via Code-Tag Reverse-Index + key_files; Fallback `platform/unassigned.md`. |
+| AC-5 | tested | V5-Mode (default) ist byte-genau unverändert. Bestehende Tests in `cap-memory-dir*.test.cjs` bleiben grün ohne Änderung. |
+| AC-6 | tested | `.claude/rules/cap-memory.md` upgedated: V6-Aware-Reading-Instructions (read index → on-demand per-feature). V5-Pfad bleibt erkenntnis-äquivalent dokumentiert für Bestandsprojekte. |
+| AC-7 | tested | Switch V5→V6 ist atomar: erste schreibe-Operation im V6-Mode archiviert existierende V5-Files nach `.cap/memory/.archive/<name>-pre-v6-<date>.<ext>`, um Datenverlust zu vermeiden. Idempotent bei gleichem Datum. |
+| AC-8 | tested | Tests: V5 default, V6 enabled (greenfield), V6 enabled mit Bestand (Hub-Szenario), V6 mit unklassifizierbaren Entries (Fallback platform). 18 neue Tests in `tests/cap-memory-dir-v6.test.cjs`, volle Suite 7495/7497 grün. |
+
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-memory-dir.cjs` — V6-Mode in writeMemoryDirectory + neuer Helper `_writeMemoryV6`
+- `cap/bin/lib/cap-memory-engine.cjs` — Optional, ggf. classification-helper
+- `.claude/rules/cap-memory.md` — V6-Aware Reading-Instructions
+- `tests/cap-memory-dir-v6.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
