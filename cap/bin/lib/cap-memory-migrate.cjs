@@ -99,7 +99,8 @@ const TITLE_PREFIX_MIN_OCCURRENCES = 5;
 /**
  * @typedef {Object} ClassifierContext
  * @property {Array<{id: string, title: string, files: string[], subApp?: string|null}>} features - from FEATURE-MAP.md
- * @property {Map<string, string>} fileToFeatureId - reverse-index: repo-relative path → F-NNN
+ * @property {Map<string, string>} fileToFeatureId - reverse-index: repo-relative path → F-NNN (FEATURE-MAP key_files)
+ * @property {Map<string, string>=} sourceFileToFeatureId - F-077/AC-8: reverse-index from source-code @cap-feature tags → F-NNN. Built by scanning the project for @cap-feature(feature:F-XXX) tags. Falls back when FEATURE-MAP key_files lists are sparse or missing.
  * @property {Map<string, {state: string, transitionAt: string|null}>} featureState - F-NNN → last-known state-transition info (for snapshot date heuristic)
  * @property {Map<string, string>=} featureToSubApp - F-082: F-NNN → sub-app slug (e.g. "web", "api", "shared"). Empty when project is not a monorepo.
  * @property {Map<string, number>=} titlePrefixCounts - F-077/D7: title-prefix slug → occurrence count
@@ -580,6 +581,54 @@ function classifyEntry(entry, context) {
       reasons,
       candidates,
     };
+  }
+
+  // @cap-feature(feature:F-077, primary:true) AC-8 — Code-Tag Reverse-Index fallback.
+  //   When FEATURE-MAP key_files match misses (e.g. hub has 0/183 features with **Files:**
+  //   sections), check whether any of the entry's relatedFiles has an @cap-feature(feature:F-XXX)
+  //   tag in source code. Confidence calibration:
+  //   - Single-feature single-source-file → 0.75 (above auto-threshold 0.7, comparable to a
+  //     curated key_files match — a file with exactly one @cap-feature tag is as trustworthy
+  //     as one explicitly listed in FEATURE-MAP)
+  //   - Multi-source-files agreeing on one feature → 0.85 (stronger signal)
+  //   - Multi-feature ambiguity → 0.6, surface candidates for prompt
+  if (context.sourceFileToFeatureId && context.sourceFileToFeatureId.size > 0) {
+    const codeMatches = new Map(); // featureId -> hit count
+    for (const f of entry.relatedFiles || []) {
+      const normalized = _normalizeRepoPath(f);
+      const fid = context.sourceFileToFeatureId.get(normalized);
+      if (fid) codeMatches.set(fid, (codeMatches.get(fid) || 0) + 1);
+    }
+    if (codeMatches.size === 1) {
+      const [fid] = codeMatches.keys();
+      const hits = codeMatches.get(fid);
+      reasons.push(`code-tag-match:${fid}${hits > 1 ? `(${hits})` : ''}`);
+      return {
+        destination: 'feature',
+        featureId: fid,
+        topic: _topicForFeature(fid, context),
+        confidence: hits >= 2 ? 0.85 : 0.75,
+        reasons,
+      };
+    }
+    if (codeMatches.size > 1) {
+      const sorted = [...codeMatches.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+      reasons.push(`code-tag-multi:${sorted.map((s) => s[0]).join(',')}`);
+      const candidates = sorted.map(([fid, hits]) => ({
+        featureId: fid,
+        topic: _topicForFeature(fid, context),
+        confidence: 0.55 + 0.05 * Math.min(hits, 3),
+        reason: `code-tag-match (${hits} hit${hits === 1 ? '' : 's'})`,
+      }));
+      return {
+        destination: 'feature',
+        featureId: candidates[0].featureId,
+        topic: candidates[0].topic,
+        confidence: 0.6,
+        reasons,
+        candidates,
+      };
+    }
   }
 
   // 4. F-NNN mention in body text — exactly one unique id.
@@ -1227,7 +1276,35 @@ function buildClassifierContext(projectRoot) {
     // feature timestamp is available.
     featureState.set(f.id, { state: /** @type {any} */ (map.features.find((m) => m.id === f.id) || {}).state || 'planned', transitionAt: map.lastScan || null });
   }
-  return { features, fileToFeatureId, featureState, featureToSubApp };
+
+  // @cap-feature(feature:F-077, primary:true) AC-8 — Code-Tag Reverse-Index. Scan the project's
+  //   source-code for @cap-feature(feature:F-XXX) tags and build sourceFileToFeatureId so
+  //   classifyEntry has a fallback when FEATURE-MAP key_files lists are sparse or missing
+  //   (real-world hub case: 0/183 features have **Files:** sections, so the original key_files
+  //   heuristic could never match). Errors degrade gracefully — empty map preserves legacy behavior.
+  let sourceFileToFeatureId = new Map();
+  try {
+    const scanner = require('./cap-tag-scanner.cjs');
+    const tags = scanner.scanDirectory(projectRoot, { projectRoot });
+    for (const t of tags) {
+      if (t.type !== 'feature') continue;
+      const fid = t.metadata && t.metadata.feature ? t.metadata.feature : null;
+      if (!fid || !t.file) continue;
+      const normalized = _normalizeRepoPath(t.file);
+      // Don't override an explicit FEATURE-MAP key_files mapping — that is higher-trust.
+      // First-write-wins for code-tag reverse: if a file has multiple @cap-feature tags
+      //   pointing at different features, the first one observed wins. This matches the
+      //   "primary" convention where the first @cap-feature in a file is canonical.
+      if (!sourceFileToFeatureId.has(normalized)) {
+        sourceFileToFeatureId.set(normalized, fid);
+      }
+    }
+  } catch (_e) {
+    // Scanner failure is non-fatal — leave map empty so classifier behaves as pre-AC-8.
+    sourceFileToFeatureId = new Map();
+  }
+
+  return { features, fileToFeatureId, featureState, featureToSubApp, sourceFileToFeatureId };
 }
 
 /**

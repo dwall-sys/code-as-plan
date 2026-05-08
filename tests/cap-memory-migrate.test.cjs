@@ -1521,3 +1521,180 @@ describe('F-077/D7: title-prefix heuristic', () => {
     }
   });
 });
+
+// --- AC-8: Code-Tag Reverse-Index ---
+
+describe('AC-8: Code-Tag Reverse-Index classifier', () => {
+  it('buildClassifierContext populates sourceFileToFeatureId from @cap-feature tags in source code', () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [
+        { id: 'F-100', title: 'Auth Backbone', files: [] },
+        { id: 'F-200', title: 'Audit Log', files: [] },
+      ]);
+      writeFile(root, 'src/auth.ts', '// @cap-feature(feature:F-100, primary:true) Auth flow\nexport const x = 1;\n');
+      writeFile(root, 'src/audit.ts', '// @cap-feature(feature:F-200) Audit hooks\nexport const y = 2;\n');
+      const ctx = buildClassifierContext(root);
+      assert.ok(ctx.sourceFileToFeatureId, 'sourceFileToFeatureId must be a Map');
+      assert.equal(ctx.sourceFileToFeatureId.get('src/auth.ts'), 'F-100');
+      assert.equal(ctx.sourceFileToFeatureId.get('src/audit.ts'), 'F-200');
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('first-write-wins: a file with multiple @cap-feature tags maps to the first one', () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [
+        { id: 'F-100', title: 'A', files: [] },
+        { id: 'F-200', title: 'B', files: [] },
+      ]);
+      writeFile(root, 'src/multi.ts', [
+        '// @cap-feature(feature:F-100) First',
+        'const x = 1;',
+        '// @cap-feature(feature:F-200) Second',
+        'const y = 2;',
+      ].join('\n'));
+      const ctx = buildClassifierContext(root);
+      assert.equal(ctx.sourceFileToFeatureId.get('src/multi.ts'), 'F-100');
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('classifyEntry routes to feature via code-tag reverse-index when key_files match misses', async () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-300', title: 'Audit Log Details', files: [] }]);
+      writeFile(root, 'src/audit-log.ts', '// @cap-feature(feature:F-300) Audit log component\nexport default {};\n');
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        { anchorId: 'a1', title: 'Use rollup query for audit aggregation', files: ['src/audit-log.ts'] },
+      ]));
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.equal(r.errors.length, 0);
+      assert.ok(
+        r.wroteFiles.some((p) => p.includes('features/') && p.includes('F-300')),
+        'code-tag reverse-index must route to F-300 even when FEATURE-MAP key_files is empty',
+      );
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('single-source-file → confidence 0.75 (above auto-threshold)', () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-400', title: 'X', files: [] }]);
+      writeFile(root, 'src/x.ts', '// @cap-feature(feature:F-400) X\nexport const x = 1;\n');
+      const ctx = buildClassifierContext(root);
+      const entry = { kind: 'decision', title: 'd', content: 'd', relatedFiles: ['src/x.ts'], anchorId: 'd1' };
+      const decision = classifyEntry(entry, ctx);
+      assert.equal(decision.destination, 'feature');
+      assert.equal(decision.featureId, 'F-400');
+      assert.equal(decision.confidence, 0.75);
+      assert.ok(decision.reasons.some((r) => r.includes('code-tag-match')));
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('multi-source-files agreeing on one feature → confidence 0.85 (stronger signal)', () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-500', title: 'Y', files: [] }]);
+      writeFile(root, 'src/y1.ts', '// @cap-feature(feature:F-500) Y1\nconst a = 1;\n');
+      writeFile(root, 'src/y2.ts', '// @cap-feature(feature:F-500) Y2\nconst b = 2;\n');
+      const ctx = buildClassifierContext(root);
+      const entry = { kind: 'decision', title: 'd', content: 'd', relatedFiles: ['src/y1.ts', 'src/y2.ts'], anchorId: 'd1' };
+      const decision = classifyEntry(entry, ctx);
+      assert.equal(decision.confidence, 0.85);
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('multi-feature ambiguity → confidence 0.6 with candidates', () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [
+        { id: 'F-600', title: 'A', files: [] },
+        { id: 'F-700', title: 'B', files: [] },
+      ]);
+      writeFile(root, 'src/a.ts', '// @cap-feature(feature:F-600) A\nconst a = 1;\n');
+      writeFile(root, 'src/b.ts', '// @cap-feature(feature:F-700) B\nconst b = 2;\n');
+      const ctx = buildClassifierContext(root);
+      const entry = { kind: 'decision', title: 'd', content: 'd', relatedFiles: ['src/a.ts', 'src/b.ts'], anchorId: 'd1' };
+      const decision = classifyEntry(entry, ctx);
+      assert.equal(decision.confidence, 0.6);
+      assert.equal(decision.candidates.length, 2);
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('explicit tag-metadata still wins over code-tag reverse', async () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [
+        { id: 'F-800', title: 'Tagged', files: [] },
+        { id: 'F-900', title: 'Reverse', files: [] },
+      ]);
+      writeFile(root, 'src/file.ts', '// @cap-feature(feature:F-900) Reverse\nconst x = 1;\n');
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        { anchorId: 'd1', title: 'tagged', files: ['src/file.ts'], dateLabel: 'code (F-800)' },
+      ]));
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.ok(r.wroteFiles.some((p) => p.includes('F-800')), 'explicit tag-metadata wins');
+      assert.ok(!r.wroteFiles.some((p) => p.includes('F-900')), 'code-tag reverse is overridden');
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('FEATURE-MAP key_files match still wins over code-tag reverse', async () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [
+        { id: 'F-1000', title: 'KeyFiles', files: ['src/shared.ts'] },
+        { id: 'F-1100', title: 'CodeTag', files: [] },
+      ]);
+      writeFile(root, 'src/shared.ts', '// @cap-feature(feature:F-1100) Reverse-only\nconst x = 1;\n');
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        { anchorId: 'd1', title: 'shared decision', files: ['src/shared.ts'] },
+      ]));
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.ok(r.wroteFiles.some((p) => p.includes('F-1000')), 'key_files match wins over code-tag reverse');
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('graceful when no source files exist — empty map preserves legacy behavior', () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-1200', title: 'X', files: [] }]);
+      const ctx = buildClassifierContext(root);
+      assert.ok(ctx.sourceFileToFeatureId);
+      assert.equal(ctx.sourceFileToFeatureId.size, 0);
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('regression: pre-AC-8 behaviour preserved when no source-tags exist', async () => {
+    const root = makeProject();
+    try {
+      writeFeatureMap(root, [{ id: 'F-1300', title: 'X', files: ['src/x.ts'] }]);
+      writeFile(root, 'src/x.ts', 'export const x = 1;\n');
+      writeFile(root, '.cap/memory/decisions.md', makeV5DecisionsMd([
+        { anchorId: 'd1', title: 'x decision', files: ['src/x.ts'] },
+      ]));
+      const r = await migrateMemory(root, { apply: true, interactive: false, now: FIXED_NOW, log: () => {} });
+      assert.ok(r.wroteFiles.some((p) => p.includes('F-1300')));
+    } finally {
+      cleanup(root);
+    }
+  });
+});
+
