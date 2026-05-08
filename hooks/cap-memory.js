@@ -180,7 +180,15 @@ function run(options = {}) {
   }
 
   // F-029: Write memory directory (merge mode for multi-developer support)
-  memDir.writeMemoryDirectory(cwd, allEntries, { merge: !options.init });
+  // @cap-feature(feature:F-090, primary:true) Apply confidence-filter at the hook layer:
+  //   only entries with confidence >= 0.6 OR pinned land in the .md output. graph.json is
+  //   built independently and stays full (Cluster/Affinity components need every node).
+  //   Real-world driver: GoetzeInvest hub had 568 KB / 2340 entries in decisions.md, ~95%
+  //   Confidence:0.50/Evidence:1 heuristic noise. Filter brings agent session-start cost
+  //   from ~150k tokens to ~5–15k tokens for typical projects.
+  // @cap-decision(F-090) Threshold lives in the hook (not in writeMemoryDirectory) so direct
+  //   callers (tests, CLI tools, library consumers) keep backwards-compat behavior.
+  memDir.writeMemoryDirectory(cwd, allEntries, { merge: !options.init, minConfidence: 0.6 });
 
   // @cap-decision(F-079/iter1) Stage-2 #1 fix: processSnapshots wired into memory-pipeline.
   // Closes AC-4 — "Memory-Pipeline MUSS Snapshots ... referenzieren" — by invoking

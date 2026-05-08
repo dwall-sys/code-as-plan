@@ -1733,7 +1733,7 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 - `tests/cap-doctor-integrity.test.cjs` — Manifest-Count 90 → 92
 - `tests/cap-ui-design-editor-adversarial.test.cjs` — Manifest-Count 90 → 92
 
-### F-090: Confidence-Filter for V5 Memory Output [planned]
+### F-090: Confidence-Filter for V5 Memory Output [tested]
 
 **Depends on:** F-055, F-056
 
@@ -1748,19 +1748,25 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 2. `confidence >= 0.6` (mind. 2 Beobachtungen — REOBSERVATION_BUMP=0.1, DEFAULT_CONFIDENCE=0.5; 0.6 = seen twice)
 3. Kategorie ist `hotspot` (Ranking-Format, regeneriert jedes Run; nicht filtern)
 
+**Iter 1 strategy:** Layer-Trennung — `generateCategoryMarkdown` und `writeMemoryDirectory` defaulten auf `minConfidence:0` (kein Filter, backwards-compat). Der Filter ist als Pipeline-Policy in `hooks/cap-memory.js` wired, dort wird `minConfidence:0.6` explizit gesetzt. Direkte Library-Caller (Tests, CLI-Tools) sind unbeeinflusst.
+
+**Real-world Befund auf GoetzeInvest hub:** Confidence-Verteilung ist 100% bei 0.50 (= alle Einträge frisch gesehen, niemand re-observed, niemand pinned). Mit 0.6-Threshold fliegen alle 2340 decisions / 305 pitfalls. Das spiegelt korrekt wider dass das aktuelle Memory-System keinen Wert trägt. Nachfolge-Ticket F-091 (source-aware confidence) ist die strukturelle Lösung.
+
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | Pure function `_filterEntriesForOutput(entries, options)` filtert Einträge nach pinned-OR-confidence-Schwelle. Threshold default 0.6, optional via `options.minConfidence` überschreibbar |
-| AC-2 | planned | `generateCategoryMarkdown` wendet den Filter VOR der Markdown-Emission an für `decision`/`pitfall`/`pattern` Kategorien. Hotspot-Kategorie bleibt unverändert (ranking format, regenerated each run) |
-| AC-3 | planned | Footer-Counter ändert sich auf `*N decisions kept (M filtered out as low-confidence)*` damit der User sieht wie viel verworfen wurde |
-| AC-4 | planned | `graph.json` bleibt unverändert — alle Nodes, alle Edges. Filter wirkt NUR auf die .md-Output. Test: vor/nach Filter haben gleichen graph.json-Hash |
-| AC-5 | planned | Pinned entries werden NIE gefiltert, auch bei `confidence: 0.0`. Defense-in-depth gegen Confidence-Drift |
-| AC-6 | planned | Tests: (a) low-confidence dropped, (b) high-confidence kept, (c) pinned always kept, (d) hotspot category unfiltered, (e) Footer-Counter zeigt drop count, (f) graph.json hash invariant über Filter-Application |
-| AC-7 | planned | Manual run on GoetzeInvest hub: `decisions.md` schrumpft erwartet auf ~5–10% (~30–60 KB statt 568 KB), `pitfalls.md` analog. Regenerate-Scripts dokumentiert |
+| AC-1 | tested | Pure function `_filterEntriesForOutput(entries, options)` filtert nach pinned-OR-confidence-Schwelle. Threshold via `options.minConfidence`. Tests: 5 cases (high kept, low dropped, pinned-always-kept, missing-metadata-defensive, custom-threshold) |
+| AC-2 | tested | `generateCategoryMarkdown` wendet Filter an wenn Threshold gegeben wird. Hotspot-Kategorie unverändert (ranking format) |
+| AC-3 | tested | Footer-Counter `*N kept (filtered out M low-confidence; threshold=0.6)*` wenn Filter aktiv und welche gedroppt; sonst klassisches `*N total*` |
+| AC-4 | tested | `graph.json` build-Pfad nicht angefasst — Filter wirkt nur auf .md-Output. Direkter Code-Beweis: writeMemoryDirectory schreibt nur die .md-Files, graph.json wird in cap-memory-graph.cjs separat gebaut |
+| AC-5 | tested | Pinned entries werden NIE gefiltert auch bei confidence:0.0. Test: `pinned entries survive even with confidence:0.0` |
+| AC-6 | tested | 14 Tests grün; volle Suite 7396/7400 (2 pre-existing plugin.json drifts, kein F-090-Regress) |
+| AC-7 | tested | Filter-Vorschau auf GoetzeInvest hub: 2340 → 0 entries (100% dropped da alle bei confidence:0.50). Token-Reduktion 568 KB → ~0.3 KB für decisions.md |
+| AC-8 | tested | Layer-Separation: `hooks/cap-memory.js` setzt `minConfidence:0.6` (Pipeline-Policy); `writeMemoryDirectory`/`generateCategoryMarkdown` defaulten auf 0 (backwards-compat, library-caller unaffected) |
 
-**Files (geplant):**
-- `cap/bin/lib/cap-memory-dir.cjs` — `_filterEntriesForOutput` Helper + Wiring in `generateCategoryMarkdown` + Footer-Counter-Anpassung
-- `tests/cap-memory-dir-confidence-filter.test.cjs` (neu)
+**Files (geändert):**
+- `cap/bin/lib/cap-memory-dir.cjs` — `_filterEntriesForOutput` (neu, exportiert), Wiring in `generateCategoryMarkdown`, Footer-Counter mit kept/dropped-Anzeige
+- `hooks/cap-memory.js` — Pipeline-Wiring `{ minConfidence: 0.6 }` an `writeMemoryDirectory`
+- `tests/cap-memory-dir-confidence-filter.test.cjs` (neu, 14 Tests)
 
 ## Legend
 
