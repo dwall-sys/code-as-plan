@@ -1690,6 +1690,42 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 - `tests/cap-feature-map-safety-net.test.cjs` (neu, 6 Tests)
 - `tests/cap-feature-map-monorepo-extraction.test.cjs` (Budget-Bump 1500 → 1750)
 
+### F-089: Sharded Feature Map (Index + Per-Feature Files) [planned]
+
+**Depends on:** F-002, F-081, F-088
+
+**Motivation:** Real-world Befund auf GoetzeInvest hub (2026-05-08): `apps/hub/FEATURE-MAP.md` ist auf ~4000 Zeilen gewachsen und ist die Single-Source-of-Truth für jeden Read/Write. Jeder Agent-Call (Brainstorm, Prototype, Scan, Reconcile, Review, Status) lädt die volle Datei → ~30–50k Tokens nur fürs Lesen, linear skalierend mit Featureanzahl. F-088 hat den Datenverlust beim Round-Trip strukturell entschärft, aber das Skalierungsproblem bleibt: bei 200 Features wird FEATURE-MAP.md unbenutzbar.
+
+**Lösung:** Sharding. `FEATURE-MAP.md` wird zur schlanken **Index-Datei** (eine Zeile pro Feature: ID | state | title | groups), die vollen Feature-Blöcke wandern in `features/<ID>.md`. Agenten lesen erst den Index (~1 Zeile/Feature) und laden gezielt nur die F-NNN.md-Datei für das aktive Feature. V6 hat das Sharding-Pattern bereits für Memory etabliert (`.cap/memory/features/F-NNN.md`) — F-089 überträgt dasselbe Schema auf den SoT.
+
+**Sekundär-Anforderung:** ID-Format wird liberalisiert. Bisher `F-NNN` (zero-padded). Ab F-089 ist auch deskriptiv erlaubt: `F-<App>-<Slug>` (z.B. `F-Hub-Spotlight-Carousel`). Reale Praxis auf GoetzeInvest hat sich längst dorthin entwickelt — deskriptive IDs geben Kontext ohne den Block laden zu müssen. Beide Formate koexistieren dauerhaft; deskriptiv wird der neue Default in `/cap:brainstorm` und `/cap:init` für Monorepo-Apps.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | `FEATURE-MAP.md` wird zur Index-Datei mit einer Zeile pro Feature im Format `- F-<ID> \| <state> \| <title> \| groups:[...]`. Header (`# Feature Map`) und `## Legend` bleiben erhalten. Maximale Tokenkosten: ~1 Zeile à ~80–120 chars × N Features |
+| AC-2 | planned | Pro Feature wird eine Datei `features/<ID>.md` angelegt mit dem vollen Block (Title-Header, Depends-on, Motivation, AC-Tabelle, Files-Sektion). Filename = `<ID>.md` 1:1 (IDs sind FS-safe) |
+| AC-3 | planned | ID-Validation akzeptiert sowohl Legacy `F-\d+` als auch deskriptiv `F-[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9][A-Za-z0-9]*)+`. Sanitisierung vor jedem FS-Write: kein `..`, keine Slashes, keine Whitespace, max-Länge 64 chars |
+| AC-4 | planned | Read-API wird lazy: `readFeatureMap()` lädt default nur den Index (Liste von `{id, state, title, groups}` ohne `acs`/`files`/`description`). Neuer Helper `readFeature(id)` lädt einen einzelnen Block on-demand. Bestehender API-Call mit `{eager:true}` lädt alle Blöcke (für Migrations-Tooling, Test-Setups) |
+| AC-5 | planned | Write-API: `setAcStatus`, `updateFeatureState`, `enrichFromTags`, `writeFeatureMap` operieren auf der Per-Feature-Datei (`features/<ID>.md`) + aktualisieren die zugehörige Index-Zeile. F-088 surgical-patch-Logik wird auf das per-feature File angewendet |
+| AC-6 | planned | Migrations-Command `cap:migrate-feature-map` shardet bestehende monolithische `FEATURE-MAP.md` → `FEATURE-MAP.md` (Index) + `features/<ID>.md` × N. Idempotent (re-running ist no-op), dry-run default, `--apply` schreibt. Backup der Original-Datei vor Apply |
+| AC-7 | planned | Backwards-Compat: existiert kein `features/`-Verzeichnis aber FEATURE-MAP.md sieht monolithisch aus (enthält `### F-` Header), fällt der Loader auf Legacy-Modus zurück und liest weiterhin aus der monolithischen Datei. Migration ist opt-in pro Projekt |
+| AC-8 | planned | `/cap:brainstorm` und `/cap:init` schlagen für neue Features im Monorepo-Kontext deskriptive IDs vor (`F-<App>-<Slug>`), bei Single-App-Repos numerisch (`F-NNN`). Heuristik: Anzahl `apps/*` Workspace-Packages > 1 |
+| AC-9 | planned | Index-Schema wird zentral definiert (eigener Typedef `IndexEntry`); Schreibzugriff auf den Index läuft über `_updateIndexEntry(id, fields)` der die Zeile surgical patcht (analog F-088), kein Full-Rewrite |
+| AC-10 | planned | Tests decken ab: (a) sharded round-trip mit 50 Features behält Index-Order, (b) Migration monolithic → sharded mit allen F-001..F-089 dieser Repo erzeugt korrekte Per-Feature-Files, (c) ID-Validator akzeptiert beide Formate und rejected path-traversal-Versuche, (d) Backwards-Compat-Fallback bei fehlendem `features/`, (e) `readFeature(id)` liest ohne Index-Load, (f) Group-Filter im Index (z.B. `getFeaturesByGroup('homepage')`) ohne Block-Load |
+| AC-11 | planned | CLAUDE.md + commands/cap/*.md werden auf die neue Konvention aktualisiert (Feature-ID-Format, Pfad-Hinweise zu `features/`); Migration-Anleitung in `commands/cap/migrate-feature-map.md` |
+
+**Files (geplant):**
+- `cap/bin/lib/cap-feature-map.cjs` — Index-Reader + Per-Feature-Reader/Writer + Index-Patcher
+- `cap/bin/lib/cap-feature-map-shard.cjs` (neu) — Shard-Operationen, Filename-Derivation, ID-Validator
+- `cap/bin/lib/cap-feature-map-migrate.cjs` (neu) — Monolithic → Sharded Migration
+- `commands/cap/migrate-feature-map.md` (neu) — User-facing Migration-Command
+- `commands/cap/brainstorm.md` (Update — deskriptive IDs default für Monorepo)
+- `agents/cap-brainstormer.md` (Update — ID-Vorschlags-Heuristik)
+- `CLAUDE.md` (Update — Feature-ID-Format, Sharded-Layout)
+- `tests/cap-feature-map-shard.test.cjs` (neu)
+- `tests/cap-feature-map-migrate.test.cjs` (neu)
+- `tests/cap-feature-map-id-validation.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
@@ -1700,4 +1736,4 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T08:30:00.000Z*
+*Last updated: 2026-05-08T09:00:00.000Z*
