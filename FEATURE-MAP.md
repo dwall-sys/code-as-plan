@@ -1389,19 +1389,22 @@
 - `tests/cap-memory-schema.test.cjs`
 - `cap/bin/lib/cap-doctor.cjs`
 
-### F-077: Build V6 Memory Migration Tool [prototyped]
+### F-077: Build V6 Memory Migration Tool [shipped]
+
+**Hub real-world Befund (2026-05-08):** Dry-Run am GoetzeInvest hub (apps/hub, 2422 decisions + 318 pitfalls) zeigt **0% feature-classification**: keine einzige der 183 Hub-Features hat eine `**Files:**`-Sektion in FEATURE-MAP, daher kann F-077s `key_files`-Heuristik nicht greifen. 99% der Einträge landen in `platform/unassigned.md`. AC-8 ergänzt die fehlende Heuristik.
 
 **Depends on:** F-076
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | implemented | Das CLI-Kommando `cap:memory:migrate` muss `decisions.md`, `pitfalls.md`, `patterns.md`, `hotspots.md` parsen und den Inhalt in V6-Per-Feature-Files unter `.cap/memory/features/` und `.cap/memory/platform/` aufteilen. |
-| AC-2 | implemented | Migration muss atomic schreiben (write-temp-then-rename, F-074-Pattern) und idempotent sein — wiederholtes Ausführen ohne neue Inputs darf keine Diff-Änderungen produzieren. |
-| AC-3 | implemented | Vor jedem Schreibvorgang muss ein Backup nach `.cap/memory/.archive/decisions-pre-v6-<YYYY-MM-DD>.md` (und analog für die anderen V5-Files) erstellt werden, idempotent bei gleichem Datum. |
-| AC-4 | implemented | Dry-Run-Modus (`--dry-run`) muss Default sein und einen vollständigen Diff-Plan ausgeben (Feature-Zuordnung pro Decision, Anzahl unklassifizierter Einträge); echte Schreibvorgänge erfordern explizites `--apply` mit Confirm-Prompt. |
-| AC-5 | implemented | Auto-Klassifizierung muss `@cap-decision(feature:F-NNN)`-Tag-Metadaten priorisieren, dann Path-Heuristik gegen `FEATURE-MAP.md` `key_files` matchen, dann Datum + State-Transition-Heuristik für Snapshot-Orphans. |
-| AC-6 | implemented | Bei Ambiguität (Mehrfach-Match, Confidence < threshold) muss das Tool interaktiv prompten mit Top-3-Kandidaten und einer `[s]kip`-Option für Platform-Bucket-Fallback. |
-| AC-7 | implemented | Nach erfolgreichem Apply muss das Tool eine Migration-Report-Datei `.cap/memory/.archive/migration-report-<date>.md` schreiben (Counts: assigned/platform/skipped, Ambiguity-Auflösungen). |
+| AC-1 | tested | Das CLI-Kommando `cap:memory:migrate` muss `decisions.md`, `pitfalls.md`, `patterns.md`, `hotspots.md` parsen und den Inhalt in V6-Per-Feature-Files unter `.cap/memory/features/` und `.cap/memory/platform/` aufteilen. |
+| AC-2 | tested | Migration muss atomic schreiben (write-temp-then-rename, F-074-Pattern) und idempotent sein — wiederholtes Ausführen ohne neue Inputs darf keine Diff-Änderungen produzieren. |
+| AC-3 | tested | Vor jedem Schreibvorgang muss ein Backup nach `.cap/memory/.archive/decisions-pre-v6-<YYYY-MM-DD>.md` (und analog für die anderen V5-Files) erstellt werden, idempotent bei gleichem Datum. |
+| AC-4 | tested | Dry-Run-Modus (`--dry-run`) muss Default sein und einen vollständigen Diff-Plan ausgeben (Feature-Zuordnung pro Decision, Anzahl unklassifizierter Einträge); echte Schreibvorgänge erfordern explizites `--apply` mit Confirm-Prompt. |
+| AC-5 | tested | Auto-Klassifizierung muss `@cap-decision(feature:F-NNN)`-Tag-Metadaten priorisieren, dann Path-Heuristik gegen `FEATURE-MAP.md` `key_files` matchen, dann Datum + State-Transition-Heuristik für Snapshot-Orphans. |
+| AC-6 | tested | Bei Ambiguität (Mehrfach-Match, Confidence < threshold) muss das Tool interaktiv prompten mit Top-3-Kandidaten und einer `[s]kip`-Option für Platform-Bucket-Fallback. |
+| AC-7 | tested | Nach erfolgreichem Apply muss das Tool eine Migration-Report-Datei `.cap/memory/.archive/migration-report-<date>.md` schreiben (Counts: assigned/platform/skipped, Ambiguity-Auflösungen). |
+| AC-8 | tested | Code-Tag Reverse-Index als zusätzliche Classifier-Heuristik: `buildClassifierContext` scannt Source-Code via cap-tag-scanner und baut `sourceFileToFeatureId`-Map aus `@cap-feature(feature:F-XXX)`-Tags. `classifyEntry` nutzt diese Map als Fallback nach FEATURE-MAP-`key_files`-Match (Priorität: explicit-tag-metadata 1.0 > FEATURE-MAP-key_files 0.7-0.95 > **code-tag-reverse 0.75-0.85** > body-mention 0.5). Real-world Hub-Befund: 0% → 97% feature-classification (4 → 196 per-feature files, 2761 → 77 unassigned). 10 neue Tests (87 total in F-077). |
 
 **Files:**
 - `cap/bin/lib/cap-memory-migrate.cjs`
