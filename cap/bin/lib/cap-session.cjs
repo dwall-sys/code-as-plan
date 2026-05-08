@@ -14,6 +14,14 @@ const path = require('node:path');
 // @cap-decision Session schema is flat and extensible -- new workflow commands can add keys without schema migration.
 // @cap-todo(ref:AC-16) SESSION.json tracks ephemeral workflow state: active feature ID, current workflow step, session timestamps
 /**
+ * @typedef {Object} CapQuickMode
+ * @property {boolean} active - Whether quick-mode is currently active
+ * @property {string|null} feature - Feature ID being worked on (mirrors activeFeature when entered via /cap:quick)
+ * @property {string|null} startedAt - ISO timestamp when quick-mode started
+ * @property {string|null} startCommit - git HEAD SHA at quick-mode entry — used by /cap:finalize to compute changed files
+ */
+
+/**
  * @typedef {Object} CapSession
  * @property {string} version - Session schema version (e.g., "2.0.0")
  * @property {string|null} lastCommand - Last /cap: command executed
@@ -24,6 +32,7 @@ const path = require('node:path');
  * @property {string|null} startedAt - ISO timestamp of when session started
  * @property {string|null} activeDebugSession - Active debug session ID
  * @property {'A'|'B'|'C'} trustMode - @cap-feature(feature:F-075) Trust-Mode slot — mirrored from .cap/config.json by cap-trust-mode.
+ * @property {CapQuickMode} quickMode - @cap-feature(feature:F-092) Two-phase workflow state — Phase 1 fast-lane editing
  * @property {Object<string,string>} metadata - Extensible key-value metadata
  */
 
@@ -77,6 +86,14 @@ function getDefaultSession() {
     // Sessions created before F-075 will land here via the { ...default, ...parsed } merge
     // in loadSession(), so backfill is automatic on first read.
     trustMode: 'A',
+    // @cap-feature(feature:F-092) Two-phase workflow — Phase 1 (Visual Iteration) vs Phase 2 (Solidify).
+    //   Default { active: false } so existing sessions / non-quick-mode workflows are unaffected.
+    quickMode: {
+      active: false,
+      feature: null,
+      startedAt: null,
+      startCommit: null,
+    },
     metadata: {},
     // @cap-feature(feature:F-057) Checkpoint persistence fields — additive, null by default.
     // lastCheckpointAt = ISO timestamp of the most recent /cap:checkpoint that detected a breakpoint.
@@ -270,6 +287,126 @@ function listApps(projectRoot) {
   };
 }
 
+// @cap-feature(feature:F-092, primary:true) Two-Phase Workflow — /cap:quick + /cap:finalize
+// @cap-decision(F-092) Quick-mode state lives in SESSION.json, not in a separate file. Mirrors
+//   how activeFeature, activeApp, etc. live in the existing schema. Single source of truth for
+//   ephemeral workflow state.
+// @cap-decision(F-092/git-snapshot) startCommit captures git HEAD at /cap:quick time. /cap:finalize
+//   diffs against this commit to compute changed-files. This decouples quick-mode lifetime from
+//   commit cadence — Bastian can iterate freely, commit or not, and finalize sees the full set.
+
+const { execSync } = require('node:child_process');
+
+/**
+ * Resolve current git HEAD SHA for the given working directory.
+ * Returns null if not a git repo or git is unavailable — caller treats as "no snapshot, fall back to unstaged-only diff".
+ * @param {string} cwd
+ * @returns {string|null}
+ */
+function _getGitHeadSha(cwd) {
+  try {
+    const out = execSync('git rev-parse HEAD', { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+    return String(out).trim() || null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+// @cap-api startQuickMode(projectRoot, featureId) -- Enter Phase 1 (Visual Iteration) for a feature.
+// @cap-todo(ac:F-092/AC-1) SESSION.json carries quickMode state with startCommit snapshot.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @param {string} featureId - Feature ID being worked on (e.g., "F-Hub-Spotlight-Carousel")
+ * @returns {CapSession}
+ */
+function startQuickMode(projectRoot, featureId) {
+  const startCommit = _getGitHeadSha(projectRoot);
+  return updateSession(projectRoot, {
+    activeFeature: featureId,
+    quickMode: {
+      active: true,
+      feature: featureId,
+      startedAt: new Date().toISOString(),
+      startCommit,
+    },
+  });
+}
+
+// @cap-api endQuickMode(projectRoot) -- Exit Phase 1 — typically called from /cap:finalize after consolidation.
+// @cap-todo(ac:F-092/AC-10) Reset quickMode flag after successful finalize.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {CapSession}
+ */
+function endQuickMode(projectRoot) {
+  return updateSession(projectRoot, {
+    quickMode: {
+      active: false,
+      feature: null,
+      startedAt: null,
+      startCommit: null,
+    },
+  });
+}
+
+// @cap-api isQuickModeActive(projectRoot) -- Check whether the current session is in Phase 1.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {boolean}
+ */
+function isQuickModeActive(projectRoot) {
+  const session = loadSession(projectRoot);
+  return Boolean(session.quickMode && session.quickMode.active === true);
+}
+
+// @cap-api getChangedFilesSinceQuickStart(projectRoot) -- Compute files changed since /cap:quick was entered.
+// @cap-todo(ac:F-092/AC-4) Diff = committed since startCommit + currently unstaged.
+// @cap-decision(F-092) Returns DEDUPLICATED set — a file edited then committed then re-edited shows up once.
+//   Filters to source files (excludes .cap/, node_modules/, dist/, build/, .git/) so finalize doesn't
+//   try to annotate generated artifacts.
+/**
+ * @param {string} projectRoot - Absolute path to project root
+ * @returns {{ files: string[], startCommit: string|null, error?: string }}
+ */
+function getChangedFilesSinceQuickStart(projectRoot) {
+  const session = loadSession(projectRoot);
+  const startCommit = session.quickMode && session.quickMode.startCommit;
+  const set = new Set();
+  const exclude = (p) =>
+    /^\.cap\//.test(p) ||
+    /^node_modules\//.test(p) ||
+    /^dist\//.test(p) ||
+    /^build\//.test(p) ||
+    /^\.git\//.test(p);
+
+  try {
+    if (startCommit) {
+      // Files committed since quick-start (includes renames as both old + new path)
+      const committed = execSync(
+        `git diff --name-only ${startCommit} HEAD`,
+        { cwd: projectRoot, stdio: ['ignore', 'pipe', 'ignore'] }
+      );
+      String(committed).trim().split('\n').filter(Boolean).forEach(f => { if (!exclude(f)) set.add(f); });
+    }
+    // Currently unstaged changes
+    const unstaged = execSync(
+      'git diff --name-only HEAD',
+      { cwd: projectRoot, stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    String(unstaged).trim().split('\n').filter(Boolean).forEach(f => { if (!exclude(f)) set.add(f); });
+    // Untracked files (newly created in quick-mode)
+    const untracked = execSync(
+      'git ls-files --others --exclude-standard',
+      { cwd: projectRoot, stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    String(untracked).trim().split('\n').filter(Boolean).forEach(f => { if (!exclude(f)) set.add(f); });
+  } catch (e) {
+    return { files: [], startCommit: startCommit || null, error: String(e && e.message ? e.message : e).trim() };
+  }
+
+  return { files: Array.from(set).sort(), startCommit: startCommit || null };
+}
+
 module.exports = {
   CAP_DIR,
   SESSION_FILE,
@@ -287,4 +424,9 @@ module.exports = {
   getActiveApp,
   getAppRoot,
   listApps,
+  // F-092: two-phase workflow
+  startQuickMode,
+  endQuickMode,
+  isQuickModeActive,
+  getChangedFilesSinceQuickStart,
 };
