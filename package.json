@@ -1,6 +1,6 @@
 {
   "name": "code-as-plan",
-  "version": "6.1.0",
+  "version": "6.2.0",
   "description": "CAP — Code as Plan. Build first, plan from code. Farley-aligned engineering framework.",
   "bin": {
     "cap": "bin/install.js"
