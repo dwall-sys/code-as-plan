@@ -47,9 +47,10 @@ function generateAnchorId(content) {
  * Generate markdown content for a memory category file.
  * @param {string} category
  * @param {import('./cap-memory-engine.cjs').MemoryEntry[]} entries
+ * @param {{ minConfidence?: number }} [opts] - F-090: confidence threshold (default 0.6)
  * @returns {string}
  */
-function generateCategoryMarkdown(category, entries) {
+function generateCategoryMarkdown(category, entries, opts = {}) {
   const title = category.charAt(0).toUpperCase() + category.slice(1) + 's';
   const out = [];
   out.push(`# Project Memory: ${title}`);
@@ -67,8 +68,27 @@ function generateCategoryMarkdown(category, entries) {
     return generateHotspotsMarkdown(out, entries);
   }
 
+  // @cap-feature(feature:F-090, primary:true) Confidence-filter: drop low-signal entries from
+  //   the .md output so agents reading the file at session-start don't ingest 568 KB of
+  //   Confidence:0.50/Evidence:1 heuristic-extracted comment text. graph.json stays full
+  //   (Cluster/Affinity components need every node); the filter only reduces the human/agent-
+  //   readable .md surface.
+  // @cap-decision(F-090/separation-of-concerns) generateCategoryMarkdown defaults to 0 (no filter)
+  //   so it stays a pure rendering function — render-correctness tests don't have to think about
+  //   the filter. writeMemoryDirectory (the pipeline entry point) defaults to 0.6 to apply the
+  //   policy. Callers who want filtered rendering pass minConfidence explicitly.
+  const minConfidence =
+    typeof opts.minConfidence === 'number' ? opts.minConfidence : 0;
+  const filtered = _filterEntriesForOutput(entries, { minConfidence });
+  const droppedCount = entries.length - filtered.length;
+
+  if (filtered.length === 0) {
+    out.push(`_No high-confidence ${category}s recorded yet (filtered out ${droppedCount} low-confidence ${category}s)._`);
+    return out.join('\n');
+  }
+
   // Default: list format for decisions, pitfalls, patterns
-  for (const entry of entries) {
+  for (const entry of filtered) {
     const anchor = generateAnchorId(entry.content);
     // Newlines or CRs in entry content would fracture into phantom entries on the next readMemoryFile pass and could smuggle a fake anchor heading. Collapse on the write path so the Markdown grammar stays one-entry-per-heading.
     const safeContent = String(entry.content).replace(/[\r\n]+/g, ' ');
@@ -104,8 +124,42 @@ function generateCategoryMarkdown(category, entries) {
   }
 
   out.push(`---`);
-  out.push(`*${entries.length} ${category}s total*`);
+  // @cap-feature(feature:F-090) Footer-Counter shows kept + filtered counts so the user can
+  //   tell at a glance how aggressive the confidence filter was on this run.
+  if (droppedCount > 0) {
+    out.push(`*${filtered.length} ${category}s kept (filtered out ${droppedCount} low-confidence ${category}s; threshold=${minConfidence})*`);
+  } else {
+    out.push(`*${filtered.length} ${category}s total*`);
+  }
   return out.join('\n');
+}
+
+// @cap-feature(feature:F-090) Pure filter for V5 monolithic Memory output.
+// @cap-decision(F-090/AC-1) Filter rule: keep entry IFF (pinned OR confidence >= threshold).
+//   evidence_count is implicit in confidence (each re-observation +0.1, default 0.5), so a
+//   single check on confidence captures both "trustworthy" (high confidence) and "user-curated"
+//   (pinned) signals. evidence-only entries without re-observation are noise by definition.
+// @cap-decision(F-090/AC-5) Defense-in-depth: pinned wins regardless of confidence value.
+//   A pinned entry with confidence:0.0 (e.g. user-suppressed via contradiction) is still
+//   user-curated content and must round-trip to disk.
+/**
+ * Filter memory entries for .md output. graph.json is built independently and not affected.
+ * @param {import('./cap-memory-engine.cjs').MemoryEntry[]} entries
+ * @param {{ minConfidence: number }} options
+ * @returns {import('./cap-memory-engine.cjs').MemoryEntry[]}
+ */
+function _filterEntriesForOutput(entries, options) {
+  const threshold = options.minConfidence;
+  const out = [];
+  for (const entry of entries) {
+    if (!entry || !entry.metadata) continue;
+    if (entry.metadata.pinned === true) { out.push(entry); continue; }
+    const fields = confidence.ensureFields(entry.metadata);
+    if (typeof fields.confidence === 'number' && fields.confidence >= threshold) {
+      out.push(entry);
+    }
+  }
+  return out;
 }
 
 // @cap-todo(ref:F-029:AC-4) hotspots.md ranks files by cross-session edit frequency
@@ -213,8 +267,17 @@ function writeMemoryDirectory(projectRoot, entries, options = {}) {
       }
     }
 
-    const content = generateCategoryMarkdown(category,
-      category === 'hotspot' ? entriesToWrite : categoryEntries);
+    // @cap-feature(feature:F-090) Forward minConfidence option to the generator. graph.json
+    //   is built separately from the same entries[] input — no filter applied there.
+    // @cap-decision(F-090) Default = 0 (no filter) preserves backwards-compat for direct
+    //   callers (tests, CLI tools). The HOOK (hooks/cap-memory.js) applies the policy by
+    //   passing minConfidence:0.6 explicitly — that's where the agent-facing token-cost-of-read
+    //   problem manifests, so that's where the policy lives.
+    const content = generateCategoryMarkdown(
+      category,
+      category === 'hotspot' ? entriesToWrite : categoryEntries,
+      { minConfidence: options.minConfidence }
+    );
     files[filename] = content;
 
     if (!options.dryRun) {
@@ -392,7 +455,8 @@ module.exports = {
   readMemoryDirectory,
   readMemoryFile,
   getCrossReference,
-  generateCategoryMarkdown,
+  // F-090: confidence filter exposed for tests + downstream tools that want the same gating.
+  _filterEntriesForOutput,
   MEMORY_DIR,
   CATEGORY_FILES,
 };
