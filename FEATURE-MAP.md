@@ -1661,7 +1661,7 @@ Beide Bugs sind nur durch Re-Run "verschwunden" — vermutlich race-condition-ar
 - `tests/cap-migrate-tags-monorepo.test.cjs` (neu)
 - `tests/cap-snapshot-linkage-type-safety.test.cjs` (neu)
 
-### F-088: Lossless FEATURE-MAP Round-Trip [prototyped]
+### F-088: Lossless FEATURE-MAP Round-Trip [shipped]
 
 **Depends on:** F-041, F-042, F-081
 
@@ -1690,7 +1690,7 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 - `tests/cap-feature-map-safety-net.test.cjs` (neu, 6 Tests)
 - `tests/cap-feature-map-monorepo-extraction.test.cjs` (Budget-Bump 1500 → 1750)
 
-### F-089: Sharded Feature Map (Index + Per-Feature Files) [tested]
+### F-089: Sharded Feature Map (Index + Per-Feature Files) [shipped]
 
 **Depends on:** F-002, F-081, F-088
 
@@ -1733,7 +1733,7 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 - `tests/cap-doctor-integrity.test.cjs` — Manifest-Count 90 → 92
 - `tests/cap-ui-design-editor-adversarial.test.cjs` — Manifest-Count 90 → 92
 
-### F-090: Confidence-Filter for V5 Memory Output [tested]
+### F-090: Confidence-Filter for V5 Memory Output [shipped]
 
 **Depends on:** F-055, F-056
 
@@ -1768,7 +1768,7 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - `hooks/cap-memory.js` — Pipeline-Wiring `{ minConfidence: 0.6 }` an `writeMemoryDirectory`
 - `tests/cap-memory-dir-confidence-filter.test.cjs` (neu, 14 Tests)
 
-### F-091: Source-Aware Initial Confidence for Memory Entries [tested]
+### F-091: Source-Aware Initial Confidence for Memory Entries [shipped]
 
 **Depends on:** F-055, F-090
 
@@ -1807,7 +1807,7 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - `tests/cap-memory-engine-source-confidence.test.cjs` (neu, 17 Tests)
 - 4 angepasste Bestands-Tests (cap-memory-confidence + adversarial) — explizite Tags assert nun 0.8/0.7
 
-### F-092: Two-Phase Workflow — /cap:quick + /cap:finalize [tested]
+### F-092: Two-Phase Workflow — /cap:quick + /cap:finalize [shipped]
 
 **Depends on:** F-003 (SESSION.json), F-047 (annotate), F-002 (Feature Map)
 
