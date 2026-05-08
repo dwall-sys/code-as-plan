@@ -1733,6 +1733,35 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 - `tests/cap-doctor-integrity.test.cjs` — Manifest-Count 90 → 92
 - `tests/cap-ui-design-editor-adversarial.test.cjs` — Manifest-Count 90 → 92
 
+### F-090: Confidence-Filter for V5 Memory Output [planned]
+
+**Depends on:** F-055, F-056
+
+**Motivation:** Real-world Befund auf GoetzeInvest hub (2026-05-08, post-F-089): `apps/hub/.cap/memory/decisions.md` ist 568 KB / 2340 Einträge groß, davon ~95% mit `Confidence: 0.50, Evidence: 1` — Heuristik-Extracts aus Code-Kommentaren (z.B. *"gracefulShutdown inline definiert (nicht Top-Level), damit"*), keine echten Entscheidungen. Pitfalls.md ähnlich (76 KB / 305 Einträge).
+
+Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den Agent am Session-Start sie zu lesen. Bei 568 KB = ~150k Tokens pro Session-Start, davon ~140k Tokens Heuristik-Mais.
+
+**Strategie:** Filter im V5-Writer (`writeMemoryDirectory` → `generateCategoryMarkdown`). graph.json bleibt voll (Cluster/Affinity-Komponenten brauchen alle Nodes), nur die menschen- und agent-lesbare .md-Output wird auf signal-tragende Einträge eingeschränkt.
+
+**Filter-Regel:** Eintrag wird emittiert wenn EINER der folgenden gilt:
+1. `pinned: true` (User-kuriert — immer behalten)
+2. `confidence >= 0.6` (mind. 2 Beobachtungen — REOBSERVATION_BUMP=0.1, DEFAULT_CONFIDENCE=0.5; 0.6 = seen twice)
+3. Kategorie ist `hotspot` (Ranking-Format, regeneriert jedes Run; nicht filtern)
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Pure function `_filterEntriesForOutput(entries, options)` filtert Einträge nach pinned-OR-confidence-Schwelle. Threshold default 0.6, optional via `options.minConfidence` überschreibbar |
+| AC-2 | planned | `generateCategoryMarkdown` wendet den Filter VOR der Markdown-Emission an für `decision`/`pitfall`/`pattern` Kategorien. Hotspot-Kategorie bleibt unverändert (ranking format, regenerated each run) |
+| AC-3 | planned | Footer-Counter ändert sich auf `*N decisions kept (M filtered out as low-confidence)*` damit der User sieht wie viel verworfen wurde |
+| AC-4 | planned | `graph.json` bleibt unverändert — alle Nodes, alle Edges. Filter wirkt NUR auf die .md-Output. Test: vor/nach Filter haben gleichen graph.json-Hash |
+| AC-5 | planned | Pinned entries werden NIE gefiltert, auch bei `confidence: 0.0`. Defense-in-depth gegen Confidence-Drift |
+| AC-6 | planned | Tests: (a) low-confidence dropped, (b) high-confidence kept, (c) pinned always kept, (d) hotspot category unfiltered, (e) Footer-Counter zeigt drop count, (f) graph.json hash invariant über Filter-Application |
+| AC-7 | planned | Manual run on GoetzeInvest hub: `decisions.md` schrumpft erwartet auf ~5–10% (~30–60 KB statt 568 KB), `pitfalls.md` analog. Regenerate-Scripts dokumentiert |
+
+**Files (geplant):**
+- `cap/bin/lib/cap-memory-dir.cjs` — `_filterEntriesForOutput` Helper + Wiring in `generateCategoryMarkdown` + Footer-Counter-Anpassung
+- `tests/cap-memory-dir-confidence-filter.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
@@ -1743,4 +1772,4 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T09:00:00.000Z*
+*Last updated: 2026-05-08T14:30:00.000Z*
