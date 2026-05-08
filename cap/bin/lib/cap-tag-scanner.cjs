@@ -35,6 +35,22 @@ function isUnifiedAnchorsEnabled(projectRoot) {
   }
 }
 
+// @cap-feature(feature:F-094, primary:true) Opt-out config check for multi-line @cap-* description capture.
+//   Default is ON: continuation-pickup runs unless .cap/config.json explicitly sets
+//   { multilineCapture: { enabled: false } }. Missing config or any read error returns true (default).
+function isMultilineCaptureEnabled(projectRoot) {
+  if (!projectRoot) return true;
+  try {
+    const cfgPath = path.join(projectRoot, '.cap', 'config.json');
+    const raw = fs.readFileSync(cfgPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.multilineCapture && parsed.multilineCapture.enabled === false) return false;
+    return true;
+  } catch (_e) {
+    return true;
+  }
+}
+
 // @cap-todo(ref:AC-25) Tag scanner uses native RegExp with dotAll flag for multiline extraction
 // @cap-pattern Tag regex anchors to comment tokens at line start -- identical approach to arc-scanner.cjs
 // @cap-decision F-046 leaves CAP_TAG_RE untouched (AC-5 backward compat). New polylingual extension uses extractTagsWithContext + getCommentStyle for richer per-language detection.
@@ -113,14 +129,92 @@ function parseMetadata(metadataStr) {
   return result;
 }
 
-// @cap-api extractTags(content, filePath) -- Regex extraction engine supporting //, #, /* */, """ """ comment styles.
+// @cap-feature(feature:F-094) Detect the comment-anchor token used to introduce a @cap-* tag.
+//   Returns one of: '//', '/*', '*', '#', '--', '"""', "'''", or null when the line does not
+//   match the expected leading-token shape. Used to drive continuation-line matching: a Line-comment
+//   anchor (//, #, --) only continues with the same token; a Block-comment anchor (/*, """, ''')
+//   continues into block-body until the closing token; a `*` anchor (already-inside JSDoc body)
+//   continues with `*` body lines.
+const ANCHOR_TOKEN_RE = /^[ \t]*(\/\/|\/\*|\*|#|--|"""|''')/;
+function detectAnchorToken(line) {
+  const m = line.match(ANCHOR_TOKEN_RE);
+  return m ? m[1] : null;
+}
+
+// @cap-feature(feature:F-094) Extract continuation lines for a @cap-* tag.
+//   Walks forward from `startIdx` collecting comment-continuation lines until a stop-condition
+//   is met. Stop-conditions per AC-2: empty line, code line (no matching opener), new @cap-* tag,
+//   block-comment-close token. Returns an array of cleaned text fragments (one per continuation
+//   line). Caller concatenates with single-space separator.
+//
+//   Block-comment behaviour (anchor `/*`, `"""`, `'''`): body lines accumulate until close token
+//   or stop-condition; leading `*` and surrounding whitespace are stripped from each body line.
+//   Line-comment behaviour (anchor `//`, `#`, `--`, `*`): each continuation line must start with
+//   the same anchor token (with arbitrary indent before/after).
+//
+//   NOT covered (deliberate scope): cross-block continuations (a tag in one /* */ block plus
+//   prose in a separate /* */ block below); continuations after exactly one blank line; nested
+//   block comments. These remain F-094 follow-up scope.
+function captureContinuations(lines, startIdx, anchor) {
+  const continuations = [];
+  if (!anchor) return continuations;
+
+  const isBlockOpen = (anchor === '/*' || anchor === '"""' || anchor === "'''");
+  // For line-comment anchors we precompute a regex matching the same token at line start.
+  let lineRe = null;
+  if (!isBlockOpen) {
+    const escaped = anchor.replace(/[/*\-]/g, '\\$&');
+    lineRe = new RegExp('^[ \\t]*' + escaped + '[ \\t]+(.*)$');
+  }
+
+  for (let j = startIdx; j < lines.length; j++) {
+    const line = lines[j];
+
+    if (!line.trim()) break;
+    if (CAP_TAG_RE.test(line) || CAP_DESIGN_TAG_RE.test(line)) break;
+
+    let text = null;
+    let blockClosed = false;
+
+    if (anchor === '/*') {
+      const closeIdx = line.indexOf('*/');
+      const body = closeIdx === -1 ? line : line.slice(0, closeIdx);
+      const stripped = body.replace(/^[ \t]*\*?[ \t]?/, '').replace(/\s+$/, '');
+      text = stripped.trim();
+      if (closeIdx !== -1) blockClosed = true;
+    } else if (anchor === '"""' || anchor === "'''") {
+      const closeIdx = line.indexOf(anchor);
+      if (closeIdx !== -1) {
+        text = line.slice(0, closeIdx).trim();
+        blockClosed = true;
+      } else {
+        text = line.trim();
+      }
+    } else {
+      const m = line.match(lineRe);
+      if (!m) break;
+      text = m[1].trim();
+    }
+
+    if (text) continuations.push(text);
+    if (blockClosed) break;
+  }
+
+  return continuations;
+}
+
+// @cap-api extractTags(content, filePath, options) -- Regex extraction engine supporting //, #, /* */, """ """ comment styles.
 // Returns: CapTag[] -- array of extracted tags.
 /**
  * @param {string} content - File content to scan
  * @param {string} filePath - Relative file path (for tag metadata)
+ * @param {Object} [options={}] - Extraction options. Default-initialised so that
+ *   `extractTags.length === 2` stays pinned by F-046/AC-5 backward-compat test.
+ * @param {boolean} [options.multilineCapture=true] - When true, multi-line continuations are appended to description (F-094)
  * @returns {CapTag[]}
  */
-function extractTags(content, filePath) {
+function extractTags(content, filePath, options = {}) {
+  const multilineEnabled = options.multilineCapture !== false; // default ON
   const lines = content.split('\n');
   const tags = [];
   for (let i = 0; i < lines.length; i++) {
@@ -129,8 +223,20 @@ function extractTags(content, filePath) {
     if (match) {
       const type = match[1];
       const metadataStr = match[2] || '';
-      const description = (match[3] || '').trim();
+      let description = (match[3] || '').trim();
       const metadata = parseMetadata(metadataStr);
+
+      // @cap-feature(feature:F-094) Continuation-pickup: if multilineCapture is enabled, walk
+      //   forward from the next line and append continuation-line content to description.
+      //   The original `raw` and `line` (1-based anchor line) are preserved for migration
+      //   compatibility (AC-4).
+      if (multilineEnabled) {
+        const anchor = detectAnchorToken(line);
+        const cont = captureContinuations(lines, i + 1, anchor);
+        if (cont.length > 0) {
+          description = (description + ' ' + cont.join(' ')).replace(/\s+/g, ' ').trim();
+        }
+      }
 
       // @cap-todo(ref:AC-22) Detect subtypes in @cap-todo description (risk:..., decision:...)
       let subtype = null;
@@ -159,8 +265,17 @@ function extractTags(content, filePath) {
     if (designMatch) {
       const type = designMatch[1]; // 'design-token' | 'design-component'
       const metadataStr = designMatch[2] || '';
-      const description = (designMatch[3] || '').trim();
+      let description = (designMatch[3] || '').trim();
       const metadata = parseMetadata(metadataStr);
+
+      if (multilineEnabled) {
+        const anchor = detectAnchorToken(line);
+        const cont = captureContinuations(lines, i + 1, anchor);
+        if (cont.length > 0) {
+          description = (description + ' ' + cont.join(' ')).replace(/\s+/g, ' ').trim();
+        }
+      }
+
       tags.push({
         type,
         file: filePath,
@@ -193,7 +308,11 @@ function scanFile(filePath, projectRoot, options) {
     return [];
   }
   const relativePath = path.relative(projectRoot, filePath);
-  const tags = extractTags(content, relativePath);
+  // @cap-feature(feature:F-094) Forward the multilineCapture flag to extractTags so callers
+  //   that resolved it once (scanDirectory) don't re-read .cap/config.json per file.
+  const extractOpts = {};
+  if (options && options.multilineCapture != null) extractOpts.multilineCapture = options.multilineCapture;
+  const tags = extractTags(content, relativePath, extractOpts);
   if (options && options.unifiedAnchors) {
     // Lazy require keeps the module decoupled when the feature is disabled.
     const anchor = require('./cap-anchor.cjs');
@@ -228,6 +347,12 @@ function scanDirectory(dirPath, options = {}) {
     options.unifiedAnchors != null
       ? !!options.unifiedAnchors
       : isUnifiedAnchorsEnabled(projectRoot);
+  // @cap-feature(feature:F-094) F-094 multilineCapture is opt-OUT (default ON). Honour explicit
+  //   options.multilineCapture; otherwise resolve from .cap/config.json once per scan.
+  const multilineCapture =
+    options.multilineCapture != null
+      ? !!options.multilineCapture
+      : isMultilineCaptureEnabled(projectRoot);
   const tags = [];
 
   // @cap-constraint Uses readdirSync (not glob) per project zero-dep constraint
@@ -247,7 +372,7 @@ function scanDirectory(dirPath, options = {}) {
         const ext = path.extname(entry.name);
         if (!extensions.includes(ext)) continue;
         if (scope.isExcluded(fullPath, false)) continue;
-        const fileTags = scanFile(fullPath, projectRoot, { unifiedAnchors });
+        const fileTags = scanFile(fullPath, projectRoot, { unifiedAnchors, multilineCapture });
         tags.push(...fileTags);
       }
     }
@@ -1608,6 +1733,10 @@ module.exports = {
   DEFAULT_EXCLUDE,
   LEGACY_TAG_RE,
   isUnifiedAnchorsEnabled,
+  // F-094 multi-line @cap-* description capture
+  isMultilineCaptureEnabled,
+  detectAnchorToken,
+  captureContinuations,
   scanFile,
   scanDirectory,
   extractTags,
