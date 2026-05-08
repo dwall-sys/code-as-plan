@@ -487,6 +487,9 @@ function accumulateFromCode(tags, options = {}) {
       seen.add('d:' + key);
 
       // @cap-todo(ac:F-055/AC-2) New entries start with confidence:0.5, evidence_count:1 (injected via initFields).
+      // @cap-feature(feature:F-091, primary:true) Source-aware initial confidence — explicit
+      //   @cap-decision tags start at 0.8 so they survive the F-090 filter (threshold 0.6)
+      //   on first emission instead of needing re-observation.
       entries.push({
         category: 'decision',
         file: tag.file,
@@ -498,7 +501,9 @@ function accumulateFromCode(tags, options = {}) {
           features: tag.metadata?.feature ? [tag.metadata.feature] : [],
           pinned: false,
           line: tag.line,
-          ...confidence.initFields(),
+          ...confidence.initFields({
+            initialConfidence: confidence.initialConfidenceForSource('cap-decision'),
+          }),
         },
       });
     }
@@ -511,7 +516,7 @@ function accumulateFromCode(tags, options = {}) {
       if (seen.has('p:' + key)) continue;
       seen.add('p:' + key);
 
-      // @cap-todo(ac:F-055/AC-2)
+      // @cap-feature(feature:F-091) Explicit @cap-todo risk: subtype starts at 0.7.
       entries.push({
         category: 'pitfall',
         file: tag.file,
@@ -523,7 +528,9 @@ function accumulateFromCode(tags, options = {}) {
           features: tag.metadata?.feature ? [tag.metadata.feature] : [],
           pinned: false,
           line: tag.line,
-          ...confidence.initFields(),
+          ...confidence.initFields({
+            initialConfidence: confidence.initialConfidenceForSource('cap-todo-risk'),
+          }),
         },
       });
     }
@@ -535,7 +542,7 @@ function accumulateFromCode(tags, options = {}) {
       if (seen.has('p:' + key)) continue;
       seen.add('p:' + key);
 
-      // @cap-todo(ac:F-055/AC-2)
+      // @cap-feature(feature:F-091) Standalone @cap-risk starts at 0.7.
       entries.push({
         category: 'pitfall',
         file: tag.file,
@@ -547,7 +554,9 @@ function accumulateFromCode(tags, options = {}) {
           features: tag.metadata?.feature ? [tag.metadata.feature] : [],
           pinned: false,
           line: tag.line,
-          ...confidence.initFields(),
+          ...confidence.initFields({
+            initialConfidence: confidence.initialConfidenceForSource('cap-risk'),
+          }),
         },
       });
     }
