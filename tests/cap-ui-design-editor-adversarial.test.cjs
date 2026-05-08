@@ -1,6 +1,6 @@
 // @cap-feature(feature:F-068) CAP-UI Visual Design Editor — adversarial hardening tests.
 // @cap-context Probes path-traversal, editable gating, atomic-write crash safety, body-parser DoS,
-// @cap-history(sessions:2, edits:2, since:2026-05-05, learned:2026-05-06) Frequently modified — 2 sessions, 2 edits
+// @cap-history(sessions:3, edits:4, since:2026-05-05, learned:2026-05-07) Frequently modified — 3 sessions, 4 edits
 //              value validation, Git-friendly diff invariants, module-split back-compat, and snapshot read-only posture.
 // @cap-decision Zero external deps. node:test + node:assert + node:http only, mirror of the baseline file.
 // @cap-decision Baseline file (cap-ui-design-editor.test.cjs) covers happy-path AC-1..AC-6.
@@ -897,7 +897,8 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     //   which were on-disk but missing from the manifest).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 90);
+    // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added (Sharded Feature Map).
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 92);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));

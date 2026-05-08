@@ -90,12 +90,16 @@ test('F-083/AC-2: re-exports are identity-preserving (===, not just same shape)'
 // @cap-decision(F-088) Bumped core budget 1500 → 1750 to accommodate the F-088 safety-net
 //   (~35 lines) AND the surgical-patch helpers (~140 lines: 3 functions + JSDoc + comments).
 //   The lossless round-trip (AC-1..4) is deferred; revisit if it lands.
-test('F-083/AC-3: line-count budget — core ≤1750, monorepo ≤900', () => {
+// @cap-decision(F-089) Bumped core budget 1750 → 2000 to accommodate the sharded-mode dispatch
+//   helpers (~200 lines: _readShardedMap, _writeShardedMap, _applyShardedSurgicalPatches, plus
+//   the lazy-require accessor and JSDoc). The shard-specific PURE helpers live in cap-feature-map-shard.cjs
+//   (separate module, ~315 lines) — only the I/O dispatchers remain in core.
+test('F-083/AC-3: line-count budget — core ≤2000, monorepo ≤900', () => {
   const coreLines = fs.readFileSync(CORE_PATH, 'utf8').split('\n').length;
   const monorepoLines = fs.readFileSync(MONOREPO_PATH, 'utf8').split('\n').length;
   assert.ok(
-    coreLines <= 1750,
-    `cap-feature-map.cjs has ${coreLines} lines — must be ≤1750. Move more into the monorepo module.`
+    coreLines <= 2000,
+    `cap-feature-map.cjs has ${coreLines} lines — must be ≤2000. Move more into the shard / monorepo module.`
   );
   assert.ok(
     monorepoLines <= 900,

@@ -211,7 +211,9 @@ Last command: {session_context.lastCommand}
 3. After sufficient understanding, cluster features into logical groups
 4. Surface dependencies between feature groups
 5. For each feature, draft numbered acceptance criteria in imperative form
-6. Assign feature IDs starting from {next available ID}
+6. Assign feature IDs:
+   - For single-app projects: sequential `F-NNN` starting from {next available ID}
+   - For monorepo projects (apps/* or workspace packages > 1): prefer descriptive `F-<App>-<Slug>` IDs (e.g., `F-Hub-Spotlight-Carousel`). Detect monorepo: presence of `apps/` directory or `package.json:workspaces`. Both formats may coexist.
 7. Return the feature entries in the exact structured format below
 
 **Return format (delimited):**

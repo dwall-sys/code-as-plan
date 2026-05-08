@@ -1690,6 +1690,49 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 - `tests/cap-feature-map-safety-net.test.cjs` (neu, 6 Tests)
 - `tests/cap-feature-map-monorepo-extraction.test.cjs` (Budget-Bump 1500 → 1750)
 
+### F-089: Sharded Feature Map (Index + Per-Feature Files) [tested]
+
+**Depends on:** F-002, F-081, F-088
+
+**Motivation:** Real-world Befund auf GoetzeInvest hub (2026-05-08): `apps/hub/FEATURE-MAP.md` ist auf ~4000 Zeilen gewachsen und ist die Single-Source-of-Truth für jeden Read/Write. Jeder Agent-Call (Brainstorm, Prototype, Scan, Reconcile, Review, Status) lädt die volle Datei → ~30–50k Tokens nur fürs Lesen, linear skalierend mit Featureanzahl. F-088 hat den Datenverlust beim Round-Trip strukturell entschärft, aber das Skalierungsproblem bleibt: bei 200 Features wird FEATURE-MAP.md unbenutzbar.
+
+**Lösung:** Sharding. `FEATURE-MAP.md` wird zur schlanken **Index-Datei** (eine Zeile pro Feature: ID | state | title | groups), die vollen Feature-Blöcke wandern in `features/<ID>.md`. Agenten lesen erst den Index (~1 Zeile/Feature) und laden gezielt nur die F-NNN.md-Datei für das aktive Feature. V6 hat das Sharding-Pattern bereits für Memory etabliert (`.cap/memory/features/F-NNN.md`) — F-089 überträgt dasselbe Schema auf den SoT.
+
+**Sekundär-Anforderung:** ID-Format wird liberalisiert. Bisher `F-NNN` (zero-padded). Ab F-089 ist auch deskriptiv erlaubt: `F-<App>-<Slug>` (z.B. `F-Hub-Spotlight-Carousel`). Reale Praxis auf GoetzeInvest hat sich längst dorthin entwickelt — deskriptive IDs geben Kontext ohne den Block laden zu müssen. Beide Formate koexistieren dauerhaft; deskriptiv wird der neue Default in `/cap:brainstorm` und `/cap:init` für Monorepo-Apps.
+
+**Iter 1 strategy:** Phase-1-Scope (lieferbar als ein PR): Storage-Layer + Read/Write-Dispatcher + Migration. AC-1..AC-7, AC-9, AC-10, AC-11 vollständig getestet. AC-4 implementiert Read-Dispatch (sharded vs monolithic) — `readFeatureMap` lädt im Sharded-Mode beide Schritte (Index + per-feature Files) eager-equivalent. Lazy-API (`readIndex`/`readFeature`-Pattern in Agent-Prompts) ist Phase 2 und wird durch existierende Helper `parseIndex` + `featureFilePath` bereits unterstützt. AC-8 (Brainstormer-Heuristik) als Doku in agents/cap-brainstormer.md + commands/cap/brainstorm.md.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | `FEATURE-MAP.md` wird zur Index-Datei mit einer Zeile pro Feature im Format `- F-<ID> \| <state> \| <title>`. Header (`# Feature Map`) und `## Legend` bleiben erhalten. Tests: cap-feature-map-shard.test.cjs (parseIndex, serializeIndex round-trip) |
+| AC-2 | tested | Pro Feature wird eine Datei `features/<ID>.md` angelegt mit dem vollen Block (Title-Header, Depends-on, Motivation, AC-Tabelle, Files-Sektion). Filename = `<ID>.md` 1:1. Tests: featureFilename + featureFilePath unit + e2e migration write |
+| AC-3 | tested | ID-Validation: Drei-Branch-Union (`F-\d{3,}` numerisch, `F-LONGFORM` Legacy-Uppercase mit segmentiertem Body, `F-Mixed-Case` deskriptiv mit erforderlichem Hyphen). Defense-in-depth: keine Path-Traversal-Chars; max-Länge 64. Tightening ggü. F-081: `F-A-` und `F-A__B` nun rejected (war als Future-AC dokumentiert). Tests: 9 cases |
+| AC-4 | tested | `readFeatureMap` dispatched auf `_readShardedMap` wenn `features/` existiert. Per-feature-File via `parseFeatureMapContent` parseable (mini-monolithic-Block). Tests: sharded read + monolithic read coexist im selben Test-File |
+| AC-5 | tested | `setAcStatus`/`updateFeatureState`/`writeFeatureMap` dispatched auf sharded-Variante; F-088 Surgical-Patch wandert byte-byte auf per-feature File + Index-Update für state-changes. 50×50 Round-Trip ohne Line-Drift validiert. Tests: cap-feature-map-sharded.test.cjs |
+| AC-6 | tested | `/cap:migrate-feature-map` (commands/cap/migrate-feature-map.md) + `cap-feature-map-migrate.cjs`. Byte-lossless extraction (raw slicing, kein parse→serialize). Idempotent. Dry-run default. Backup als `.backup-pre-F-089`. Tests: e2e auf eigenem FEATURE-MAP.md (~89 Features in 22ms) |
+| AC-7 | tested | Backwards-Compat: ohne `features/`-Dir → Monolithic-Modus, alle 565 bestehenden cap-feature-map.* Tests bleiben grün. Sharded vs monolithic-Detection via `isShardedMap` |
+| AC-8 | tested | Brainstormer (`agents/cap-brainstormer.md` + `commands/cap/brainstorm.md`) führt deskriptive `F-<App>-<Slug>` als bevorzugte Form für Monorepo-Apps ein; Single-App-Repos behalten `F-NNN`. Heuristik dokumentiert (apps/* dir oder package.json:workspaces). CLAUDE.md aktualisiert |
+| AC-9 | tested | `IndexEntry` typedef in cap-feature-map-shard.cjs zentral; `_updateIndexEntry` (surgical) + `_appendIndexEntry` (insert at end of section). Tests: surgical preserves byte-content of siblings; append doesn't accumulate blank lines |
+| AC-10 | tested | 95 neue Tests (cap-feature-map-shard: 46, cap-feature-map-migrate: 18, cap-feature-map-sharded: 10, plus angepasste adversarial: 21). Volle Suite: 7380/7384 (zwei Pre-existing plugin.json drift-Failures sind nicht F-089) |
+| AC-11 | tested | `commands/cap/migrate-feature-map.md` (neu) + `CLAUDE.md` (Feature-ID-Konvention, Sharded-Layout, Command-Tabelle) + `agents/cap-brainstormer.md` + `commands/cap/brainstorm.md` aktualisiert |
+
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-feature-map.cjs` — Pattern erweitert (3-Branch-Union); Sharded-Mode-Dispatcher in readFeatureMap/writeFeatureMap/applySurgicalPatches; `_readShardedMap`/`_writeShardedMap`/`_applyShardedSurgicalPatches`
+- `cap/bin/lib/cap-feature-map-shard.cjs` (neu) — ID-Validator + Filename-Derivation + Index parse/serialize + surgical `_updateIndexEntry`/`_appendIndexEntry`
+- `cap/bin/lib/cap-feature-map-migrate.cjs` (neu) — Monolithic → Sharded Migration; byte-lossless extractFeatureBlocks; planMigration/applyMigration/formatPlan
+- `cap/bin/lib/cap-doctor.cjs` — Manifest +2 Module
+- `commands/cap/migrate-feature-map.md` (neu) — User-facing Migration-Command
+- `commands/cap/brainstorm.md` (Update — deskriptive IDs default für Monorepo)
+- `agents/cap-brainstormer.md` (Update — ID-Vorschlags-Heuristik mit Mono/Single-App-Discrimination)
+- `CLAUDE.md` (Update — Feature-ID-Format, Sharded-Layout, Command-Tabelle)
+- `tests/cap-feature-map-shard.test.cjs` (neu, 46 Tests)
+- `tests/cap-feature-map-migrate.test.cjs` (neu, 18 Tests, inkl. e2e auf eigenem FEATURE-MAP.md)
+- `tests/cap-feature-map-sharded.test.cjs` (neu, 10 Tests, inkl. 50×50 Round-Trip)
+- `tests/cap-feature-map-adversarial.test.cjs` — Tests an die getightnete Regex angepasst (3 Tests refactored, 1 neu)
+- `tests/cap-feature-map-monorepo-extraction.test.cjs` — Line-Count-Budget bumped 1750 → 2000
+- `tests/cap-doctor-integrity.test.cjs` — Manifest-Count 90 → 92
+- `tests/cap-ui-design-editor-adversarial.test.cjs` — Manifest-Count 90 → 92
+
 ## Legend
 
 | State | Meaning |
@@ -1700,4 +1743,4 @@ Betroffene Pfade: `setAcStatus`, `updateFeatureState`, `enrichFromTags` (alle ru
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T08:30:00.000Z*
+*Last updated: 2026-05-08T09:00:00.000Z*

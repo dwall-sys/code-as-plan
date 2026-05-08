@@ -10,20 +10,25 @@
 // @cap-feature(feature:F-081) Multi-Format Feature Map Parser — Union ID regex (F-NNN | F-LONGFORM), bullet-style ACs, config-driven format selection
 // @cap-feature(feature:F-082) Aggregate Feature Maps Across Monorepo Sub-Apps — readFeatureMap transparently merges sub-app maps via Rescoped Table or opt-in directory walk
 
-// @cap-history(sessions:3, edits:5, since:2026-04-20, learned:2026-05-06) Frequently modified — 3 sessions, 5 edits
+// @cap-history(sessions:4, edits:10, since:2026-04-20, learned:2026-05-07) Frequently modified — 4 sessions, 10 edits
 const fs = require('node:fs');
 const path = require('node:path');
 
 const FEATURE_MAP_FILE = 'FEATURE-MAP.md';
 
 // @cap-feature(feature:F-081) Union Feature-ID pattern: legacy F-NNN (3+ digits) OR long-form F-UPPERCASE
-// @cap-decision(F-081/AC-1) The pattern is intentionally anchored on both ends; the second branch
-//   `[A-Z][A-Z0-9_-]*` requires uppercase first char so digit-leading slugs like `F-076-suffix`
-//   continue to be REJECTED — preserves the F-076 schema invariant proven by cap-memory-schema tests.
+// @cap-feature(feature:F-089) Pattern widened to include mixed-case deskriptiv IDs (F-Hub-Spotlight-Carousel)
+//   for monorepo apps. Three-branch union; F-076-suffix invariant preserved (digit-leading suffixed
+//   forms match neither branch).
+// @cap-decision(F-081/AC-1) The pattern is intentionally anchored on both ends; the letter branch
+//   requires letter-first char so digit-leading slugs like `F-076-suffix` continue to be REJECTED —
+//   preserves the F-076 schema invariant proven by cap-memory-schema tests.
 // @cap-risk(reason:regex-asymmetry) The narrow header regex `featureHeaderRE` historically used `\d{3}`;
 //   widening it to the union must NOT also widen `getNextFeatureId`'s sequence detection (which only
 //   considers numeric IDs for next-id allocation). Long-form IDs are user-named and never auto-generated.
-const FEATURE_ID_PATTERN = /^F-(?:\d{3,}|[A-Z][A-Z0-9_-]*)$/;
+// @cap-decision(F-089/regex-sync) The canonical source is cap-feature-map-shard.cjs:FEATURE_ID_PATTERN.
+//   Keep this constant in sync with that file or callers will see asymmetric ID acceptance.
+const FEATURE_ID_PATTERN = /^F-(?:\d{3,}|[A-Z](?:[A-Z0-9_]*[A-Z0-9])?(?:[-_][A-Z0-9_]*[A-Z0-9])*|[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)$/;
 
 // @cap-todo(ref:AC-9) Feature state lifecycle: planned -> prototyped -> tested -> shipped
 const VALID_STATES = ['planned', 'prototyped', 'tested', 'shipped'];
@@ -105,6 +110,13 @@ function generateTemplate() {
 function readFeatureMap(projectRoot, appPath, options) {
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
   const filePath = path.join(baseDir, FEATURE_MAP_FILE);
+
+  // @cap-feature(feature:F-089, primary:true) Sharded-mode dispatch — load index + per-feature files
+  //   when features/ directory exists. Falls back to monolithic for AC-7 backwards-compat.
+  if (_shard().isShardedMap(projectRoot, appPath)) {
+    return _readShardedMap(projectRoot, appPath, options);
+  }
+
   if (!fs.existsSync(filePath)) {
     return { features: [], lastScan: null };
   }
@@ -246,7 +258,8 @@ function parseFeatureMapContent(content, options) {
   //   throughout root + sub-app maps. Accepting `:` plus dash forms (with required surrounding whitespace
   //   to disambiguate from hyphen-in-ID) makes CAP tolerant of the legacy CAP-init-template em-dash style
   //   without forcing migration. Tested in cap-feature-map-emdash.test.cjs.
-  const featureHeaderRE = /^###\s+(F-(?:\d{3,}|[A-Z][A-Z0-9_-]*))(?::\s+|\s+[—–-]\s+)(.+?)\s*$/;
+  // @cap-feature(feature:F-089) Header regex keeps in sync with FEATURE_ID_PATTERN above.
+  const featureHeaderRE = /^###\s+(F-(?:\d{3,}|[A-Z](?:[A-Z0-9_]*[A-Z0-9])?(?:[-_][A-Z0-9_]*[A-Z0-9])*|[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+))(?::\s+|\s+[—–-]\s+)(.+?)\s*$/;
   // Match AC rows: | AC-N | status | description |
   // End-anchor (\s*$) forces the non-greedy description group to expand up to the
   // trailing pipe of the row, not the first internal pipe. Without the anchor an AC
@@ -628,7 +641,8 @@ function _surgicalSetAcStatus(content, featureId, acId, newStatus) {
   // Find the start of the NEXT feature header (or end of content).
   const blockStart = headerMatch.index;
   const afterHeader = content.slice(blockStart + headerMatch[0].length);
-  const nextHeaderMatch = /^###\s+F-(?:\d{3,}|[A-Z][A-Z0-9_-]*)(?::\s+|\s+[—–-]\s+)/m.exec(afterHeader);
+  // @cap-feature(feature:F-089) Next-header regex keeps in sync with FEATURE_ID_PATTERN above.
+  const nextHeaderMatch = /^###\s+F-(?:\d{3,}|[A-Z](?:[A-Z0-9_]*[A-Z0-9])?(?:[-_][A-Z0-9_]*[A-Z0-9])*|[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)(?::\s+|\s+[—–-]\s+)/m.exec(afterHeader);
   const blockEnd = nextHeaderMatch
     ? blockStart + headerMatch[0].length + nextHeaderMatch.index
     : content.length;
@@ -664,6 +678,10 @@ function _surgicalSetAcStatus(content, featureId, acId, newStatus) {
  * @returns {{ ok: boolean, hits: number, misses: Array<object> }}
  */
 function applySurgicalPatches(projectRoot, appPath, patches) {
+  // @cap-feature(feature:F-089) Sharded-mode dispatch — route to per-feature surgical patcher.
+  if (_shard().isShardedMap(projectRoot, appPath)) {
+    return _applyShardedSurgicalPatches(projectRoot, appPath, patches);
+  }
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
   const filePath = path.join(baseDir, FEATURE_MAP_FILE);
   let content;
@@ -710,6 +728,10 @@ function applySurgicalPatches(projectRoot, appPath, patches) {
  * @param {{ legacyStatusLine?: boolean, allowShrink?: boolean }} [options] - Serialization options forwarded to serializeFeatureMap.
  */
 function writeFeatureMap(projectRoot, featureMap, appPath, options) {
+  // @cap-feature(feature:F-089) Sharded-mode dispatch — route to per-feature writer.
+  if (_shard().isShardedMap(projectRoot, appPath)) {
+    return _writeShardedMap(projectRoot, featureMap, appPath, options);
+  }
   const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
   const filePath = path.join(baseDir, FEATURE_MAP_FILE);
 
@@ -832,6 +854,227 @@ function writeFeatureMap(projectRoot, featureMap, appPath, options) {
 
   fs.writeFileSync(filePath, content, 'utf8');
   return true;
+}
+
+// @cap-feature(feature:F-089) Lazy accessor for cap-feature-map-shard.cjs. Mirrors the F-083
+//   _monorepo() pattern. Used inside function bodies (never at top-level) so the shard module
+//   stays out of the require cycle and the import order remains stable.
+let _shardCache = null;
+function _shard() {
+  if (!_shardCache) _shardCache = require('./cap-feature-map-shard.cjs');
+  return _shardCache;
+}
+
+/**
+ * Read a sharded Feature Map: parse FEATURE-MAP.md (index) for the entry list, then load each
+ * features/<id>.md and parse it as a single-feature mini-map. Returns the same FeatureMap shape
+ * as monolithic readFeatureMap so all downstream code is shape-compatible.
+ *
+ * @param {string} projectRoot
+ * @param {string|null|undefined} appPath
+ * @param {{ safe?: boolean }=} options
+ * @returns {FeatureMap}
+ */
+function _readShardedMap(projectRoot, appPath, options) {
+  const sh = _shard();
+  const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
+  const indexPath = path.join(baseDir, FEATURE_MAP_FILE);
+  const safe = Boolean(options && options.safe === true);
+
+  let indexContent = '';
+  let lastScan = null;
+  if (fs.existsSync(indexPath)) {
+    indexContent = fs.readFileSync(indexPath, 'utf8');
+    const m = indexContent.match(/^\*Last updated:\s*(.+?)\*$/m);
+    if (m) lastScan = m[1].trim();
+  }
+  const indexEntries = sh.parseIndex(indexContent);
+
+  /** @type {Feature[]} */
+  const features = [];
+  for (const entry of indexEntries) {
+    const filePath = sh.featureFilePath(projectRoot, entry.id, appPath);
+    if (!fs.existsSync(filePath)) {
+      // Index lists a feature file that doesn't exist — surface a structured warning but continue
+      // so partial/recovering states remain readable.
+      const msg = 'cap: feature file missing for index entry ' + entry.id + ' (expected ' + filePath + ')';
+      if (safe) {
+        console.warn(msg);
+        continue;
+      }
+      console.warn(msg);
+      continue;
+    }
+    let blockContent;
+    try {
+      blockContent = fs.readFileSync(filePath, 'utf8');
+    } catch (e) {
+      console.warn('cap: failed to read feature file ' + filePath + ': ' + _safeForError(e && e.message));
+      continue;
+    }
+    const parsed = parseFeatureMapContent(blockContent, { projectRoot, safe });
+    if (parsed.parseError) {
+      // Per-feature parse error — skip this feature, surface warning. Sharded model isolates
+      // damage to a single feature instead of poisoning the whole map.
+      console.warn('cap: parseError in ' + filePath + ': ' + _safeForError(parsed.parseError.message));
+      continue;
+    }
+    if (parsed.features.length === 0) {
+      console.warn('cap: feature file produced no parsed feature: ' + filePath);
+      continue;
+    }
+    // Trust the per-feature file content; the index entry is just a summary cache.
+    const feature = parsed.features[0];
+    // If the index says a different state from the per-feature file, the per-feature file wins
+    // (it's the authoritative source). The index is best-effort summary.
+    features.push(feature);
+  }
+
+  return { features, lastScan };
+}
+
+/**
+ * Write a sharded Feature Map: per-feature file for each feature + atomic index update.
+ * Used by the writeFeatureMap dispatcher when the project is in sharded mode.
+ *
+ * @param {string} projectRoot
+ * @param {FeatureMap} featureMap
+ * @param {string|null|undefined} appPath
+ * @param {{ legacyStatusLine?: boolean, allowShrink?: boolean }=} options
+ * @returns {boolean}
+ */
+function _writeShardedMap(projectRoot, featureMap, appPath, options) {
+  const sh = _shard();
+  const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
+  const indexPath = path.join(baseDir, FEATURE_MAP_FILE);
+  const featuresDir = sh.featuresDirPath(projectRoot, appPath);
+
+  fs.mkdirSync(featuresDir, { recursive: true });
+
+  const features = (featureMap && Array.isArray(featureMap.features)) ? featureMap.features : [];
+  /** @type {import('./cap-feature-map-shard.cjs').IndexEntry[]} */
+  const indexEntries = [];
+
+  for (const feature of features) {
+    if (!feature || !sh.validateFeatureId(feature.id)) continue;
+    const target = sh.featureFilePath(projectRoot, feature.id, appPath);
+    // Per-feature serialization: emit only THIS feature's block (header + Depends + ACs + Files).
+    // We construct a single-feature mini-FeatureMap and reuse the existing serializer, then strip
+    // the global header/Legend/footer so only the feature block remains.
+    const singleMap = {
+      features: [feature],
+      lastScan: null,
+    };
+    const fullSerialized = serializeFeatureMap(singleMap, options);
+    // Extract just the feature block: from `### F-` to the next `## ` (Legend) or to start of footer.
+    const blockMatch = /(^### F-[\s\S]+?)(\n## Legend|\n---\n\*Last updated:)/m.exec(fullSerialized);
+    const blockContent = blockMatch ? blockMatch[1].replace(/\s+$/, '') + '\n' : fullSerialized;
+    // Atomic write
+    const tmp = target + '.tmp';
+    fs.writeFileSync(tmp, blockContent, 'utf8');
+    fs.renameSync(tmp, target);
+    indexEntries.push({ id: feature.id, state: feature.state, title: feature.title });
+  }
+
+  // Re-build index. We do NOT preserve any prose between feature entries — the sharded mode
+  // moves prose into the per-feature files, so the index is always clean header + entries + Legend.
+  const indexContent = sh.serializeIndex(indexEntries);
+  const tmpIdx = indexPath + '.tmp';
+  fs.writeFileSync(tmpIdx, indexContent, 'utf8');
+  fs.renameSync(tmpIdx, indexPath);
+  return true;
+}
+
+/**
+ * Apply F-088-style surgical patches in sharded mode. Routes each patch by featureId to the
+ * relevant per-feature file. State changes also surgical-patch the index entry.
+ *
+ * @param {string} projectRoot
+ * @param {string|null|undefined} appPath
+ * @param {Array<
+ *   {kind:'state', featureId:string, newState:string} |
+ *   {kind:'ac', featureId:string, acId:string, newStatus:string}
+ * >} patches
+ * @returns {{ ok: boolean, hits: number, misses: Array<object> }}
+ */
+function _applyShardedSurgicalPatches(projectRoot, appPath, patches) {
+  const sh = _shard();
+  const baseDir = appPath ? path.join(projectRoot, appPath) : projectRoot;
+  const indexPath = path.join(baseDir, FEATURE_MAP_FILE);
+
+  // Group patches by featureId so we apply all changes for one file in a single read-modify-write.
+  /** @type {Map<string, Array<object>>} */
+  const byFeature = new Map();
+  for (const p of patches) {
+    if (!p || !p.featureId || !sh.validateFeatureId(p.featureId)) continue;
+    if (!byFeature.has(p.featureId)) byFeature.set(p.featureId, []);
+    byFeature.get(p.featureId).push(p);
+  }
+
+  let hits = 0;
+  const misses = [];
+
+  // Per-feature file patches.
+  for (const [featureId, featurePatches] of byFeature.entries()) {
+    const filePath = sh.featureFilePath(projectRoot, featureId, appPath);
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch (_e) {
+      // Feature file doesn't exist — record as miss for every patch.
+      for (const p of featurePatches) misses.push(p);
+      continue;
+    }
+    let modified = false;
+    for (const p of featurePatches) {
+      let result;
+      if (p.kind === 'state') {
+        result = _surgicalUpdateFeatureState(content, p.featureId, p.newState);
+      } else if (p.kind === 'ac') {
+        result = _surgicalSetAcStatus(content, p.featureId, p.acId, p.newStatus);
+      } else {
+        misses.push(p);
+        continue;
+      }
+      if (result.hit) {
+        content = result.content;
+        modified = true;
+        hits++;
+      } else {
+        misses.push(p);
+      }
+    }
+    if (modified) {
+      const tmp = filePath + '.tmp';
+      fs.writeFileSync(tmp, content, 'utf8');
+      fs.renameSync(tmp, filePath);
+    }
+  }
+
+  // Index state-column updates: for every successful 'state' patch, surgical-patch the index too.
+  if (fs.existsSync(indexPath)) {
+    let indexContent = fs.readFileSync(indexPath, 'utf8');
+    let indexChanged = false;
+    for (const [featureId, featurePatches] of byFeature.entries()) {
+      const stateP = featurePatches.find(p => p.kind === 'state');
+      if (!stateP) continue;
+      const r = sh._updateIndexEntry(indexContent, featureId, { state: stateP.newState });
+      if (r.hit) {
+        indexContent = r.content;
+        indexChanged = true;
+      }
+    }
+    if (indexChanged) {
+      const tmp = indexPath + '.tmp';
+      fs.writeFileSync(tmp, indexContent, 'utf8');
+      fs.renameSync(tmp, indexPath);
+    }
+  }
+
+  if (hits === 0) {
+    return { ok: false, hits: 0, misses };
+  }
+  return { ok: true, hits, misses };
 }
 
 // @cap-feature(feature:F-082) _safeForError — sanitize a user-controlled value before

@@ -89,21 +89,35 @@ describe('F-081/AC-1 — adversarial regex boundaries', () => {
     assert.equal(FEATURE_ID_PATTERN.test('F-A:B'), false);
   });
 
-  it('rejects double-leading-dash but accepts internal double-dash (regex permissive within body)', () => {
-    // @cap-decision(F-081/AC-1) `F-A--B` is intentionally allowed because the body class
-    //   `[A-Z0-9_-]*` does not forbid consecutive dashes. The F-076 topic regex DOES forbid
-    //   them — feature IDs are looser by design (user-named slugs).
-    assert.equal(FEATURE_ID_PATTERN.test('F--A'), false, 'leading dash on body must reject');
-    assert.equal(FEATURE_ID_PATTERN.test('F-A--B'), true, 'internal double-dash documented as allowed');
+  it('rejects double-dash anywhere in the ID (F-089 tightened the F-081 permissive body)', () => {
+    // @cap-decision(F-089/AC-3) F-089 tightened the ID regex from F-081's permissive body class
+    //   to a three-branch union that requires segment shape: `[A-Z][A-Z0-9_]*(?:[-_][A-Z0-9_]+)*`
+    //   for the legacy long-form. Consecutive separators (`--`, `__`, `-_`) are now rejected
+    //   because the separator branch requires at least one body char between separators.
+    //   This was explicitly anticipated in the F-081 @cap-risk note ("if a future AC requires
+    //   stricter shape, tighten to ..."). F-089 IS that AC.
+    assert.equal(FEATURE_ID_PATTERN.test('F--A'), false, 'leading dash rejected');
+    assert.equal(FEATURE_ID_PATTERN.test('F-A--B'), false, 'internal double-dash now rejected (F-089)');
   });
 
-  it('accepts trailing dash/underscore (regex permissive — documented in @cap-decision)', () => {
-    // @cap-risk(reason:trailing-separator-in-id) `F-A-` and `F-A_` pass the regex because the
-    //   body class is `[A-Z0-9_-]*` (Kleene closure). Combined with topic suffix `-<topic>`
-    //   this can produce `F-A--topic.md` (doubled separator). Acceptable for v1; if a future
-    //   AC requires stricter shape, tighten to `[A-Z0-9_-]*[A-Z0-9]?$`.
-    assert.equal(FEATURE_ID_PATTERN.test('F-A-'), true);
-    assert.equal(FEATURE_ID_PATTERN.test('F-A_'), true);
+  it('rejects trailing dash/underscore (F-089 tightened the regex)', () => {
+    // @cap-decision(F-089/AC-3) The F-081 permissive trailing-separator behavior is now closed
+    //   off — `F-A-` and `F-A_` no longer pass. Each segment-extension `(?:[-_][A-Z0-9_]+)`
+    //   requires a non-empty body after the separator. See cap-feature-map-shard.cjs for the
+    //   canonical pattern.
+    assert.equal(FEATURE_ID_PATTERN.test('F-A-'), false);
+    assert.equal(FEATURE_ID_PATTERN.test('F-A_'), false);
+  });
+
+  it('accepts F-089 deskriptiv mixed-case IDs with required hyphen separator', () => {
+    // @cap-decision(F-089/AC-3) Third branch of the union: `[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+`
+    //   accepts `F-Hub-Spotlight-Carousel`, `F-App2-Feature3`. Single-segment mixed-case (e.g.
+    //   `F-Hub`) is REJECTED — the hyphen is mandatory to disambiguate from typos like `F-deploy`.
+    assert.equal(FEATURE_ID_PATTERN.test('F-Hub-Spotlight'), true);
+    assert.equal(FEATURE_ID_PATTERN.test('F-Hub-Spotlight-Carousel'), true);
+    assert.equal(FEATURE_ID_PATTERN.test('F-App2-Feature3'), true);
+    assert.equal(FEATURE_ID_PATTERN.test('F-Hub'), false, 'single-segment mixed-case rejected');
+    assert.equal(FEATURE_ID_PATTERN.test('F-deploy'), false, 'lowercase single-segment rejected');
   });
 
   it('parser silently drops headers that do NOT match the regex (no throw, no recovery)', () => {
