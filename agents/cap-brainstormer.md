@@ -123,7 +123,10 @@ You do NOT need to run any divergence detection code — this is a conversationa
    - "The API shall return..."
 4. Identify dependencies between features (A depends on B)
 5. Flag any circular dependencies as risks
-6. Assign feature IDs starting from the next available ID (e.g., if F-003 exists, start at F-004)
+6. Assign feature IDs:
+   - **Single-app projects** (no `apps/*` workspace): use sequential `F-NNN` (e.g., if `F-003` exists, start at `F-004`)
+   - **Monorepo projects** (has `apps/*` or multiple workspace packages): prefer descriptive `F-<App>-<Slug>` IDs that surface context without loading the full feature block (e.g., `F-Hub-Spotlight-Carousel`, `F-Hub-AuthGate`). Both formats coexist; you may continue numeric for legacy areas. The slug must use mixed case with at least one hyphen (`F-Hub` alone is rejected; `F-Hub-Auth` is fine).
+   - To detect monorepo automatically: check for an `apps/` directory with multiple subdirectories, or a `workspaces` field in `package.json`.
 
 **AC quality rules:**
 - Each AC must be independently testable

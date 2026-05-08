@@ -9,7 +9,7 @@
 // @cap-feature(feature:F-019) Module Integrity Verification — verify CAP CJS modules exist and load correctly
 // @cap-feature(feature:F-058) Claude-Code Plugin Manifest — detect npx vs plugin install modes and surface coexistence
 
-// @cap-history(sessions:6, edits:20, since:2026-04-20, learned:2026-05-06) Frequently modified — 6 sessions, 20 edits
+// @cap-history(sessions:7, edits:21, since:2026-04-20, learned:2026-05-07) Frequently modified — 7 sessions, 21 edits
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -51,9 +51,15 @@ const CAP_MODULE_MANIFEST = [
   // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs
   //   was added (de-duplicates `FEATURE_MAP_FILE` between core and monorepo modules).
   'cap-feature-map-internals.cjs',
+  // @cap-feature(feature:F-089) Sharded Feature Map migration — monolithic → sharded layout.
+  // @cap-decision(F-089) Bumped manifest count when cap-feature-map-migrate.cjs was added.
+  'cap-feature-map-migrate.cjs',
   // @cap-feature(feature:F-083) Monorepo aggregation module extracted from cap-feature-map.cjs.
   // @cap-decision(F-083) Bumped 84 -> 85 when cap-feature-map-monorepo.cjs was added.
   'cap-feature-map-monorepo.cjs',
+  // @cap-feature(feature:F-089) Sharded Feature Map — pure shard helpers (ID validator, index parse/serialize).
+  // @cap-decision(F-089) Bumped manifest count when cap-feature-map-shard.cjs was added.
+  'cap-feature-map-shard.cjs',
   // @cap-feature(feature:F-072) Compute Two-Layer Fitness Score — pure-compute scorer driving F-074 unlearn.
   // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added (Two-Layer Fitness Score for Pattern Unlearn).
   'cap-fitness-score.cjs',

@@ -2,7 +2,7 @@
 
 'use strict';
 
-// @cap-history(sessions:5, edits:32, since:2026-04-20, learned:2026-05-06) Frequently modified — 5 sessions, 32 edits
+// @cap-history(sessions:6, edits:33, since:2026-04-20, learned:2026-05-07) Frequently modified — 6 sessions, 33 edits
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -41,7 +41,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     //   by the on-disk-vs-manifest deepEqual contract once cap-feature-map-internals.cjs landed.
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
-    assert.equal(CAP_MODULE_MANIFEST.length, 90);
+    // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added (Sharded Feature Map: index + per-feature files).
+    assert.equal(CAP_MODULE_MANIFEST.length, 92);
   });
 
   it('every entry ends with .cjs', () => {
@@ -83,7 +84,9 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added.
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs + cap-snapshot-linkage.cjs).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
-    assert.equal(result.modulesTotal, 90);
+    // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added.
+    // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added.
+    assert.equal(result.modulesTotal, 92);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -112,7 +115,9 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added.
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs + cap-snapshot-linkage.cjs).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
-    assert.equal(result.modulesTotal, 90);
+    // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added.
+    // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added.
+    assert.equal(result.modulesTotal, 92);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -249,7 +254,9 @@ describe('runDoctor includes module integrity', () => {
     // @cap-decision(F-083/followup) F-083-FIX-A: Bumped 85 -> 86 when cap-feature-map-internals.cjs was added.
     // @cap-decision(F-083/followup) Manifest sync: 86 -> 88 (added cap-memory-bridge.cjs + cap-snapshot-linkage.cjs).
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
-    assert.equal(report.modulesTotal, 90);
+    // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added.
+    // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added.
+    assert.equal(report.modulesTotal, 92);
   });
 
   it('report includes platformPaths', () => {
