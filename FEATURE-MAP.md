@@ -1768,6 +1768,40 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - `hooks/cap-memory.js` — Pipeline-Wiring `{ minConfidence: 0.6 }` an `writeMemoryDirectory`
 - `tests/cap-memory-dir-confidence-filter.test.cjs` (neu, 14 Tests)
 
+### F-091: Source-Aware Initial Confidence for Memory Entries [planned]
+
+**Depends on:** F-055, F-090
+
+**Motivation:** F-090 hat den Confidence-Filter aktiviert (Hook setzt `minConfidence:0.6`), aber Real-world auf GoetzeInvest hub zeigte: 100% der 2340 decisions sind bei Confidence 0.50 (`DEFAULT_CONFIDENCE`) — niemand re-observed, niemand pinned. Filter dropped 100%. Resultat ist korrekt (das System trägt aktuell keinen Wert), aber das deutet auf ein tieferes Problem: das Confidence-System bekommt für ALLE Quellen den gleichen Startwert, egal ob `@cap-decision` (User-explizit) oder Heuristik-Kommentar-Extract (random Fragment).
+
+**Strategie:** Initial confidence basierend auf der Quelle des Eintrags:
+
+| Quelle | Initial Confidence | Rationale |
+|---|---|---|
+| Explizit `@cap-decision(...)` Tag im Code | 0.8 | User hat selbst markiert → hoch vertrauenswürdig |
+| Explizit `@cap-todo decision:` Tag | 0.7 | User hat als Decision markiert |
+| `@cap-risk` mit Begründung | 0.7 | Strukturierte Annotation |
+| Session-Extract aus Conversation | 0.6 | Konversationskontext, validiert |
+| Heuristik-Comment-Block-Extract | 0.5 (current default) | Niedrig — muss Re-Observation überleben |
+| Pinned via User-Action | 1.0 (already covered) | Manueller Curation-Akt |
+
+**Wirkung:** Mit F-091 + F-090-Filter:
+- @cap-decision-Tags überleben den Filter sofort
+- Heuristik-Extracts bleiben gefiltert bis sie re-observed werden
+- User pinning wird selten nötig
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | `cap-memory-engine.cjs` (`accumulateFromCode`) setzt initial-confidence basierend auf Tag-Type: `@cap-decision` → 0.8, `@cap-todo decision:` → 0.7, `@cap-risk` → 0.7, sonst 0.5 |
+| AC-2 | planned | Session-Extract-Pfad (`accumulateFromFiles`) bekommt Confidence 0.6 (zwischen Heuristik und expliziter Annotation) |
+| AC-3 | planned | Bestehende V5-Files mit confidence:0.50 werden NICHT retroaktiv hochgestuft — F-091 wirkt nur auf neu geschriebene Einträge. Re-Migration via init-Mode triggers re-extraction mit neuer Logik |
+| AC-4 | planned | Tests: (a) @cap-decision tag → 0.8, (b) @cap-todo risk: → 0.5 (still heuristic), (c) @cap-todo decision: → 0.7, (d) heuristic comment extract → 0.5, (e) session conversation → 0.6 |
+| AC-5 | planned | Manual on GoetzeInvest hub: nach init-mode re-extraction zeigt decisions.md ~50–200 entries (= geschätzte Anzahl @cap-decision tags im hub-Source) statt 0 |
+
+**Files (geplant):**
+- `cap/bin/lib/cap-memory-engine.cjs` — `accumulateFromCode`/`accumulateFromFiles` setzen initial confidence per source-type
+- `tests/cap-memory-engine-source-confidence.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
@@ -1778,4 +1812,4 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T14:30:00.000Z*
+*Last updated: 2026-05-08T15:00:00.000Z*
