@@ -1846,6 +1846,43 @@ Heute hat CAP nur den Phase-2-Modus. F-092 fügt Phase-1-Modus hinzu UND macht d
 - `commands/cap/finalize.md` (neu)
 - `tests/cap-session-quick-mode.test.cjs` (neu, 13 Tests)
 
+### F-094: Multi-Line @cap-* Description Capture [shipped]
+
+**Depends on:** F-001 (Tag Scanner), F-046 (polylingual comment-context)
+
+**Motivation:** Empirische Befunde am GoetzeInvest hub (2026-05-08, post-F-091): von 2422 `@cap-decision`-Einträgen sind **78% mid-sentence truncated** (enden ohne Satzzeichen), **84%** liegen im 60–90-Zeichen-Bucket, **0** Einträge ≥200 Zeichen. Root cause: `cap-tag-scanner.cjs` line 124 splittet `content.split('\n')`, `match[3]` ist alles bis Zeilenende — Multi-Line `@cap-decision`-Blöcke werden nach Zeile 1 gekappt. Beispiel im Hub: `// @cap-decision @react-pdf/renderer haengt an pdfkit/fontkit, die ihre Fonts\n// lokal aus assets/fonts laden müssen — daher webpack copy-plugin step` → nur Zeile 1 wird erfasst, der wichtige Teil ("daher webpack copy-plugin step") verschwindet.
+
+Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091 (source-aware confidence) hob alle auf 0.8 — aber 78% davon sind mid-cut. F-093 (Memory-Volumen via Sharding) wäre das falsche erste Werkzeug, weil es shrinkst was strukturell kaputt ist. F-094 fixt das ROOT-Problem; danach lässt sich F-093 datenbasiert zuschneiden (möglicherweise Volumen sogar kleiner durch besseres Dedup).
+
+**Strategie:** Continuation-Pickup im Scanner. Nach einem `@cap-*`-Match werden Folgezeilen aufgenommen wenn sie Comment-Continuation-Form haben (gleicher Comment-Style, kein neuer @cap-Tag). Stop-Conditions schützen vor Über-Capture: leere Zeile, Code-Zeile, neuer @cap-Tag, Block-Close. Feature-Flag in `.cap/config.json` für Opt-Out (default ON).
+
+**Iter 1 strategy:** Erweiterung von `extractTags()` in `cap-tag-scanner.cjs`. Detection des Comment-Tokens am Tag-Start, Loop über Folgezeilen mit Match-Continuation-Regex. Description-Concat mit Single-Space-Separator + Whitespace-Normalisierung. Keine Änderungen an `CAP_TAG_RE` selbst (F-001-Regression-Pin geschützt).
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | Continuation-Lines (Comment-Lines direkt nach @cap-Tag, gleicher Comment-Style, kein neuer @cap-Tag) werden an `description` angehängt mit Single-Space-Separator |
+| AC-2 | tested | Stop-Conditions: leere Zeile, Code-Zeile (ohne Comment-Token am Anfang), neue `@cap-*`-Tag-Zeile (auch design-tags), Block-Comment-Close-Token (`*/`, `"""`, `'''`) |
+| AC-3 | tested | Funktioniert für Line-Comments (`//`, `#`, `--`) UND Block-Comment-Body (`* foo`, einfacher Indent ohne Token im `/* … */`-Block) |
+| AC-4 | tested | `tag.line` bleibt die Zeile des @cap-Anchors. `tag.raw` bleibt die erste Zeile (für Migration-Kompatibilität) |
+| AC-5 | tested | Whitespace-Normalisierung: Runs zu Single-Spaces, ausgangs-Trim, Comment-Tokens (`*`, `//`, `#`) am Anfang jeder Continuation entfernt vor Append |
+| AC-6 | tested | Feature-Flag `multilineCapture.enabled` in `.cap/config.json` — default `true` (opt-out via `false`). F-046/AC-5 backward-compat-Pin (`extractTags.length === 2`) gewahrt durch Default-Param `options = {}` |
+| AC-7 | tested | Volle Suite 7463/7469 grün (4 pre-existing Plugin-Drifts + Perf-Flakes, kein F-094-Regress). Neue Tests in `tests/cap-tag-scanner-multiline.test.cjs` (39 Tests) decken alle Stop-Conditions, Comment-Style-Varianten, Mixed-Indent, Feature-Flag opt-out |
+| AC-8 | tested | Inline-Comments im Scanner erklären Continuation-Algorithmus + bewusst NICHT erfasste Cases (Cross-Block-Continuations, Continuations nach Leerzeilen) |
+
+**Real-world Befund auf GoetzeInvest hub:** Re-Extraction über `apps/hub` (8323 Tags total, 2475 @cap-decisions) zeigt:
+
+- Truncation-Rate: **78% → 4%** (-74 Prozentpunkte)
+- Avg description length: 58 → 234 Zeichen (4×)
+- Bucket 30-90 chars: 92% → 4%
+- Volumen: 141 KB → 565 KB raw (4× growth, nicht shrink — Quality-Win, kein Volume-Win)
+- Dedup-Collapse: 2% → 1% (Hypothese "truncated entries deduplizieren" widerlegt — 2475 unique mid-cuts waren tatsächlich unique)
+
+→ F-093 (Memory-Volumen via Sharding) wird durch diesen Volume-Growth dringender; F-094 fixt aber das Quality-Fundament, ohne das F-093 nur kaputten Inhalt geshardiert hätte.
+
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-tag-scanner.cjs` — `extractTags()` Continuation-Pickup, neue Helper `matchCommentContinuation`/`detectCommentTokenAt`, opt-out via `isMultilineCaptureEnabled()`
+- `tests/cap-tag-scanner-multiline.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
