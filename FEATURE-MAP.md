@@ -1846,6 +1846,33 @@ Heute hat CAP nur den Phase-2-Modus. F-092 fügt Phase-1-Modus hinzu UND macht d
 - `commands/cap/finalize.md` (neu)
 - `tests/cap-session-quick-mode.test.cjs` (neu, 13 Tests)
 
+### F-094: Multi-Line @cap-* Description Capture [planned]
+
+**Depends on:** F-001 (Tag Scanner), F-046 (polylingual comment-context)
+
+**Motivation:** Empirische Befunde am GoetzeInvest hub (2026-05-08, post-F-091): von 2422 `@cap-decision`-Einträgen sind **78% mid-sentence truncated** (enden ohne Satzzeichen), **84%** liegen im 60–90-Zeichen-Bucket, **0** Einträge ≥200 Zeichen. Root cause: `cap-tag-scanner.cjs` line 124 splittet `content.split('\n')`, `match[3]` ist alles bis Zeilenende — Multi-Line `@cap-decision`-Blöcke werden nach Zeile 1 gekappt. Beispiel im Hub: `// @cap-decision @react-pdf/renderer haengt an pdfkit/fontkit, die ihre Fonts\n// lokal aus assets/fonts laden müssen — daher webpack copy-plugin step` → nur Zeile 1 wird erfasst, der wichtige Teil ("daher webpack copy-plugin step") verschwindet.
+
+Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091 (source-aware confidence) hob alle auf 0.8 — aber 78% davon sind mid-cut. F-093 (Memory-Volumen via Sharding) wäre das falsche erste Werkzeug, weil es shrinkst was strukturell kaputt ist. F-094 fixt das ROOT-Problem; danach lässt sich F-093 datenbasiert zuschneiden (möglicherweise Volumen sogar kleiner durch besseres Dedup).
+
+**Strategie:** Continuation-Pickup im Scanner. Nach einem `@cap-*`-Match werden Folgezeilen aufgenommen wenn sie Comment-Continuation-Form haben (gleicher Comment-Style, kein neuer @cap-Tag). Stop-Conditions schützen vor Über-Capture: leere Zeile, Code-Zeile, neuer @cap-Tag, Block-Close. Feature-Flag in `.cap/config.json` für Opt-Out (default ON).
+
+**Iter 1 strategy:** Erweiterung von `extractTags()` in `cap-tag-scanner.cjs`. Detection des Comment-Tokens am Tag-Start, Loop über Folgezeilen mit Match-Continuation-Regex. Description-Concat mit Single-Space-Separator + Whitespace-Normalisierung. Keine Änderungen an `CAP_TAG_RE` selbst (F-001-Regression-Pin geschützt).
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Continuation-Lines (Comment-Lines direkt nach @cap-Tag, gleicher Comment-Style, kein neuer @cap-Tag) werden an `description` angehängt mit Single-Space-Separator |
+| AC-2 | planned | Stop-Conditions: leere Zeile, Code-Zeile (ohne Comment-Token am Anfang), neue `@cap-*`-Tag-Zeile (auch design-tags), Block-Comment-Close-Token (`*/`, `"""`, `'''`) |
+| AC-3 | planned | Funktioniert für Line-Comments (`//`, `#`, `--`) UND Block-Comment-Body (`* foo`, einfacher Indent ohne Token im `/* … */`-Block) |
+| AC-4 | planned | `tag.line` bleibt die Zeile des @cap-Anchors. `tag.raw` bleibt die erste Zeile (für Migration-Kompatibilität) |
+| AC-5 | planned | Whitespace-Normalisierung: Runs zu Single-Spaces, ausgangs-Trim, Comment-Tokens (`*`, `//`, `#`) am Anfang jeder Continuation entfernt vor Append |
+| AC-6 | planned | Feature-Flag `multilineCapture.enabled` in `.cap/config.json` — default `true` (opt-out via `false`). F-001-Regression-Tests bleiben grün weil Single-Line-Tags identisches Output produzieren (no continuation = no append) |
+| AC-7 | planned | Bestehende Test-Suite bleibt grün (≥7396); neue Tests in `tests/cap-tag-scanner-multiline.test.cjs` decken alle Stop-Conditions, Comment-Style-Varianten, Mixed-Indent, Feature-Flag opt-out |
+| AC-8 | planned | Inline-Comment im Scanner erklärt Continuation-Algorithmus + bewusst NICHT erfasste Cases (Cross-Block-Continuations, Continuations nach 1 Leerzeile) — kein extra Doc-File |
+
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-tag-scanner.cjs` — `extractTags()` Continuation-Pickup, neue Helper `matchCommentContinuation`/`detectCommentTokenAt`, opt-out via `isMultilineCaptureEnabled()`
+- `tests/cap-tag-scanner-multiline.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
