@@ -1768,7 +1768,7 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - `hooks/cap-memory.js` — Pipeline-Wiring `{ minConfidence: 0.6 }` an `writeMemoryDirectory`
 - `tests/cap-memory-dir-confidence-filter.test.cjs` (neu, 14 Tests)
 
-### F-091: Source-Aware Initial Confidence for Memory Entries [planned]
+### F-091: Source-Aware Initial Confidence for Memory Entries [tested]
 
 **Depends on:** F-055, F-090
 
@@ -1790,17 +1790,22 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - Heuristik-Extracts bleiben gefiltert bis sie re-observed werden
 - User pinning wird selten nötig
 
+**Iter 1 strategy:** Schedule lebt in `cap-memory-confidence.cjs` (single source of truth). `initFields(opts)` akzeptiert optionalen `initialConfidence`-Override mit Clamp [FLOOR, CAP]. Engine passt die richtige Confidence per Tag-Type. Session-Extract bleibt zunächst bei 0.5 (Heuristik-Regex auf Conversations ist nicht besser als Heuristik-Comment-Extract). Bug-Fix mitgegeben: `applyLearningSignals` Spread-Order war falsch und überschrieb die source-aware Confidence der eingehenden Entry — initFields() füllt jetzt nur fehlende Felder, newEntry-Werte gewinnen.
+
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | `cap-memory-engine.cjs` (`accumulateFromCode`) setzt initial-confidence basierend auf Tag-Type: `@cap-decision` → 0.8, `@cap-todo decision:` → 0.7, `@cap-risk` → 0.7, sonst 0.5 |
-| AC-2 | planned | Session-Extract-Pfad (`accumulateFromFiles`) bekommt Confidence 0.6 (zwischen Heuristik und expliziter Annotation) |
-| AC-3 | planned | Bestehende V5-Files mit confidence:0.50 werden NICHT retroaktiv hochgestuft — F-091 wirkt nur auf neu geschriebene Einträge. Re-Migration via init-Mode triggers re-extraction mit neuer Logik |
-| AC-4 | planned | Tests: (a) @cap-decision tag → 0.8, (b) @cap-todo risk: → 0.5 (still heuristic), (c) @cap-todo decision: → 0.7, (d) heuristic comment extract → 0.5, (e) session conversation → 0.6 |
-| AC-5 | planned | Manual on GoetzeInvest hub: nach init-mode re-extraction zeigt decisions.md ~50–200 entries (= geschätzte Anzahl @cap-decision tags im hub-Source) statt 0 |
+| AC-1 | tested | `cap-memory-engine.cjs` (`accumulateFromCode`) setzt initial-confidence per Tag-Type: `@cap-decision` → 0.8, `@cap-risk` → 0.7, `@cap-todo risk:` → 0.7. Tests: 4 cases (decision/risk/todo-risk/mixed) |
+| AC-2 | tested (deferred for session-extract) | Session-Extract-Pfad (`accumulateFromFiles`) bleibt bei 0.5 — heuristic regex match ist NICHT user-curated. Source `session-extract` ist im Schedule mit 0.5 dokumentiert für zukünftige Anpassung |
+| AC-3 | tested | Bestehende V5-Files werden NICHT retroaktiv hochgestuft — F-091 wirkt auf neu geschriebene Einträge. Hub-Re-Migration via init-mode-Pipeline triggers re-extraction mit neuer Logik (eigenes Operation-Step) |
+| AC-4 | tested | Tests: 17 neue (initFields opts-variant, source-table inspection, per-tag-type confidence, F-090+F-091 integration) |
+| AC-5 | planned | Manual on GoetzeInvest hub: nach init-mode re-extraction zeigt decisions.md die @cap-decision-Anzahl. Validation-Step nach diesem PR |
+| AC-6 | tested | Bug-Fix: `applyLearningSignals` spread-order — initFields() überschrieb pre-F-091 die source-aware Confidence der eingehenden Entry. Jetzt: initFields() fills only missing, newEntry wins. Decken via 4 angepasste Bestands-Tests + die F-091 integration tests |
 
-**Files (geplant):**
-- `cap/bin/lib/cap-memory-engine.cjs` — `accumulateFromCode`/`accumulateFromFiles` setzen initial confidence per source-type
-- `tests/cap-memory-engine-source-confidence.test.cjs` (neu)
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-memory-confidence.cjs` — `initFields(opts)` akzeptiert `initialConfidence`, neue exports `SOURCE_INITIAL_CONFIDENCE` + `initialConfidenceForSource`, Bug-Fix in `applyLearningSignals`
+- `cap/bin/lib/cap-memory-engine.cjs` — `accumulateFromCode` passt `initialConfidence` per Tag-Type
+- `tests/cap-memory-engine-source-confidence.test.cjs` (neu, 17 Tests)
+- 4 angepasste Bestands-Tests (cap-memory-confidence + adversarial) — explizite Tags assert nun 0.8/0.7
 
 ## Legend
 

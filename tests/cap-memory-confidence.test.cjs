@@ -437,17 +437,20 @@ describe('applyLearningSignals', () => {
 describe('engine.accumulateFromCode with learning signals', () => {
   const engine = require('../cap/bin/lib/cap-memory-engine.cjs');
 
-  it('injects initFields into every new entry (AC-2)', () => {
+  it('injects initFields into every new entry (AC-2; F-091 source-aware)', () => {
     const tags = [
       { type: 'decision', file: 'src/a.ts', line: 1, metadata: {}, description: 'Decide something meaningful about the architecture', subtype: null },
       { type: 'risk', file: 'src/b.ts', line: 2, metadata: {}, description: 'This is a risk that might cause problems later on', subtype: null },
     ];
     const entries = engine.accumulateFromCode(tags);
     assert.equal(entries.length, 2);
-    for (const e of entries) {
-      assert.equal(e.metadata.confidence, 0.5);
-      assert.equal(e.metadata.evidence_count, 1);
-    }
+    // F-091: source-aware — explicit @cap-decision -> 0.8, @cap-risk -> 0.7.
+    const dec = entries.find(e => e.category === 'decision');
+    const risk = entries.find(e => e.category === 'pitfall');
+    assert.equal(dec.metadata.confidence, 0.8);
+    assert.equal(dec.metadata.evidence_count, 1);
+    assert.equal(risk.metadata.confidence, 0.7);
+    assert.equal(risk.metadata.evidence_count, 1);
   });
 
   it('re-observation merges with existing entry and bumps its confidence (AC-4)', () => {
@@ -486,9 +489,10 @@ describe('engine.accumulateFromCode with learning signals', () => {
     const newEntry = out.find((e) => e.content.startsWith('never use cookies'));
     const damped = out.find((e) => e.content.startsWith('use cookies'));
     assert.ok(newEntry && damped);
-    assert.equal(newEntry.metadata.confidence, 0.5);
+    // F-091: @cap-decision starts at 0.8 (was 0.5 before F-091).
+    assert.equal(newEntry.metadata.confidence, 0.8);
     assert.equal(newEntry.metadata.evidence_count, 1);
-    assert.equal(damped.metadata.confidence, 0.5); // 0.7 - 0.2
+    assert.equal(damped.metadata.confidence, 0.5); // existing 0.7 - DAMP 0.2
     assert.equal(damped.metadata.evidence_count, 3); // unchanged
     // sidecar must be stripped from the public result
     assert.ok(!('_contradictedExistingUpdate' in newEntry));
@@ -500,7 +504,8 @@ describe('engine.accumulateFromCode with learning signals', () => {
     ];
     const out = engine.accumulateFromCode(tags);
     assert.equal(out.length, 1);
-    assert.equal(out[0].metadata.confidence, 0.5);
+    // F-091: @cap-decision starts at 0.8.
+    assert.equal(out[0].metadata.confidence, 0.8);
     assert.equal(out[0].metadata.evidence_count, 1);
   });
 
@@ -518,8 +523,8 @@ describe('engine.accumulateFromCode with learning signals', () => {
     ];
     const out = engine.accumulateFromCode(tags, { existingEntries: existing, learningSignals: false });
     assert.equal(out.length, 1);
-    // signal disabled => fresh init fields, no bump
-    assert.equal(out[0].metadata.confidence, 0.5);
+    // signal disabled => fresh init fields, no bump. F-091: @cap-decision starts at 0.8.
+    assert.equal(out[0].metadata.confidence, 0.8);
     assert.equal(out[0].metadata.evidence_count, 1);
   });
 });

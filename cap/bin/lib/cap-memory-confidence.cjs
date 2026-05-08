@@ -194,15 +194,66 @@ function isContradiction(newEntry, existingEntry) {
 
 /**
  * @cap-todo(ac:F-056/AC-3) last_seen seeded on first observation so decay has a reference point.
- * @param {Date} [now]
+ * @cap-feature(feature:F-091) Source-aware initial confidence — explicit user-annotated entries
+ *   start higher than heuristic-extracted ones so the F-090 confidence-filter (threshold 0.6)
+ *   admits legitimate decisions immediately instead of waiting for re-observation.
+ * @param {Date|number|{ now?: Date|number, initialConfidence?: number }} [optsOrNow]
  * @returns {ConfidenceFields}
  */
-function initFields(now) {
+function initFields(optsOrNow) {
+  // Backwards-compat: legacy signature accepts a Date|number directly. Detect by absence
+  //   of initialConfidence key.
+  let now;
+  let initialConfidence = DEFAULT_CONFIDENCE;
+  if (
+    optsOrNow !== undefined &&
+    optsOrNow !== null &&
+    typeof optsOrNow === 'object' &&
+    !(optsOrNow instanceof Date) &&
+    'initialConfidence' in optsOrNow
+  ) {
+    now = optsOrNow.now;
+    if (typeof optsOrNow.initialConfidence === 'number') {
+      // Clamp to [FLOOR, CAP] so callers can't accidentally write 1.5 into the field.
+      initialConfidence = Math.max(
+        CONFIDENCE_FLOOR,
+        Math.min(CONFIDENCE_CAP, optsOrNow.initialConfidence)
+      );
+    }
+  } else {
+    now = optsOrNow;
+  }
   return {
-    confidence: DEFAULT_CONFIDENCE,
+    confidence: round2(initialConfidence),
     evidence_count: DEFAULT_EVIDENCE,
     last_seen: nowIso(now),
   };
+}
+
+// @cap-feature(feature:F-091) Per-source initial confidence schedule. Higher values for entries
+//   the user explicitly annotated (so they bypass the F-090 0.6 filter immediately); default
+//   stays 0.5 for heuristic-extracted entries that need re-observation to prove themselves.
+// @cap-decision(F-091) Schedule lives in confidence.cjs (single source of truth) so future
+//   adjustments touch one constant table rather than scattered branches in the engine.
+const SOURCE_INITIAL_CONFIDENCE = {
+  'cap-decision': 0.8,        // Explicit @cap-decision(...) tag — user marked it as a decision
+  'cap-todo-decision': 0.7,   // Explicit @cap-todo decision: subtype
+  'cap-todo-risk': 0.7,       // Explicit @cap-todo risk: subtype (F-091 — was 0.5)
+  'cap-risk': 0.7,            // Standalone @cap-risk tag
+  'session-extract': 0.5,     // Heuristic regex-match in conversation transcript (status quo)
+  'heuristic': 0.5,           // Generic heuristic — comment-block extraction etc.
+};
+
+/**
+ * Resolve the initial confidence value for a given source.
+ * @param {string} source - one of the keys in SOURCE_INITIAL_CONFIDENCE
+ * @returns {number}
+ */
+function initialConfidenceForSource(source) {
+  if (typeof source === 'string' && Object.prototype.hasOwnProperty.call(SOURCE_INITIAL_CONFIDENCE, source)) {
+    return SOURCE_INITIAL_CONFIDENCE[source];
+  }
+  return DEFAULT_CONFIDENCE;
 }
 
 /**
@@ -332,9 +383,14 @@ function applyLearningSignals(newEntry, existingEntries) {
       const damped = dampOnContradiction(e.metadata);
       // The new entry is tracked separately (not merged) — only the existing entry's confidence drops.
       // Callers receive the new entry with fresh init-fields AND the touched index so they can rewrite the existing entry.
+      // @cap-feature(feature:F-091) Spread order: initFields() first, then newEntry.metadata.
+      //   Pre-F-091 the order was reversed — initFields() overrode the entry's existing
+      //   confidence, which silently lost any source-aware confidence the engine had set.
+      //   Post-F-091 source-aware values (e.g. 0.8 for @cap-decision) win; initFields() only
+      //   fills in keys that are absent (typically last_seen).
       const mergedEntry = {
         ...newEntry,
-        metadata: { ...(newEntry.metadata || {}), ...initFields() },
+        metadata: { ...initFields(), ...(newEntry.metadata || {}) },
         _contradictedExistingUpdate: {
           index: i,
           updatedMetadata: { ...e.metadata, ...damped },
@@ -348,7 +404,8 @@ function applyLearningSignals(newEntry, existingEntries) {
   return {
     mergedEntry: {
       ...newEntry,
-      metadata: { ...(newEntry.metadata || {}), ...initFields() },
+      // @cap-feature(feature:F-091) Same spread-order fix as the contradiction branch above.
+      metadata: { ...initFields(), ...(newEntry.metadata || {}) },
     },
     touchedExistingIndex: null,
     action: 'new',
@@ -384,6 +441,10 @@ module.exports = {
   dampOnContradiction,
   ensureFields,
   isLowConfidence,
+
+  // F-091: source-aware initial confidence
+  SOURCE_INITIAL_CONFIDENCE,
+  initialConfidenceForSource,
 
   // Orchestration
   applyLearningSignals,

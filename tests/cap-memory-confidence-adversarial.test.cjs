@@ -826,7 +826,8 @@ describe('[adversarial] engine.accumulateFromCode — options contract', () => {
     const out = engine.accumulateFromCode(tags, { existingEntries: [] });
     assert.equal(out.length, 1);
     // Even with signals enabled, no existing → "new" path → initFields still applied.
-    assert.equal(out[0].metadata.confidence, 0.5);
+    // F-091: @cap-decision starts at 0.8 (was 0.5 pre-F-091).
+    assert.equal(out[0].metadata.confidence, 0.8);
     assert.equal(out[0].metadata.evidence_count, 1);
   });
 
@@ -836,9 +837,9 @@ describe('[adversarial] engine.accumulateFromCode — options contract', () => {
     ];
     const out = engine.accumulateFromCode(tags, { learningSignals: true });
     // signalsEnabled requires Array.isArray(existingEntries) — true alone is insufficient.
-    // Result must still have defaults.
+    // Result must still have defaults. F-091: @cap-decision starts at 0.8.
     assert.equal(out.length, 1);
-    assert.equal(out[0].metadata.confidence, 0.5);
+    assert.equal(out[0].metadata.confidence, 0.8);
     assert.equal(out[0].metadata.evidence_count, 1);
   });
 
@@ -856,8 +857,8 @@ describe('[adversarial] engine.accumulateFromCode — options contract', () => {
     ];
     const out = engine.accumulateFromCode(tags, { existingEntries: existing });
     assert.equal(out.length, 1);
-    // Different category → no reobservation → fresh fields
-    assert.equal(out[0].metadata.confidence, 0.5);
+    // Different category → no reobservation → fresh fields. F-091: @cap-decision starts at 0.8.
+    assert.equal(out[0].metadata.confidence, 0.8);
     assert.equal(out[0].metadata.evidence_count, 1);
     assert.equal(out[0].category, 'decision');
   });
@@ -874,8 +875,9 @@ describe('[adversarial] engine.accumulateFromCode — options contract', () => {
     // → keys differ (the second has "any"), so dedup keeps both.
     const out = engine.accumulateFromCode(tags, { existingEntries: [] });
     assert.equal(out.length, 2);
+    // F-091: @cap-decision starts at 0.8.
     for (const e of out) {
-      assert.equal(e.metadata.confidence, 0.5);
+      assert.equal(e.metadata.confidence, 0.8);
       assert.equal(e.metadata.evidence_count, 1);
     }
   });
