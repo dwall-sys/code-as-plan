@@ -233,6 +233,12 @@ function parseExistingAnchors(content) {
  * @returns {{files: Object<string, string>, written: number}}
  */
 function writeMemoryDirectory(projectRoot, entries, options = {}) {
+  // @cap-feature(feature:F-093, primary:true) Layout dispatch: V5 monolithic (default) or V6 per-feature.
+  //   V6 mode is opt-in via .cap/config.json: { memory: { layout: 'v6' } }. Without the flag
+  //   behaviour is byte-identical to pre-F-093 (legacy callers and tests stay green).
+  if (_isV6LayoutEnabled(projectRoot, options)) {
+    return _writeMemoryV6(projectRoot, entries, options);
+  }
   const memDir = path.join(projectRoot, MEMORY_DIR);
   const files = {};
   let written = 0;
@@ -447,6 +453,273 @@ function readMemoryFile(filePath) {
   return { entries };
 }
 
+// =====================================================================
+// F-093: V6 Per-Feature Memory Pipeline Layout
+// =====================================================================
+//
+// @cap-feature(feature:F-093, primary:true) V6 layout opt-in via .cap/config.json
+//   { memory: { layout: 'v6' } }. When enabled, writeMemoryDirectory groups entries
+//   by feature using F-077's classifier (sourceFileToFeatureId code-tag reverse-index
+//   + FEATURE-MAP key_files), writes per-feature files under .cap/memory/features/
+//   and platform/, and produces top-level decisions.md/pitfalls.md as Index files.
+//
+// The classifier is shared with F-077 (one-shot migration), so the routing decisions
+// are consistent: a Hub session running incremental V6 yields the same per-feature
+// distribution that F-077 produced from the V5 monolith snapshot.
+//
+// Manual edits in per-feature files are preserved across regeneration via F-076's
+// auto-block markers (<!-- cap:auto:start --> / <!-- cap:auto:end -->).
+
+/**
+ * @param {string} projectRoot
+ * @param {Object} [options]
+ * @returns {boolean}
+ */
+function _isV6LayoutEnabled(projectRoot, options) {
+  if (options && options.layout === 'v6') return true;
+  if (options && options.layout === 'v5') return false;
+  if (!projectRoot) return false;
+  try {
+    const cfgPath = path.join(projectRoot, '.cap', 'config.json');
+    const raw = fs.readFileSync(cfgPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return !!(parsed && parsed.memory && parsed.memory.layout === 'v6');
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Slugify a string for use in filenames. Mirrors F-077's _slugify behavior
+ * (lowercase, alpha-num + hyphens, trim).
+ * @param {string} s
+ * @returns {string}
+ */
+function _slugifyForV6(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+/**
+ * Resolve a feature title from FEATURE-MAP given the F-NNN id. Falls back to the id itself.
+ * @param {string} featureId
+ * @param {Array<{id: string, title: string}>=} features
+ * @returns {string}
+ */
+function _featureTitleFor(featureId, features) {
+  if (!features) return featureId;
+  const f = features.find((x) => x.id === featureId);
+  return f && f.title ? f.title : featureId;
+}
+
+/**
+ * Group entries into V6 destinations using F-077's classifier.
+ * Returns a Map keyed by destination identifier ("feature:F-XXX" or "platform:topic")
+ * with values { destination, featureId?, topic?, decisions, pitfalls }.
+ * @param {Array} entries
+ * @param {Object} context - F-077 ClassifierContext
+ * @returns {Map<string, {destination: string, featureId?: string, topic?: string, decisions: Array, pitfalls: Array}>}
+ */
+function _groupEntriesByDestination(entries, context, classifyEntry) {
+  const groups = new Map();
+  for (const entry of entries) {
+    if (entry.category === 'hotspot' || entry.category === 'pattern') continue; // V6 only handles decision/pitfall per F-076 schema
+    const v5Entry = {
+      kind: entry.category,
+      title: entry.content,
+      content: entry.content,
+      relatedFiles: (entry.metadata && entry.metadata.relatedFiles) || [],
+      taggedFeatureId: entry.metadata && entry.metadata.features && entry.metadata.features.length > 0 ? entry.metadata.features[0] : null,
+      anchorId: '',
+      dateLabel: '',
+    };
+    const decision = classifyEntry(v5Entry, context);
+    let key, group;
+    if (decision.destination === 'feature' && decision.confidence >= 0.7) {
+      key = `feature:${decision.featureId}`;
+      if (!groups.has(key)) groups.set(key, { destination: 'feature', featureId: decision.featureId, topic: decision.topic, decisions: [], pitfalls: [] });
+      group = groups.get(key);
+    } else {
+      const topic = decision.topic || 'unassigned';
+      key = `platform:${topic}`;
+      if (!groups.has(key)) groups.set(key, { destination: 'platform', topic, decisions: [], pitfalls: [] });
+      group = groups.get(key);
+    }
+    if (entry.category === 'decision') group.decisions.push(entry);
+    else group.pitfalls.push(entry);
+  }
+  return groups;
+}
+
+/**
+ * Build the auto-block items array (decisions or pitfalls) for F-076 schema.
+ * @param {Array} entries
+ * @returns {Array<{text: string, location?: string}>}
+ */
+function _toAutoBlockItems(entries) {
+  return entries.map((e) => {
+    const item = { text: e.content };
+    const files = (e.metadata && e.metadata.relatedFiles) || [];
+    if (files.length > 0) item.location = files[0];
+    return item;
+  });
+}
+
+/**
+ * Write the top-level Index file (decisions.md or pitfalls.md) summarizing
+ * per-feature counts. Replaces the V5 monolith with a sparse pointer table.
+ * @param {string} category 'decision' | 'pitfall'
+ * @param {Map} groups
+ * @param {Object} context
+ */
+function _renderV6Index(category, groups, context) {
+  const filename = CATEGORY_FILES[category];
+  const titleCat = category.charAt(0).toUpperCase() + category.slice(1) + 's';
+  const lines = [
+    `# Project Memory: ${titleCat} (V6 Index)`,
+    '',
+    `> **V6 layout active.** Per-feature ${category}s live in \`.cap/memory/features/\` and \`.cap/memory/platform/\`. This file is an auto-generated index — see the linked feature file for the actual entries.`,
+    `> Last updated: ${new Date().toISOString().substring(0, 10)}`,
+    '',
+    '| Destination | Count | File |',
+    '|---|---|---|',
+  ];
+  // Sort: features alphabetically, then platform topics
+  const featureGroups = [...groups.values()].filter((g) => g.destination === 'feature').sort((a, b) => String(a.featureId).localeCompare(String(b.featureId)));
+  const platformGroups = [...groups.values()].filter((g) => g.destination === 'platform').sort((a, b) => String(a.topic).localeCompare(String(b.topic)));
+  for (const g of featureGroups) {
+    const items = category === 'decision' ? g.decisions : g.pitfalls;
+    if (items.length === 0) continue;
+    const slug = _slugifyForV6(_featureTitleFor(g.featureId, context.features));
+    const file = `features/${g.featureId}-${slug}.md`;
+    lines.push(`| ${g.featureId} | ${items.length} | [${file}](${file}) |`);
+  }
+  for (const g of platformGroups) {
+    const items = category === 'decision' ? g.decisions : g.pitfalls;
+    if (items.length === 0) continue;
+    const file = `platform/${g.topic}.md`;
+    lines.push(`| platform/${g.topic} | ${items.length} | [${file}](${file}) |`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Write a per-feature file using F-076 schema (auto-block + manual-block preservation).
+ * @param {string} filePath
+ * @param {string} title
+ * @param {Array} decisions
+ * @param {Array} pitfalls
+ */
+function _writeV6FeatureFile(filePath, title, decisions, pitfalls) {
+  const schema = require('./cap-memory-schema.cjs');
+  let parsed;
+  try {
+    const existing = fs.readFileSync(filePath, 'utf8');
+    parsed = schema.parseFeatureMemoryFile(existing);
+  } catch (_e) {
+    parsed = {
+      frontmatter: {},
+      autoBlock: { decisions: [], pitfalls: [] },
+      manualBlock: { raw: `# ${title}\n\n` },
+    };
+  }
+  parsed.autoBlock = {
+    decisions: _toAutoBlockItems(decisions),
+    pitfalls: _toAutoBlockItems(pitfalls),
+  };
+  const out = schema.serializeFeatureMemoryFile(parsed);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, out, 'utf8');
+}
+
+/**
+ * Archive existing V5 monolith files to .archive/ before first V6 write,
+ * mirroring F-077's backup convention. Idempotent on same date.
+ * @param {string} projectRoot
+ */
+function _archiveV5IfPresent(projectRoot) {
+  const memDir = path.join(projectRoot, MEMORY_DIR);
+  const archiveDir = path.join(memDir, '.archive');
+  const date = new Date().toISOString().substring(0, 10);
+  for (const filename of Object.values(CATEGORY_FILES)) {
+    const src = path.join(memDir, filename);
+    if (!fs.existsSync(src)) continue;
+    // Only archive if file looks like a V5 monolith — V6 index files have a special marker.
+    let raw;
+    try { raw = fs.readFileSync(src, 'utf8'); } catch (_e) { continue; }
+    if (raw.includes('(V6 Index)')) continue; // already a V6 index, skip
+    const base = filename.replace(/\.md$/, '');
+    const dest = path.join(archiveDir, `${base}-pre-v6-${date}.md`);
+    if (fs.existsSync(dest)) continue; // idempotent on same date
+    fs.mkdirSync(archiveDir, { recursive: true });
+    fs.copyFileSync(src, dest);
+  }
+}
+
+/**
+ * V6 layout writer — entry point dispatched from writeMemoryDirectory when
+ * { memory: { layout: 'v6' } } is set in .cap/config.json.
+ * @param {string} projectRoot
+ * @param {Array} entries
+ * @param {Object} options
+ * @returns {{files: Object<string, string>, written: number}}
+ */
+function _writeMemoryV6(projectRoot, entries, options = {}) {
+  // Lazy-load the F-077 classifier to avoid coupling the V5 path.
+  const migrate = require('./cap-memory-migrate.cjs');
+  const context = migrate.buildClassifierContext(projectRoot);
+
+  const groups = _groupEntriesByDestination(entries, context, migrate.classifyEntry);
+
+  const memDir = path.join(projectRoot, MEMORY_DIR);
+  if (!options.dryRun) {
+    fs.mkdirSync(memDir, { recursive: true });
+    _archiveV5IfPresent(projectRoot);
+  }
+
+  const files = {};
+  let written = 0;
+
+  // Per-feature + per-platform writes
+  for (const g of groups.values()) {
+    let filePath, title;
+    if (g.destination === 'feature') {
+      const slug = _slugifyForV6(_featureTitleFor(g.featureId, context.features));
+      filePath = path.join(memDir, 'features', `${g.featureId}-${slug}.md`);
+      title = `${g.featureId}: ${_featureTitleFor(g.featureId, context.features)}`;
+    } else {
+      filePath = path.join(memDir, 'platform', `${g.topic}.md`);
+      title = `Platform: ${g.topic}`;
+    }
+    if (!options.dryRun) {
+      _writeV6FeatureFile(filePath, title, g.decisions, g.pitfalls);
+      written++;
+    }
+    // Snapshot for return value
+    const relKey = path.relative(memDir, filePath);
+    files[relKey] = `${title}\n decisions:${g.decisions.length}\n pitfalls:${g.pitfalls.length}`;
+  }
+
+  // Top-level Index files
+  for (const cat of ['decision', 'pitfall']) {
+    const indexContent = _renderV6Index(cat, groups, context);
+    const filename = CATEGORY_FILES[cat];
+    files[filename] = indexContent;
+    if (!options.dryRun) {
+      fs.writeFileSync(path.join(memDir, filename), indexContent, 'utf8');
+      written++;
+    }
+  }
+
+  // Skip patterns/hotspots in V6 — those remain V5-monolith for now (out-of-scope per F-076 schema).
+  // Generate empty stubs only if they don't exist, to preserve legacy callers.
+
+  return { files, written };
+}
+
 module.exports = {
   generateAnchorId,
   generateCategoryMarkdown,
@@ -457,6 +730,12 @@ module.exports = {
   getCrossReference,
   // F-090: confidence filter exposed for tests + downstream tools that want the same gating.
   _filterEntriesForOutput,
+  // F-093: V6 layout helpers exposed for testing.
+  _isV6LayoutEnabled,
+  _writeMemoryV6,
+  _groupEntriesByDestination,
+  _renderV6Index,
+  _archiveV5IfPresent,
   MEMORY_DIR,
   CATEGORY_FILES,
 };

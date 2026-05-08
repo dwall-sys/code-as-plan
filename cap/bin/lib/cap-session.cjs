@@ -49,7 +49,19 @@ const CAP_MEMORY_RULE = `## CAP Project Memory
 
 This project uses CAP (Code as Plan) with a project memory system at \`.cap/memory/\`.
 
-When starting work on this project, read the following files to understand prior decisions and known pitfalls:
+The pipeline supports **two layouts** (F-093). Detect which is active before reading:
+
+### V6 layout (per-feature, opt-in via \`.cap/config.json: { memory: { layout: "v6" } }\`)
+
+When the top-level \`decisions.md\` or \`pitfalls.md\` contains the marker \`(V6 Index)\` in its title, this project is on V6:
+
+1. **Read \`.cap/memory/decisions.md\` and \`.cap/memory/pitfalls.md\` first** — these are short index tables (\`Destination | Count | File\`) listing per-feature memory files.
+2. **Then load only the per-feature file relevant to the current task** — e.g. \`.cap/memory/features/F-XXX-<topic>.md\` if you're working on F-XXX, or a \`platform/<topic>.md\` for cross-cutting concerns.
+3. Skip reading the index entries you don't need — that is the whole point of V6 (token-cost-of-read reduction).
+
+### V5 layout (legacy, default for projects without the V6 config flag)
+
+When the top-level files do NOT have the \`(V6 Index)\` marker, read them directly as monolithic memory:
 
 - \`.cap/memory/decisions.md\` — architectural decisions extracted from code tags and sessions
 - \`.cap/memory/pitfalls.md\` — known pitfalls, gotchas, and things that broke before
