@@ -1,6 +1,7 @@
 'use strict';
 
 // @cap-feature(feature:F-083) F-083 extraction-contract regression suite — pins the public-API
+// @cap-history(sessions:2, edits:3, since:2026-05-07, learned:2026-05-08) Frequently modified — 2 sessions, 3 edits
 //   surface, identity-preserving re-exports, _subAppPrefixes non-enumerable contract, and the
 //   no-cycle invariant between cap-feature-map.cjs and cap-feature-map-monorepo.cjs.
 // @cap-decision(F-083/AC-4) Discrete test file rather than appending to cap-feature-map-monorepo.test.cjs

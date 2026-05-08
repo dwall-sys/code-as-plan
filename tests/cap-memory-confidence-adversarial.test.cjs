@@ -1,7 +1,7 @@
 'use strict';
 
 // @cap-feature(feature:F-055) Adversarial tests over the F-055 confidence/evidence prototype.
-// @cap-history(sessions:2, edits:4, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 4 edits
+// @cap-history(sessions:3, edits:7, since:2026-04-20, learned:2026-05-08) Frequently modified — 3 sessions, 7 edits
 // Goal: probe edge cases that the happy-path suite does not cover — numeric boundaries,
 // Unicode, contradiction false-positives, migration quirks, roundtrip fidelity.
 

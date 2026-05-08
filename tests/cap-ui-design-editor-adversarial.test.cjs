@@ -1,6 +1,6 @@
 // @cap-feature(feature:F-068) CAP-UI Visual Design Editor — adversarial hardening tests.
 // @cap-context Probes path-traversal, editable gating, atomic-write crash safety, body-parser DoS,
-// @cap-history(sessions:3, edits:4, since:2026-05-05, learned:2026-05-07) Frequently modified — 3 sessions, 4 edits
+// @cap-history(sessions:4, edits:5, since:2026-05-05, learned:2026-05-08) Frequently modified — 4 sessions, 5 edits
 //              value validation, Git-friendly diff invariants, module-split back-compat, and snapshot read-only posture.
 // @cap-decision Zero external deps. node:test + node:assert + node:http only, mirror of the baseline file.
 // @cap-decision Baseline file (cap-ui-design-editor.test.cjs) covers happy-path AC-1..AC-6.

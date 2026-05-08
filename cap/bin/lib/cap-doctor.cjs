@@ -9,7 +9,7 @@
 // @cap-feature(feature:F-019) Module Integrity Verification — verify CAP CJS modules exist and load correctly
 // @cap-feature(feature:F-058) Claude-Code Plugin Manifest — detect npx vs plugin install modes and surface coexistence
 
-// @cap-history(sessions:7, edits:21, since:2026-04-20, learned:2026-05-07) Frequently modified — 7 sessions, 21 edits
+// @cap-history(sessions:8, edits:22, since:2026-04-20, learned:2026-05-08) Frequently modified — 8 sessions, 22 edits
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');

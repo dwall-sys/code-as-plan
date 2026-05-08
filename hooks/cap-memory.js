@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @cap-feature(feature:F-030) Memory Automation Hook — post-session hook that triggers memory accumulation pipeline
-// @cap-history(sessions:2, edits:7, since:2026-04-03, learned:2026-04-03) Frequently modified — 2 sessions, 7 edits
+// @cap-history(sessions:2, edits:5, since:2026-05-06, learned:2026-05-08) Frequently modified — 2 sessions, 5 edits
 // @cap-history(sessions:3, edits:9, since:2026-04-03, learned:2026-04-04) Frequently modified — 3 sessions, 9 edits
 // cap-hook-version: {{CAP_VERSION}}
 // Memory Hook - runs after session end to accumulate project memory.

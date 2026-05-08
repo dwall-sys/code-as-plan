@@ -5,6 +5,7 @@
 
 'use strict';
 
+// @cap-history(sessions:2, edits:8, since:2026-04-21, learned:2026-05-08) Frequently modified — 2 sessions, 8 edits
 // --- Constants ---
 
 /** Starting confidence for a freshly observed entry. */

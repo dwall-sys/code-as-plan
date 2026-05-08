@@ -9,7 +9,7 @@
 // @cap-feature(feature:F-001) Tag Scanner — regex-based extraction of @cap-* tags from source files
 // @cap-todo decision: Migrating @gsd-* comment headers in this file to @cap-* format is blocked on F-006 migration completion
 
-// @cap-history(sessions:2, edits:6, since:2026-04-20, learned:2026-05-06) Frequently modified — 2 sessions, 6 edits
+// @cap-history(sessions:3, edits:10, since:2026-04-20, learned:2026-05-07) Frequently modified — 3 sessions, 10 edits
 const fs = require('node:fs');
 const path = require('node:path');
 // @cap-feature(feature:F-085) Scope filter integration — gitignore + path-pattern + plugin-mirror

@@ -1,6 +1,7 @@
 'use strict';
 
 // @cap-feature(feature:F-047) Migration tool: fragmented @cap-* tags -> unified anchor block.
+// @cap-history(sessions:2, edits:7, since:2026-04-20, learned:2026-05-07) Frequently modified — 2 sessions, 7 edits
 //
 // v1 strategy is ADDITIVE: a unified anchor block is inserted near the top of each file
 // that carries fragmented AC-level tags, but the legacy tags themselves are NOT removed.
