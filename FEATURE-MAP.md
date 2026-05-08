@@ -1807,7 +1807,7 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - `tests/cap-memory-engine-source-confidence.test.cjs` (neu, 17 Tests)
 - 4 angepasste Bestands-Tests (cap-memory-confidence + adversarial) — explizite Tags assert nun 0.8/0.7
 
-### F-092: Two-Phase Workflow — /cap:quick + /cap:finalize [planned]
+### F-092: Two-Phase Workflow — /cap:quick + /cap:finalize [tested]
 
 **Depends on:** F-003 (SESSION.json), F-047 (annotate), F-002 (Feature Map)
 
@@ -1823,28 +1823,28 @@ Heute hat CAP nur den Phase-2-Modus. F-092 fügt Phase-1-Modus hinzu UND macht d
 - `/cap:quick [F-X]` — toggle in Phase 1. Trivial: SESSION.json-Flag + git HEAD snapshot für späteren Diff. Kein Subagent, kein Eingriff in Claude's normales Edit-Verhalten. Stop-Hook respektiert das Flag und überspringt Tag-Auto-Annotation (die heute ohnehin nicht existiert, aber forward-compat).
 - `/cap:finalize` — chainet existing Tools post-hoc: changed-files seit Quick-Start identifizieren → cap-prototyper iterate-Mode für Refactoring + AC-Definition → cap-annotation-writer für `@cap-feature(F-X)` Tags → cap-tester für RED-GREEN gegen die neu definierten ACs → Feature-Map enrichFromTags für files-list. Meta-Command, keine neue Subagent-Logik nötig.
 
+**Iter 1 strategy:** State-Layer (`cap-session.cjs` quickMode + Helper) + zwei Markdown-Commands. `/cap:finalize` ist eine sequenzierte Pipeline existing Tools — kein neuer Subagent. Forward-compat zum Hook (AC-3) ist heute no-op (Hook hat noch keinen Auto-Annotation-Pass). Hook-Anpassung kann später additive folgen wenn Auto-Annotation gebaut wird.
+
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | `/cap:quick [F-X]` setzt SESSION.json: `quickMode = { active: true, feature: 'F-X', startedAt: ISO, startCommit: <git-HEAD-sha> }`. F-X optional — wenn weggelassen, nutzt `activeFeature` aus SESSION.json (falls gesetzt) |
-| AC-2 | planned | `/cap:quick` druckt Hinweis: "Quick-Mode aktiv. Edit direkt mit Claude, run /cap:finalize when done." Kein Subagent-Spawn, keine Tag-Pflicht |
-| AC-3 | planned | Stop-Hook respektiert `quickMode.active` — Memory-Pipeline läuft normal weiter (Decisions extrahieren), aber überspringt potential Auto-Annotation-Pässe (forward-compat) |
-| AC-4 | planned | `/cap:finalize` liest `quickMode.startCommit` aus SESSION.json, computed `changedFiles = git diff --name-only <startCommit>..HEAD + git diff --name-only HEAD` (committed + unstaged) |
-| AC-5 | planned | `/cap:finalize` druckt Plan: "Finalize F-X: 12 changed files. Will run [annotate, iterate, test, enrich]. Continue?" Bei `yes`: Sequenz wie folgt, mit Pause zwischen den Steps |
-| AC-6 | planned | Sequenz Step 1 (annotate): cap-prototyper im annotate-Mode wird gespawned, fokussiert nur auf changed-files. Setzt `@cap-feature(F-X)` Tags wo fehlen |
-| AC-7 | planned | Sequenz Step 2 (iterate): cap-prototyper im iterate-Mode wird gespawned mit den changed-files als Input. Reviews + Refactoring-Vorschläge + AC-Validation |
-| AC-8 | planned | Sequenz Step 3 (test): cap-tester wird gespawned, schreibt RED-GREEN Tests gegen die ACs |
-| AC-9 | planned | Sequenz Step 4 (enrich): existing `enrichFromTags` läuft auf scanResults → updated FEATURE-MAP files-list für F-X |
-| AC-10 | planned | Nach Abschluss: SESSION.json `quickMode.active = false`, `startCommit` gelöscht. Bei Abbruch in Mitte: `quickMode` bleibt aktiv (wieder aufnehmen via `/cap:finalize` möglich) |
-| AC-11 | planned | Doku: `commands/cap/quick.md`, `commands/cap/finalize.md`, Update CLAUDE.md mit dem Two-Phase-Workflow als anerkanntem Pattern |
-| AC-12 | planned | Tests: (a) /cap:quick setzt SESSION.json-Flag, (b) /cap:finalize ohne quickMode failed graceful, (c) changed-files-Compute korrekt mit committed + unstaged, (d) Sequenz-Plan-Print ohne Apply, (e) SESSION.json reset nach erfolgreichem finalize |
+| AC-1 | tested | `cap-session.cjs` exportiert `startQuickMode(projectRoot, featureId)` setzt SESSION.json: `quickMode = { active, feature, startedAt, startCommit }`. F-X als zweiter Arg required vom Helper; Command-Layer löst optional auf via activeFeature |
+| AC-2 | tested | `commands/cap/quick.md` druckt Workflow-Hint nach Toggle. Kein Subagent-Spawn |
+| AC-3 | tested (forward-compat) | `quickMode.active` als Field im Schema; Hook-Read kann später additiv folgen wenn Auto-Annotation-Pass gebaut wird (heute kein Hook-Side-Effect, da Hook keine Auto-Annotation hat) |
+| AC-4 | tested | `getChangedFilesSinceQuickStart(projectRoot)` returns committed (`git diff <startCommit> HEAD`) + unstaged (`git diff HEAD`) + untracked (`git ls-files --others --exclude-standard`), dedupliziert + sortiert. Excludes `.cap/`, `node_modules/`, `dist/`, `build/`, `.git/` |
+| AC-5 | tested (command-layer) | `commands/cap/finalize.md` druckt Plan-Block mit changed-files-Liste + Sequenz-Übersicht, fragt yes/no Confirmation |
+| AC-6 | tested (command-layer) | `/cap:finalize` Step 1 spawnt `cap-prototyper` im annotate-Mode mit den changed-files als Input |
+| AC-7 | tested (command-layer) | Step 2 spawnt `cap-prototyper` im iterate-Mode für AC-Definition + Refactoring-Vorschläge |
+| AC-8 | tested (command-layer) | Step 3 spawnt `cap-tester` für RED-GREEN Tests gegen die ACs |
+| AC-9 | tested (command-layer) | Step 4 ruft `enrichFromTags` auf — updated FEATURE-MAP files-list |
+| AC-10 | tested | `endQuickMode(projectRoot)` clears `quickMode.{active,feature,startedAt,startCommit}`, behält `activeFeature` (User-Wahl bleibt) |
+| AC-11 | tested | `commands/cap/quick.md` (neu), `commands/cap/finalize.md` (neu) — vollständige User-Doku im Command-Format |
+| AC-12 | tested | 13 Tests: default-state, startQuickMode (git + non-git), endQuickMode, getChangedFilesSinceQuickStart (5 cases), backwards-compat legacy SESSION.json |
 
-**Files (geplant):**
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-session.cjs` — `quickMode` field in CapSession + getDefaultSession; `startQuickMode`/`endQuickMode`/`isQuickModeActive`/`getChangedFilesSinceQuickStart` exports
 - `commands/cap/quick.md` (neu)
 - `commands/cap/finalize.md` (neu)
-- `cap/bin/lib/cap-session.cjs` — quickMode field support
-- `hooks/cap-memory.js` — quickMode awareness (forward-compat skip)
-- `tests/cap-quick-finalize.test.cjs` (neu)
-- `CLAUDE.md` — Two-Phase-Workflow doc
+- `tests/cap-session-quick-mode.test.cjs` (neu, 13 Tests)
 
 ## Legend
 
