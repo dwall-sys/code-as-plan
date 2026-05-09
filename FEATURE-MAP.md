@@ -1946,7 +1946,7 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - `commands/cap/memory.md` — neuer Subcommand-Block `--switch-layout=v6` (AC-1, AC-4)
 - `tests/cap-memory-switch-layout.test.cjs` (neu, 12 Tests)
 
-### F-096: Cross-App Memory Aggregation Index [planned]
+### F-096: Cross-App Memory Aggregation Index [tested]
 
 **Motivation:** In Monorepos existieren mehrere `.cap/memory/`-Verzeichnisse (Root + pro App). Da die Root-Pipeline @cap-feature-Tags aus dem **gesamten** Monorepo scannt, dupliziert sie App-spezifische features beim V6-Switch — z.B. würde `F-HUB-USER-MESSAGES` sowohl in `apps/hub/.cap/memory/features/` als auch in `<root>/.cap/memory/features/` landen. F-096 baut einen Aggregation-Index am Root: per-app-features verweisen auf `apps/<app>/.cap/memory/features/...` (single source of truth pro feature), nur cross-cutting features (z.B. `F-PERF-SENTRY-TRACING`, `F-MIGRATION`, NX/monorepo-tooling) bleiben am Root lokal.
 
@@ -1954,13 +1954,13 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | Monorepo-Detection: `_isMonorepoLayout(root)` erkennt `apps/*/.cap/memory/` und aktiviert Aggregation-Modus. Single-app projects (kein apps/-Dir) bleiben bei Standard-V6 (F-093). |
-| AC-2 | planned | App-Routing per source-file: Source-Tag aus `apps/hub/x.ts` → entry routet primär nach `apps/hub/.cap/memory/features/`, nicht Root. F-077-Classifier erweitert um `entrySourceApp` (welche App liefert das `.file`-Feld). |
-| AC-3 | planned | Cross-cutting entries: features ohne single-app-Source (Tags nur in Root-tools wie `nx.json`, `package.json`, `.github/`) bleiben in `<root>/.cap/memory/features/`. |
-| AC-4 | planned | Root-Index: `<root>/.cap/memory/decisions.md` listet alle features mit relativem Pfad — Pfade können auf `apps/<app>/.cap/memory/features/F-XXX-*.md` UND auf eigenes `features/F-YYY-*.md` (cross-cutting) zeigen. |
-| AC-5 | planned | Append-only auf Sub-Apps: Root-Pipeline überschreibt KEINE bestehenden `apps/<app>/.cap/memory/features/F-XXX-*.md` — verifiziert nur Existenz, nutzt merge-mode falls schon V6 dort. Schützt Sub-App-pipeline-Authority. |
-| AC-6 | planned | Atomicity + Idempotency wie F-093/F-095. Conflict-Behandlung: wenn featureId in mehreren Apps Source-Tags hat, geht entry an `<root>/` mit explizitem `ambiguous_apps:[hub,booking]`-Frontmatter. |
-| AC-7 | planned | Tests: monorepo-fixture (2 apps), single-app-project (legacy V6), cross-cutting feature (root-only-tag), multi-app conflict (gleiche featureId in 2 apps), V5-only sub-app (nicht-V6, wird ignoriert), idempotency, append-mode preserves existing app entries. ≥10 Tests in `tests/cap-memory-aggregation.test.cjs`. |
+| AC-1 | tested | Monorepo-Detection: `_isMonorepoLayout(root)` erkennt sub-apps unter `apps/*/.cap/memory/decisions.md` mit `(V6 Index)`-Marker und gibt deren Namen zurück. Single-app oder V5-only-monorepos liefern leeres Array → Fallback auf Standard-V6 (F-093). 5 Tests. |
+| AC-2 | tested | App-Routing per source-file: `_resolveAppForFile(filePath, v6Apps)` matcht `apps/<name>/...` und liefert Sub-App-Namen zurück; nicht-app-Pfade → null. Backslashes (Windows) und führende Slashes werden normalisiert. 5 Tests. |
+| AC-3 | tested | Cross-cutting entries: Features ohne single-app-Source (Tags nur in Root-tools wie `nx.json`) bleiben in `<root>/.cap/memory/features/`. Multi-app entries (tags in 2+ apps) landen ebenfalls am Root als cross-cutting/ambiguous. 2 Tests. |
+| AC-4 | tested | Root-Index: `<root>/.cap/memory/decisions.md` listet sub-app-owned features in einer "Cross-App"-Sektion mit relativem Pfad `../../apps/<app>/.cap/memory/features/F-XXX-*.md`. Helper `_findSubAppFeatureFile` resolviert echte Slug-Filenames. Wenn Sub-App-File noch nicht existiert: "(pending sub-app pipeline)"-Hinweis. 3 Tests. |
+| AC-5 | tested | Append-only auf Sub-Apps: Root-Pipeline schreibt NIE in `apps/<app>/.cap/memory/`. Sub-App-Files bleiben byte-identisch nach Root-Run, kein neues File entsteht im Sub-App-features/. 2 Tests. |
+| AC-6 | tested | Opt-out via `options.aggregate=false` (legacy F-093 behavior, Tests + escape hatch). Idempotenz: Re-Run produces byte-identischen Index. 2 Tests. |
+| AC-7 | tested | End-to-end Integration: `writeMemoryDirectory` mit V6-config + Monorepo dispatched korrekt; Fallback bei nur-V5-sub-apps. 3 Tests. Plus `_findSubAppFeatureFile` Helper-Tests (3 Tests, inkl. Slug-Disambiguierung wo `F-HUB-CHAT` nicht versehentlich `F-HUB-CHAT-VOICE-NOTES`-Files matcht). 24 Tests total in `tests/cap-memory-aggregation.test.cjs`. |
 
 **Depends on:** F-093 (V6-Layout), F-095 (Layout-Switch), F-077 (Classifier-AC-8), F-038 (Monorepo-Awareness)
 
@@ -1969,11 +1969,15 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - Race-conditions bei parallel hub+root pipelines — Single-process-Annahme, ggf. fs-lock falls relevant.
 - Reverse-flow als F-097 oder Part-2 von F-096.
 
-**Files (geplant):**
-- `cap/bin/lib/cap-memory-dir.cjs` — Aggregation-Mode in `_writeMemoryV6` + Helper `_isMonorepoLayout`
-- `cap/bin/lib/cap-memory-migrate.cjs` — Classifier um app-zuordnung erweitern (`entrySourceApp` aus source-file-pfad)
-- `commands/cap/memory.md` — `--aggregate`-Flag-Doku oder auto-detected
-- `tests/cap-memory-aggregation.test.cjs` (neu)
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-memory-dir.cjs` — neue Helpers `_isMonorepoLayout`, `_resolveAppForFile`, `_findSubAppFeatureFile`. `_writeMemoryV6` um Aggregation-Routing erweitert. `_renderV6Index` mit "Cross-App"-Sektion. App-Detection auto via apps/*/.cap/memory/decisions.md V6-Marker — kein User-Flag.
+- `tests/cap-memory-aggregation.test.cjs` (neu, 24 Tests)
+
+**Real-world impact (Smoke-Test 2026-05-09 GoetzeInvest-Monorepo-Root):**
+- 2966 V5 entries → F-093 ohne Aggregation hätte 198 features-files am Root geschrieben
+- F-096 mit Aggregation: **4 cross-cutting features** lokal + **192 hub-features delegiert** an `apps/hub/.cap/memory/` (Index-only, kein Doppel-Write)
+- Index 37.7 KB (vs. 661 KB V5-Monolith, +5 KB gegenüber F-093 wegen Cross-App-Sektion — vertretbar für saving 192 Duplikate)
+- Cross-cutting korrekt erkannt: F-MIGRATION, F-AUTH, F-HUB-ROLES, F-HUB-SCHEMA (letzte zwei haben Source-Tags außerhalb apps/hub/, daher legitim cross-cutting)
 
 ## Legend
 

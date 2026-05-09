@@ -489,6 +489,102 @@ function _isV6LayoutEnabled(projectRoot, options) {
   }
 }
 
+// =====================================================================
+// F-096: Cross-App Memory Aggregation Index
+// =====================================================================
+//
+// @cap-feature(feature:F-096, primary:true) Monorepo-aware V6 aggregation.
+//   Detects sub-apps with V6 layout active under apps/* and routes app-
+//   tagged entries away from the root (which would otherwise duplicate
+//   features that the sub-app pipeline already owns). Cross-cutting
+//   entries (no app source) and ambiguous entries (multiple apps) stay
+//   at root. Root index lists everything with cross-app paths.
+//
+// @cap-decision(F-096) Read-only on sub-apps: root pipeline NEVER writes
+//   to apps/<app>/.cap/memory/. Sub-app pipeline owns its own features/.
+//   Root just uses sub-app filenames for the index. Avoids race conditions
+//   between root + sub-app pipeline runs.
+//
+// @cap-decision(F-096) Auto-detected, no flag: monorepo layout is detected
+//   by presence of apps/<name>/.cap/memory/decisions.md with the (V6 Index)
+//   marker. No user-facing flag — symmetrical to F-093 (config-only) and
+//   keeps the surface area small.
+
+/**
+ * Detect monorepo layout: returns array of sub-app names that have V6 layout active.
+ * Empty array means single-app project (or no V6 sub-apps yet) — fall back to F-093 default.
+ * @param {string} projectRoot
+ * @returns {string[]} sub-app names (e.g. ['hub', 'booking'])
+ */
+function _isMonorepoLayout(projectRoot) {
+  if (!projectRoot) return [];
+  const appsDir = path.join(projectRoot, 'apps');
+  if (!fs.existsSync(appsDir)) return [];
+  let entries;
+  try {
+    entries = fs.readdirSync(appsDir, { withFileTypes: true });
+  } catch (_e) {
+    return [];
+  }
+  const v6Apps = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const subDecisions = path.join(appsDir, entry.name, '.cap', 'memory', 'decisions.md');
+    if (!fs.existsSync(subDecisions)) continue;
+    let raw;
+    try { raw = fs.readFileSync(subDecisions, 'utf8'); } catch (_e) { continue; }
+    if (raw.includes('(V6 Index)')) v6Apps.push(entry.name);
+  }
+  return v6Apps;
+}
+
+/**
+ * Resolve which sub-app a source-file belongs to. Returns null if file is
+ * not under apps/<v6Apps[i]>/. Path is normalized to forward-slashes; leading
+ * slashes are stripped before matching.
+ * @param {string|undefined} filePath
+ * @param {string[]} v6Apps - sub-apps with V6 active
+ * @returns {string|null}
+ */
+function _resolveAppForFile(filePath, v6Apps) {
+  if (!filePath || !v6Apps || v6Apps.length === 0) return null;
+  const normalized = String(filePath).replace(/\\/g, '/').replace(/^\/+/, '');
+  const match = normalized.match(/^apps\/([^/]+)\//);
+  if (!match) return null;
+  return v6Apps.includes(match[1]) ? match[1] : null;
+}
+
+/**
+ * Look up an existing V6 feature-file in a sub-app by featureId prefix.
+ * Returns the filename (e.g. "F-HUB-USER-MESSAGES-in-app-direktnachrichten.md")
+ * or null if no matching file exists. Used by the root index to render
+ * cross-app links without inventing slugs.
+ * @param {string} projectRoot
+ * @param {string} app
+ * @param {string} featureId
+ * @returns {string|null}
+ */
+function _findSubAppFeatureFile(projectRoot, app, featureId) {
+  const featuresDir = path.join(projectRoot, 'apps', app, '.cap', 'memory', 'features');
+  if (!fs.existsSync(featuresDir)) return null;
+  let files;
+  try { files = fs.readdirSync(featuresDir); } catch (_e) { return null; }
+  // CAP convention: filename = `<FEATURE-ID>-<slug>.md` where featureId is UPPERCASE
+  // and slug starts with a lowercase letter or digit. So `F-HUB-CHAT` should match
+  // `F-HUB-CHAT-some-slug.md` but NOT `F-HUB-CHAT-VOICE-NOTES-other.md` — the trailing
+  // `V` (uppercase) signals that VOICE-NOTES is a continuation of the featureId, not slug.
+  const prefix = `${featureId}-`;
+  const match = files.find((f) => {
+    if (!f.startsWith(prefix) || !f.endsWith('.md')) return false;
+    const after = f.slice(prefix.length);
+    if (after.length === 0) return false;
+    // First char of slug must be lowercase letter or digit (or hyphen for edge cases).
+    const first = after.charAt(0);
+    return first === first.toLowerCase() && /[a-z0-9]/.test(first);
+  });
+  return match || null;
+}
+
 /**
  * Slugify a string for use in filenames. Mirrors F-077's _slugify behavior
  * (lowercase, alpha-num + hyphens, trim).
@@ -575,13 +671,16 @@ function _toAutoBlockItems(entries) {
  * @param {Map} groups
  * @param {Object} context
  */
-function _renderV6Index(category, groups, context) {
+function _renderV6Index(category, groups, context, indexOptions = {}) {
   const filename = CATEGORY_FILES[category];
   const titleCat = category.charAt(0).toUpperCase() + category.slice(1) + 's';
+  const isAggregating = Array.isArray(indexOptions.aggregatedAppFeatures);
   const lines = [
     `# Project Memory: ${titleCat} (V6 Index)`,
     '',
-    `> **V6 layout active.** Per-feature ${category}s live in \`.cap/memory/features/\` and \`.cap/memory/platform/\`. This file is an auto-generated index — see the linked feature file for the actual entries.`,
+    isAggregating
+      ? `> **V6 layout active (monorepo aggregation).** Per-feature ${category}s live in \`.cap/memory/features/\` (cross-cutting) and \`apps/<app>/.cap/memory/features/\` (app-owned, see "Cross-App" rows). This file is an auto-generated index — see the linked feature file for the actual entries.`
+      : `> **V6 layout active.** Per-feature ${category}s live in \`.cap/memory/features/\` and \`.cap/memory/platform/\`. This file is an auto-generated index — see the linked feature file for the actual entries.`,
     `> Last updated: ${new Date().toISOString().substring(0, 10)}`,
     '',
     '| Destination | Count | File |',
@@ -602,6 +701,29 @@ function _renderV6Index(category, groups, context) {
     if (items.length === 0) continue;
     const file = `platform/${g.topic}.md`;
     lines.push(`| platform/${g.topic} | ${items.length} | [${file}](${file}) |`);
+  }
+  // F-096: Cross-app aggregated features (sub-app owns the file, root just indexes)
+  if (isAggregating && indexOptions.aggregatedAppFeatures.length > 0) {
+    const agg = [...indexOptions.aggregatedAppFeatures].sort((a, b) => {
+      if (a.app !== b.app) return a.app.localeCompare(b.app);
+      return a.featureId.localeCompare(b.featureId);
+    });
+    lines.push('');
+    lines.push(`## Cross-App (sub-app owned)`);
+    lines.push('');
+    lines.push('| Feature | App | Count | File |');
+    lines.push('|---|---|---|---|');
+    for (const f of agg) {
+      const count = category === 'decision' ? f.decisionsCount : f.pitfallsCount;
+      if (count === 0) continue;
+      // Path resolves from .cap/memory/decisions.md → ../../apps/<app>/.cap/memory/features/<file>
+      // If sub-app pipeline hasn't created the file yet (fileName === null), point at the directory.
+      const file = f.fileName
+        ? `../../apps/${f.app}/.cap/memory/features/${f.fileName}`
+        : `../../apps/${f.app}/.cap/memory/features/`;
+      const display = f.fileName || `${f.featureId} (pending sub-app pipeline)`;
+      lines.push(`| ${f.featureId} | ${f.app} | ${count} | [${display}](${file}) |`);
+    }
   }
   return lines.join('\n') + '\n';
 }
@@ -674,6 +796,46 @@ function _writeMemoryV6(projectRoot, entries, options = {}) {
 
   const groups = _groupEntriesByDestination(entries, context, migrate.classifyEntry);
 
+  // F-096: detect monorepo aggregation mode. Returns sub-apps with V6 active.
+  // options.aggregate === false explicitly opts out (test-friendly + escape hatch).
+  const v6Apps = options.aggregate === false ? [] : _isMonorepoLayout(projectRoot);
+  const isAggregating = v6Apps.length > 0;
+
+  // F-096: split groups into "owned by sub-app" (skip writing locally, just index)
+  //        vs "stays at root" (write locally as before).
+  // A feature-group is owned by a sub-app when ALL its source-files resolve to that
+  // single app. Multi-app or no-app entries stay at root (cross-cutting / ambiguous).
+  const aggregatedAppFeatures = []; // [{ app, featureId, count, decisionsCount, pitfallsCount, fileName }]
+  const localGroups = new Map();
+  for (const [key, g] of groups) {
+    if (isAggregating && g.destination === 'feature') {
+      const items = [...g.decisions, ...g.pitfalls];
+      const apps = new Set(
+        items
+          .map((e) => {
+            const f = (e.metadata && e.metadata.relatedFiles && e.metadata.relatedFiles[0]) || e.file;
+            return _resolveAppForFile(f, v6Apps);
+          })
+          .filter(Boolean),
+      );
+      if (apps.size === 1) {
+        // Single sub-app owns this feature → don't write at root, just track for index.
+        const app = [...apps][0];
+        const fileName = _findSubAppFeatureFile(projectRoot, app, g.featureId);
+        aggregatedAppFeatures.push({
+          app,
+          featureId: g.featureId,
+          decisionsCount: g.decisions.length,
+          pitfallsCount: g.pitfalls.length,
+          fileName, // may be null if sub-app pipeline hasn't created it yet
+        });
+        continue;
+      }
+      // Multi-app or no-app → keep at root.
+    }
+    localGroups.set(key, g);
+  }
+
   const memDir = path.join(projectRoot, MEMORY_DIR);
   if (!options.dryRun) {
     fs.mkdirSync(memDir, { recursive: true });
@@ -683,8 +845,8 @@ function _writeMemoryV6(projectRoot, entries, options = {}) {
   const files = {};
   let written = 0;
 
-  // Per-feature + per-platform writes
-  for (const g of groups.values()) {
+  // Per-feature + per-platform writes (only localGroups in aggregation mode)
+  for (const g of localGroups.values()) {
     let filePath, title;
     if (g.destination === 'feature') {
       const slug = _slugifyForV6(_featureTitleFor(g.featureId, context.features));
@@ -703,9 +865,11 @@ function _writeMemoryV6(projectRoot, entries, options = {}) {
     files[relKey] = `${title}\n decisions:${g.decisions.length}\n pitfalls:${g.pitfalls.length}`;
   }
 
-  // Top-level Index files
+  // Top-level Index files (include aggregated app features in F-096 mode)
   for (const cat of ['decision', 'pitfall']) {
-    const indexContent = _renderV6Index(cat, groups, context);
+    const indexContent = _renderV6Index(cat, localGroups, context, {
+      aggregatedAppFeatures: isAggregating ? aggregatedAppFeatures : null,
+    });
     const filename = CATEGORY_FILES[cat];
     files[filename] = indexContent;
     if (!options.dryRun) {
@@ -814,6 +978,10 @@ module.exports = {
   _archiveV5IfPresent,
   // F-095: Layout-Switch Activation CLI.
   switchLayout,
+  // F-096: Cross-app aggregation helpers exposed for testing.
+  _isMonorepoLayout,
+  _resolveAppForFile,
+  _findSubAppFeatureFile,
   MEMORY_DIR,
   CATEGORY_FILES,
 };
