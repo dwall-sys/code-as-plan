@@ -1946,6 +1946,35 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - `commands/cap/memory.md` — neuer Subcommand-Block `--switch-layout=v6` (AC-1, AC-4)
 - `tests/cap-memory-switch-layout.test.cjs` (neu, 12 Tests)
 
+### F-096: Cross-App Memory Aggregation Index [planned]
+
+**Motivation:** In Monorepos existieren mehrere `.cap/memory/`-Verzeichnisse (Root + pro App). Da die Root-Pipeline @cap-feature-Tags aus dem **gesamten** Monorepo scannt, dupliziert sie App-spezifische features beim V6-Switch — z.B. würde `F-HUB-USER-MESSAGES` sowohl in `apps/hub/.cap/memory/features/` als auch in `<root>/.cap/memory/features/` landen. F-096 baut einen Aggregation-Index am Root: per-app-features verweisen auf `apps/<app>/.cap/memory/features/...` (single source of truth pro feature), nur cross-cutting features (z.B. `F-PERF-SENTRY-TRACING`, `F-MIGRATION`, NX/monorepo-tooling) bleiben am Root lokal.
+
+**Real-world Befund:** 2026-05-09 — GoetzeInvest-Monorepo-V6-Dry-Run am Root zeigte 198 feature-files, davon ~190 Duplikate von `apps/hub/.cap/memory/features/`. 316 unique feature-IDs total im Monorepo, ~250 hub-spezifisch. Token-Saving wäre positiv (660 KB → 32 KB Index), aber Memory-Architektur dupliziert Inhalt der schon in der App primär liegt. F-096 löst das ohne den Token-Win zu opfern.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Monorepo-Detection: `_isMonorepoLayout(root)` erkennt `apps/*/.cap/memory/` und aktiviert Aggregation-Modus. Single-app projects (kein apps/-Dir) bleiben bei Standard-V6 (F-093). |
+| AC-2 | planned | App-Routing per source-file: Source-Tag aus `apps/hub/x.ts` → entry routet primär nach `apps/hub/.cap/memory/features/`, nicht Root. F-077-Classifier erweitert um `entrySourceApp` (welche App liefert das `.file`-Feld). |
+| AC-3 | planned | Cross-cutting entries: features ohne single-app-Source (Tags nur in Root-tools wie `nx.json`, `package.json`, `.github/`) bleiben in `<root>/.cap/memory/features/`. |
+| AC-4 | planned | Root-Index: `<root>/.cap/memory/decisions.md` listet alle features mit relativem Pfad — Pfade können auf `apps/<app>/.cap/memory/features/F-XXX-*.md` UND auf eigenes `features/F-YYY-*.md` (cross-cutting) zeigen. |
+| AC-5 | planned | Append-only auf Sub-Apps: Root-Pipeline überschreibt KEINE bestehenden `apps/<app>/.cap/memory/features/F-XXX-*.md` — verifiziert nur Existenz, nutzt merge-mode falls schon V6 dort. Schützt Sub-App-pipeline-Authority. |
+| AC-6 | planned | Atomicity + Idempotency wie F-093/F-095. Conflict-Behandlung: wenn featureId in mehreren Apps Source-Tags hat, geht entry an `<root>/` mit explizitem `ambiguous_apps:[hub,booking]`-Frontmatter. |
+| AC-7 | planned | Tests: monorepo-fixture (2 apps), single-app-project (legacy V6), cross-cutting feature (root-only-tag), multi-app conflict (gleiche featureId in 2 apps), V5-only sub-app (nicht-V6, wird ignoriert), idempotency, append-mode preserves existing app entries. ≥10 Tests in `tests/cap-memory-aggregation.test.cjs`. |
+
+**Depends on:** F-093 (V6-Layout), F-095 (Layout-Switch), F-077 (Classifier-AC-8), F-038 (Monorepo-Awareness)
+
+**Out of scope (deferred):**
+- Bidirektionale Sync — Sub-App liest Root-cross-cutting auto. Aktuell unidirectional (Root indexiert Apps).
+- Race-conditions bei parallel hub+root pipelines — Single-process-Annahme, ggf. fs-lock falls relevant.
+- Reverse-flow als F-097 oder Part-2 von F-096.
+
+**Files (geplant):**
+- `cap/bin/lib/cap-memory-dir.cjs` — Aggregation-Mode in `_writeMemoryV6` + Helper `_isMonorepoLayout`
+- `cap/bin/lib/cap-memory-migrate.cjs` — Classifier um app-zuordnung erweitern (`entrySourceApp` aus source-file-pfad)
+- `commands/cap/memory.md` — `--aggregate`-Flag-Doku oder auto-detected
+- `tests/cap-memory-aggregation.test.cjs` (neu)
+
 ## Legend
 
 | State | Meaning |
@@ -1956,4 +1985,4 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T22:55:00.000Z*
+*Last updated: 2026-05-08T23:30:00.000Z*
