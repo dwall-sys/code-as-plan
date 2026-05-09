@@ -5,7 +5,7 @@
 
 'use strict';
 
-// @cap-history(sessions:4, edits:12, since:2026-04-20, learned:2026-05-08) Frequently modified — 4 sessions, 12 edits
+// @cap-history(sessions:5, edits:15, since:2026-04-20, learned:2026-05-08) Frequently modified — 5 sessions, 15 edits
 // @cap-history(sessions:2, edits:3, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 3 edits
 const fs = require('node:fs');
 const path = require('node:path');
@@ -884,6 +884,82 @@ function _writeMemoryV6(projectRoot, entries, options = {}) {
   return { files, written };
 }
 
+// @cap-feature(feature:F-095, primary:true) Memory Layout-Switch Activation CLI — leichtgewichtige Aktivierung von V6
+//   ohne session-reprocess. Liest existing V5 entries via readMemoryFile, persistiert config.json, ruft writeMemoryDirectory
+//   einmal mit V6-dispatch. Workflow-Lücke aus F-093: Stop-Hook returnt früh ohne neue Sessions, V6-config greift nicht
+//   beim ersten Toggle. /cap:memory init wäre heavy (alle Sessions reprocess); switchLayout ist <1s auf Hub-Größe.
+// @cap-decision(F-095) write-then-rollback statt config-first: writeMemoryDirectory zuerst (try/catch), config.json
+//   wird erst NACH success geschrieben. Bei error bleiben V5-Files + alte config unverändert. Atomicity via Schreib-Order,
+//   nicht via Locks.
+/**
+ * Switch the memory layout for a project (V5 → V6).
+ * Reads existing V5 entries, persists config.json with the new layout flag,
+ * and triggers writeMemoryDirectory once so the V6 dispatch produces the
+ * per-feature/platform files and Index.
+ *
+ * Idempotent for V6→V6: detects the `(V6 Index)` marker and short-circuits.
+ *
+ * @param {string} projectRoot
+ * @param {string} target - currently only 'v6' supported
+ * @returns {{ status: 'switched'|'noop', target: string, sourceEntries: number, written: number, configPath: string, archives: string[] }}
+ */
+function switchLayout(projectRoot, target) {
+  if (target !== 'v6') {
+    throw new Error(`switchLayout: unsupported target "${target}" (only "v6" supported in F-095)`);
+  }
+
+  const memDir = path.join(projectRoot, MEMORY_DIR);
+  const configPath = path.join(projectRoot, '.cap', 'config.json');
+
+  // AC-3: idempotency check — if top-level decisions.md already has the V6 marker, no-op.
+  const decisionsFile = path.join(memDir, CATEGORY_FILES.decision);
+  if (fs.existsSync(decisionsFile)) {
+    const raw = fs.readFileSync(decisionsFile, 'utf8');
+    if (raw.includes('(V6 Index)')) {
+      return { status: 'noop', target, sourceEntries: 0, written: 0, configPath, archives: [] };
+    }
+  }
+
+  // Read existing V5 entries (decisions + pitfalls). patterns/hotspots stay V5-monolith per F-093 schema.
+  const pitfallsFile = path.join(memDir, CATEGORY_FILES.pitfall);
+  const decEntries = fs.existsSync(decisionsFile)
+    ? readMemoryFile(decisionsFile).entries.map(e => ({ ...e, category: 'decision' }))
+    : [];
+  const pitEntries = fs.existsSync(pitfallsFile)
+    ? readMemoryFile(pitfallsFile).entries.map(e => ({ ...e, category: 'pitfall' }))
+    : [];
+  const allEntries = [...decEntries, ...pitEntries];
+
+  // AC-2: writeMemoryDirectory zuerst (force layout via options); config.json schreiben wir erst nach success.
+  // Force layout via options.layout — bypasses config.json read so a missing/invalid config doesn't block the switch.
+  const result = writeMemoryDirectory(projectRoot, allEntries, { layout: target });
+
+  // Persist config.json (merge with existing if present).
+  const capDir = path.join(projectRoot, '.cap');
+  if (!fs.existsSync(capDir)) fs.mkdirSync(capDir, { recursive: true });
+  let config = {};
+  if (fs.existsSync(configPath)) {
+    try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')) || {}; } catch (_e) { config = {}; }
+  }
+  config.memory = { ...(config.memory || {}), layout: target };
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+
+  // Collect archive list for reporting (AC-4).
+  const archiveDir = path.join(memDir, '.archive');
+  const archives = fs.existsSync(archiveDir)
+    ? fs.readdirSync(archiveDir).filter(f => f.includes('pre-v6'))
+    : [];
+
+  return {
+    status: 'switched',
+    target,
+    sourceEntries: allEntries.length,
+    written: result.written,
+    configPath,
+    archives,
+  };
+}
+
 module.exports = {
   generateAnchorId,
   generateCategoryMarkdown,
@@ -900,6 +976,8 @@ module.exports = {
   _groupEntriesByDestination,
   _renderV6Index,
   _archiveV5IfPresent,
+  // F-095: Layout-Switch Activation CLI.
+  switchLayout,
   // F-096: Cross-app aggregation helpers exposed for testing.
   _isMonorepoLayout,
   _resolveAppForFile,

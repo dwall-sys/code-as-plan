@@ -25,6 +25,7 @@ Manage project memory — bootstrap from existing sessions, run incremental pipe
 - `unpin <file> <content-prefix>` — remove pinned:true from annotation
 - `prune [--apply]` — decay stale entries, archive very-stale low-confidence ones, purge old raw-logs (default dry-run)
 - `migrate [--apply] [--interactive=false]` — **F-077**: one-shot migration from V5 monolith files (`decisions.md`, `pitfalls.md`, etc.) to V6 per-feature layout under `.cap/memory/features/`. Default is dry-run; `--apply` requires a confirm prompt unless `--interactive=false` is passed.
+- `--switch-layout=v6` — **F-095**: lightweight V5→V6 layout activation. Reads existing V5 entries, persists `.cap/config.json: { memory: { layout: 'v6' } }`, triggers one `writeMemoryDirectory` call so the V6 dispatch produces per-feature/platform files + Index. No session reprocess. Idempotent (V6→V6 no-op).
 - `--dry-run` — show what would change without writing
 </objective>
 
@@ -230,5 +231,45 @@ Default is **dry-run** -- no files touched. The dry-run output is sent to stderr
 Exit codes: `0` success, `1` errors during apply, `2` user-initiated quit (declined confirm or `q` in ambiguity prompt).
 
 After a successful migration, the user commits `.cap/memory/features/`, `.cap/memory/platform/`, and `.cap/memory/.archive/` to git themselves -- the tool deliberately does NOT touch git.
+
+## Subcommand: --switch-layout=v6
+
+<!-- @cap-feature(feature:F-095) /cap:memory --switch-layout=v6 — lightweight V5→V6 activation. -->
+<!-- @cap-decision(F-095) write-then-rollback statt config-first: writeMemoryDirectory wird zuerst aufgerufen, config.json erst nach success persistiert. Bei error bleiben V5-Files + alte config unverändert. -->
+
+```bash
+node -e "
+const dir = require('./cap/bin/lib/cap-memory-dir.cjs');
+try {
+  const r = dir.switchLayout(process.cwd(), 'v6');
+  if (r.status === 'noop') {
+    console.log('cap-memory: layout already v6 — no changes.');
+  } else {
+    console.log('cap-memory: switched to v6 layout');
+    console.log('  source entries:    ', r.sourceEntries);
+    console.log('  files written:     ', r.written);
+    console.log('  config persisted:  ', r.configPath);
+    console.log('  V5 backups present:', r.archives.length);
+  }
+} catch (e) {
+  console.error('switch-layout failed:', e.message);
+  console.error('config.json not modified, V5 files unchanged.');
+  process.exit(1);
+}
+"
+```
+
+What --switch-layout=v6 does:
+
+1. **Reads** existing V5 entries from `decisions.md` and `pitfalls.md` via `readMemoryFile()`.
+2. **Calls** `writeMemoryDirectory(projectRoot, entries, { layout: 'v6' })` — V6 dispatch creates `features/F-XXX-<topic>.md`, `platform/<topic>.md`, top-level Index files, and archives V5 monoliths to `.cap/memory/.archive/`.
+3. **Persists** `.cap/config.json: { memory: { layout: 'v6' } }` — only after step 2 succeeds. Existing keys in config.json are preserved.
+4. **Reports** source-entry count, files-written count, config-path, archive-paths.
+
+**Idempotency:** If `decisions.md` already has the `(V6 Index)` marker, the call is a no-op (`status: 'noop'`).
+
+**Difference vs. `migrate`:** `migrate` is a one-shot **deep migration** (interactive disambiguation prompts, classification reports, snapshot routing, prompt-for-ambiguous). `--switch-layout=v6` is the **lightweight activation step** for projects that already migrated (or are happy with auto-classification). No session reprocess, <1s on typical project size.
+
+**Use when:** You have a Bestandsprojekt with V5 monolithic memory, want V6 token-cost-of-read benefits, and don't need the deep migration ceremony. Or after `/cap:memory migrate --apply` if the writeMemoryDirectory dispatch never triggered (e.g. Stop-Hook returns early without new sessions).
 
 </process>
