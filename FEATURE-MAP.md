@@ -1967,7 +1967,7 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 **Out of scope (deferred):**
 - Bidirektionale Sync — Sub-App liest Root-cross-cutting auto. Aktuell unidirectional (Root indexiert Apps).
 - Race-conditions bei parallel hub+root pipelines — Single-process-Annahme, ggf. fs-lock falls relevant.
-- Reverse-flow als F-097 oder Part-2 von F-096.
+- Reverse-flow als F-099 oder Part-2 von F-096.
 
 **Files (geändert/neu):**
 - `cap/bin/lib/cap-memory-dir.cjs` — neue Helpers `_isMonorepoLayout`, `_resolveAppForFile`, `_findSubAppFeatureFile`. `_writeMemoryV6` um Aggregation-Routing erweitert. `_renderV6Index` mit "Cross-App"-Sektion. App-Detection auto via apps/*/.cap/memory/decisions.md V6-Marker — kein User-Flag.
@@ -1979,6 +1979,57 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - Index 37.7 KB (vs. 661 KB V5-Monolith, +5 KB gegenüber F-093 wegen Cross-App-Sektion — vertretbar für saving 192 Duplikate)
 - Cross-cutting korrekt erkannt: F-MIGRATION, F-AUTH, F-HUB-ROLES, F-HUB-SCHEMA (letzte zwei haben Source-Tags außerhalb apps/hub/, daher legitim cross-cutting)
 
+### F-097: cap-doctor verifies hook registration [planned]
+
+**Motivation:** Heute (2026-05-09) entdeckt: 7 CAP-Hooks installiert in `~/.claude/hooks/`, aber nur 3 in `~/.claude/settings.json` registriert. Cap-learning-hook (F-070), cap-tag-observer (F-054), cap-learn-review-hook (F-073), cap-version-check, cap-workflow-guard waren tot installiert — Code da, aber nie aufgerufen. Konsequenz: Self-Learning-Pipeline hat 0 Signals gesammelt obwohl Hub 31 Sessions mit Edit/Write-Ratio 3.79 (= sehr viel Rework, idealer Pattern-Input). `cap doctor` checkt aktuell nur Existenz der Lib-Files, nicht ob die Hooks aktiv im hook-Lifecycle eingehängt sind.
+
+**Real-world Impact:** Diese eine Konfig-Lücke hat gestern Self-Learning komplett deaktiviert für ~1 Monat. F-070-F-074 (V5 Self-Learning Stack, 5500 LOC, 359 Tests) lief praktisch im Leerlauf. Erst durch User-Frage "wie funktioniert das eigentlich?" entdeckt.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | `cap doctor` parst `~/.claude/settings.json` und mappt jeden installierten CAP-Hook (cap-*.js in `~/.claude/hooks/`) auf seinen erwarteten Lifecycle (PostToolUse, Stop, UserPromptSubmit, SessionStart, PreToolUse). Erwartung steht im Hook-File-Header (z.B. `// PostToolUse hook:` Marker). |
+| AC-2 | planned | Ausgabe in 3 Buckets: ✓ "registered + reachable", ⚠ "installed but not registered" (mit Empfehlung was zu tun), ✗ "registered to non-existent file" (broken pointer). |
+| AC-3 | planned | Optional `--fix` Flag: bietet die fehlenden Hook-Registrations als JSON-patch an, schreibt mit Backup `settings.json.bak-pre-fix-<date>`. Strikt opt-in, kein Auto-Fix. |
+| AC-4 | planned | Tests: alle 7 erwarteten Hooks erkannt, Drift-Erkennung (Hook fehlt in settings), Broken-Pointer-Erkennung (settings → fehlende Datei), Lifecycle-Mismatch (PostToolUse-Hook in Stop-Block). |
+
+**Depends on:** F-040 (cap doctor), F-070 (cap-learning-hook), F-054 (cap-tag-observer), F-073 (cap-learn-review-hook)
+
+**Files (geplant):**
+- `cap/bin/lib/cap-doctor.cjs` — neue Funktion `verifyHookRegistration(homeDir)` + Output-Formatter
+- `tests/cap-doctor-hooks.test.cjs` (neu, ≥6 Tests)
+- `commands/cap/doctor.md` — Output-Doku erweitern
+
+### F-098: Implicit Quick-Mode (supersedes F-092) [planned]
+
+**Motivation:** Empirisches Befund (2026-05-09 Hub-Session-Analyse): `/cap:quick` wurde in 31 Hub-Sessions **0×** aufgerufen. 65 % der Sessions sind raw-chat (kein /cap-Command), 32 % formal-cap, 1 hybrid. Der explizite `/cap:quick`-Toggle ist **redundante Surface** — der User lebt schon in Quick-Mode by default, vergisst aber den Toggle. Folge: 620+ editAfterWrite-events ohne F-070-Signal-Capture (vor 2026-05-09 mittag-Hook-Aktivierung), keine retrospektive Tag-Coverage, FEATURE-MAP-Drift bei raw-chat-Sessions.
+
+**Approach:** Catch-up wird **implicit + light**, nicht explicit + heavy. Statt expliziter Toggle: Detection per Heuristik (no /cap:prototype + n+ edits + activeFeature gesetzt → war Quick-Mode-Session). Catch-up läuft auto im Stop-Hook oder bei `/cap:save`, mit minimaler Hygiene (annotate + scan), nicht heavy ritual (iterate + test). Heavy ritual bleibt explizit verfügbar via existierende Commands (`/cap:annotate`, `/cap:iterate`, `/cap:test`).
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | planned | Auto-Detection: Stop-Hook erkennt "war raw-chat-Session" wenn (a) kein `/cap:prototype` aufgerufen wurde, (b) ≥5 Edits/Writes auf Source-Files seit session-start, (c) `SESSION.json.activeFeature` gesetzt. Sonst: skip catch-up. |
+| AC-2 | planned | Light Catch-up: für changed-files seit session-start (git diff): wenn File kein `@cap-feature`-Tag hat → Tag silently setzen (`@cap-feature(feature:F-XXX)` aus activeFeature). Atomic write-temp-then-rename. Existing Tags werden nicht überschrieben. |
+| AC-3 | planned | Notice am Session-Ende (stderr, exit 0): `"F-XXX: 5 files annotated, 30 edits captured. /cap:test wenn AC-coverage gewünscht."` — kein automatischer Test/Iterate-Trigger. |
+| AC-4 | planned | F-092 Deprecation: `commands/cap/quick.md` und `commands/cap/finalize.md` werden gelöscht. SESSION.json `quickMode`-struct kann bleiben (für git-HEAD-tracking) oder wird repurposed als `implicitQuick`-struct. |
+| AC-5 | planned | Disable-Flag: `CAP_SKIP_IMPLICIT_QUICK=1` als env-var. Plus per-Project-config `.cap/config.json: { implicitQuick: { enabled: false } }`. Wichtig für Demos/Showcases wo silent annotation unerwünscht ist. |
+| AC-6 | planned | Heuristik-Fallback: wenn `activeFeature` nicht eindeutig (mehrere features gleichzeitig touched, oder featureId stale) → kein silent annotate, statt dessen Notice "5 ambiguous files, run /cap:annotate to assign". Konservativ: lieber gar nichts als wrong. |
+| AC-7 | planned | Tests: typical raw-chat session (5 edits → 5 tags), explicit /cap:prototype session (skip catch-up), ambiguous activeFeature (no auto-annotate, notice issued), CAP_SKIP_IMPLICIT_QUICK=1 (skip), Files mit existing tags (preserve), F-092-removal-roundtrip (commands/quick.md gone, SESSION.json migration). ≥10 Tests in `tests/cap-implicit-quick.test.cjs`. |
+
+**Supersedes:** F-092 (Two-Phase Workflow). Migration: F-098 ships → 2-3 weeks dogfood am Hub → wenn stable: F-092 deprecaten (delete commands/cap/quick.md + commands/cap/finalize.md, remove quickMode references in cap-session.cjs falls nicht repurposed).
+
+**Depends on:** F-030 (Stop-Hook), F-070 (Edit-Tracking via learning-hook — schon aktiv), F-054 (tag-observer für tag-write-coordination), F-002 (FEATURE-MAP read/write).
+
+**Out of scope (deferred):**
+- Auto-Test/Iterate (heavy pipeline) — bleibt explizit
+- Cross-Feature-Sessions (User editiert F-A und F-B in selber Session) — komplexes Routing, F-099 falls relevant
+- Multi-app Catch-up (relevant in Monorepos: was wenn Edits in `apps/hub/` UND `apps/booking/`?) — single-app annahme zunächst
+
+**Files (geplant):**
+- `~/.claude/hooks/cap-memory.js` oder neuer `cap-implicit-quick.js` — Detection + Light-Catch-up im Stop-Hook (vermutlich erweitert F-030 statt eigener Hook)
+- `cap/bin/lib/cap-implicit-quick.cjs` — Detection-Logik + tag-injection
+- `tests/cap-implicit-quick.test.cjs` (neu)
+- `commands/cap/quick.md` + `commands/cap/finalize.md` — DELETE (post-deprecation, separater commit)
+
 ## Legend
 
 | State | Meaning |
@@ -1989,4 +2040,4 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T23:30:00.000Z*
+*Last updated: 2026-05-09T13:55:00.000Z*
