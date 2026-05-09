@@ -1923,6 +1923,29 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - `.claude/rules/cap-memory.md` — V6-Aware Reading-Instructions
 - `tests/cap-memory-dir-v6.test.cjs` (neu)
 
+### F-095: Memory Layout-Switch Activation CLI [tested]
+
+**Motivation:** F-093 hat V6-Layout als Schreibmodus shipped, aber das Aktivieren auf einem Bestandsprojekt (V5→V6) hat keine UX. Der Stop-Hook returnt früh wenn keine neuen Sessions seit `.last-run` (siehe `~/.claude/hooks/cap-memory.js:114`), also wird `writeMemoryDirectory` nie aufgerufen — der V6-Dispatch greift nicht. `/cap:memory init` wäre der Workaround, processed aber alle Sessions (heavy: Hub hat 26).
+
+**Real-world incident:** 2026-05-08 — Hub V6-Aktivierung erforderte ein Ad-hoc-Skript (`readMemoryFile` + `writeMemoryDirectory` direkt aufrufen, ~30 LOC). Funktional sauber, aber kein reproduzierbarer Pfad für Bastian / weitere Projekte.
+
+| AC | Status | Description |
+|----|--------|-------------|
+| AC-1 | tested | `/cap:memory --switch-layout=v6` CLI: liest existing entries via `readMemoryFile(decisions.md/pitfalls.md)`, schreibt `.cap/config.json` mit `{memory:{layout:"v6"}}`, ruft `writeMemoryDirectory` einmal. Kein session-reprocess. <1s auf Hub-Größe (2740 entries). Smoke-Test: 0.4s greenfield, 1.0s bei 2740 entries. |
+| AC-2 | tested | Atomar: writeMemoryDirectory zuerst (try/catch), config.json wird erst nach success geschrieben. Bei error bleiben V5-Files + alte config unverändert. Test sabotiert features/ als File → ENOTDIR → config bleibt unangetastet. |
+| AC-3 | tested | Idempotent: Re-Run V6→V6 byte-identical. Detection via `(V6 Index)`-Marker im Top-Level decisions.md; bei present → `status: 'noop'`, sourceEntries=0, written=0. |
+| AC-4 | tested | Reporting: returns `{ status, target, sourceEntries, written, configPath, archives }`. CLI-Wrapper in commands/cap/memory.md formatiert für stdout. |
+| AC-5 | tested | 12 Tests in `tests/cap-memory-switch-layout.test.cjs` (5 describe-blöcke): greenfield V5→V6, decisions+pitfalls reading, config-after-success, error-rollback (sabotage features/), V6→V6 noop+byte-identical, reporting-payload, unsupported-target throws, no-V5 greenfield, config-merge mit other keys, layout-overwrite, missing-cap-dir defense. |
+
+**Depends on:** F-093, F-077, F-076 (alle shipped).
+
+**Out of scope:** V6→V5 Downgrade-Pfad (separates Feature falls nötig — V6-Files müssten zu Monolith aggregiert werden, anderes Operation-Profil).
+
+**Files (geändert/neu):**
+- `cap/bin/lib/cap-memory-dir.cjs` — neue Funktion `switchLayout(projectRoot, target)` exportiert (AC-1..AC-3)
+- `commands/cap/memory.md` — neuer Subcommand-Block `--switch-layout=v6` (AC-1, AC-4)
+- `tests/cap-memory-switch-layout.test.cjs` (neu, 12 Tests)
+
 ## Legend
 
 | State | Meaning |
@@ -1933,4 +1956,4 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 | shipped | Deployed / merged to main |
 
 ---
-*Last updated: 2026-05-08T16:00:00.000Z*
+*Last updated: 2026-05-08T22:55:00.000Z*
