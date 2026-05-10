@@ -79,10 +79,12 @@ describe('runDoctor', () => {
     assert.strictEqual(report.optionalTotal, optionalTools.length);
   });
 
-  it('marks healthy:true when all required tools are available', () => {
+  it('marks healthy:true when all required tools, modules, and hooks are available', () => {
     const report = runDoctor();
     const allRequiredOk = report.tools.filter(t => t.required).every(t => t.ok);
-    assert.strictEqual(report.healthy, allRequiredOk);
+    const allModulesOk = report.modulesTotal == null || report.modulesOk === report.modulesTotal;
+    const hooksOk = !report.hookRegistration || report.hookRegistration.ok;
+    assert.strictEqual(report.healthy, allRequiredOk && allModulesOk && hooksOk);
   });
 
   it('each tool has expected properties', () => {

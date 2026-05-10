@@ -3,7 +3,8 @@
 // @cap-history(sessions:2, edits:5, since:2026-05-06, learned:2026-05-08) Frequently modified — 2 sessions, 5 edits
 // @cap-history(sessions:3, edits:9, since:2026-04-03, learned:2026-04-04) Frequently modified — 3 sessions, 9 edits
 // cap-hook-version: {{CAP_VERSION}}
-// Memory Hook - runs after session end to accumulate project memory.
+// cap-hook-lifecycle: Stop
+// Memory Hook - Stop hook that runs after session end to accumulate project memory.
 //
 // Pipeline: F-027 (Engine) → F-028 (Annotation Writer) → F-029 (Memory Directory)
 //

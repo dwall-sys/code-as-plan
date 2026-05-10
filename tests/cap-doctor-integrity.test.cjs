@@ -41,7 +41,6 @@ describe('CAP_MODULE_MANIFEST', () => {
     //   by the on-disk-vs-manifest deepEqual contract once cap-feature-map-internals.cjs landed.
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
-    // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added (Sharded Feature Map: index + per-feature files).
     assert.equal(CAP_MODULE_MANIFEST.length, 92);
   });
 
@@ -266,10 +265,13 @@ describe('runDoctor includes module integrity', () => {
   });
 
   it('healthy accounts for module failures', () => {
-    // When all modules pass and required tools are present, healthy should be true
+    // When tools, modules, AND hooks are OK, healthy should be true.
+    // F-097 added hookRegistration as a third gate; on a fresh CI box hooks may not be
+    // installed/registered yet, which is fine — that's a separate signal, not a module failure.
     const report = runDoctor();
-    if (report.requiredOk === report.requiredTotal && report.modulesOk === report.modulesTotal) {
-      assert.ok(report.healthy, 'should be healthy when tools and modules are OK');
+    const hooksOk = !report.hookRegistration || report.hookRegistration.ok;
+    if (report.requiredOk === report.requiredTotal && report.modulesOk === report.modulesTotal && hooksOk) {
+      assert.ok(report.healthy, 'should be healthy when tools, modules, and hooks are OK');
     }
   });
 });

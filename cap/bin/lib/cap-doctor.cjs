@@ -580,6 +580,10 @@ function runDoctor(projectRoot) {
   const platformResult = checkPlatformPaths();
   // @cap-todo(ac:F-058/AC-5) Install-mode detection runs automatically and is surfaced in the doctor report.
   const installMode = detectInstallMode();
+  // @cap-todo(ac:F-097/AC-1) Hook registration verification — surfaces installed-but-unregistered hooks.
+  let hookRegistration = null;
+  try { hookRegistration = verifyHookRegistration(); }
+  catch (_e) { /* best-effort, never fail doctor on hook surface alone */ }
 
   // Compute summary
   const requiredTools = tools.filter(t => t.required);
@@ -591,13 +595,16 @@ function runDoctor(projectRoot) {
     requiredTotal: requiredTools.length,
     optionalOk: optionalTools.filter(t => t.ok).length,
     optionalTotal: optionalTools.length,
-    healthy: requiredTools.every(t => t.ok) && moduleResult.modulesOk === moduleResult.modulesTotal,
+    healthy: requiredTools.every(t => t.ok)
+      && moduleResult.modulesOk === moduleResult.modulesTotal
+      && (hookRegistration ? hookRegistration.ok : true),
     installCommands: [],
     modules: moduleResult.modules,
     modulesOk: moduleResult.modulesOk,
     modulesTotal: moduleResult.modulesTotal,
     platformPaths: platformResult,
     installMode,
+    hookRegistration,
   };
 
   // Build install commands for missing tools
@@ -697,23 +704,38 @@ function formatReport(report) {
     }
   }
 
+  // @cap-todo(ac:F-097/AC-2) Render hook-registration buckets in doctor output.
+  if (report.hookRegistration) {
+    lines.push('');
+    for (const l of formatHookSection(report.hookRegistration)) lines.push(l);
+  }
+
   lines.push('');
   lines.push(`  Required:  ${report.requiredOk}/${report.requiredTotal} OK`);
   lines.push(`  Optional:  ${report.optionalOk}/${report.optionalTotal} OK`);
   if (report.modulesTotal != null) {
     lines.push(`  Modules:   ${report.modulesOk}/${report.modulesTotal} OK`);
   }
+  if (report.hookRegistration) {
+    const hr = report.hookRegistration;
+    const total = hr.hooks.length;
+    const okCount = hr.registered.length - hr.mismatched.length;
+    lines.push(`  Hooks:     ${okCount}/${total} OK`);
+  }
 
   if (!report.healthy) {
     lines.push('');
     const toolsMissing = report.requiredOk < report.requiredTotal;
     const modulesMissing = report.modulesOk != null && report.modulesOk < report.modulesTotal;
+    const hooksMissing = report.hookRegistration && !report.hookRegistration.ok;
     if (toolsMissing && modulesMissing) {
       lines.push('  ✗ UNHEALTHY — required tools missing and module integrity failures detected.');
     } else if (modulesMissing) {
       lines.push('  ✗ UNHEALTHY — module integrity failures detected. Try: npx code-as-plan@latest --force');
-    } else {
+    } else if (toolsMissing) {
       lines.push('  ✗ UNHEALTHY — required tools missing. CAP cannot function correctly.');
+    } else if (hooksMissing) {
+      lines.push('  ⚠ DEGRADED — CAP hooks not fully registered. Run `cap doctor --fix` to repair.');
     }
   }
 
@@ -734,6 +756,370 @@ function formatReport(report) {
   return lines.join('\n');
 }
 
+// @cap-feature(feature:F-097) Hook Registration Verification — checks installed CAP hooks
+//   are registered to their expected Claude-Code lifecycle in ~/.claude/settings.json.
+// @cap-decision Lifecycle resolution prefers an explicit `// cap-hook-lifecycle: <Name>` marker
+//   in the hook file header (single source of truth). When absent, a regex fallback scans the
+//   header for tokens like `Stop hook` / `(PostToolUse hook)`. If neither matches the hook is
+//   reported as `unknown` rather than being silently dropped — silent drops were the original
+//   pre-F-097 failure mode.
+// @cap-decision The 3-bucket output (registered / installed-not-registered / broken-pointer)
+//   is the contract surface; lifecycle-mismatch is a fourth virtual bucket modelled as a flag
+//   on the registered entry. We deliberately do not auto-relocate mismatches — the user has
+//   to opt-in to `--fix`, which only proposes additions for installed-not-registered, never
+//   moves between lifecycles (that would require uninstalling first and risks data loss in
+//   complex matcher trees).
+
+const KNOWN_LIFECYCLES = new Set([
+  'SessionStart',
+  'Stop',
+  'PostToolUse',
+  'PreToolUse',
+  'UserPromptSubmit',
+  'Notification',
+  'statusLine',
+]);
+
+/**
+ * @typedef {Object} HookEntry
+ * @property {string} name - Hook filename (e.g., 'cap-memory.js')
+ * @property {string} fullPath - Absolute path on disk
+ * @property {boolean} exists - Whether the hook file exists
+ * @property {string|null} expectedLifecycle - Lifecycle declared in header, or null
+ * @property {string|null} registeredLifecycle - Lifecycle the settings.json puts it under, or null
+ * @property {boolean} registered - True iff settings.json references this file
+ * @property {boolean} mismatched - True iff registered to a different lifecycle than expected
+ * @property {string} bucket - 'registered' | 'unregistered' | 'broken'
+ * @property {string} [recommendation] - Human-readable next-step
+ */
+
+/**
+ * @typedef {Object} HookReport
+ * @property {HookEntry[]} hooks
+ * @property {HookEntry[]} registered
+ * @property {HookEntry[]} unregistered
+ * @property {HookEntry[]} brokenPointers
+ * @property {HookEntry[]} mismatched
+ * @property {boolean} ok - True iff zero unregistered + zero broken + zero mismatched
+ * @property {string} settingsPath
+ * @property {string} hooksDir
+ */
+
+/**
+ * Read up to `maxLines` of a hook file's leading header, stopping at the first non-comment
+ * line so headers like JSDoc-after-shebang aren't mixed with code.
+ * @param {string} filePath
+ * @param {number} [maxLines=30]
+ * @returns {string}
+ */
+function readHookHeader(filePath, maxLines = 30) {
+  let content;
+  try { content = fs.readFileSync(filePath, 'utf8'); } catch (_e) { return ''; }
+  return content.split(/\r?\n/).slice(0, maxLines).join('\n');
+}
+
+/**
+ * Resolve the expected lifecycle for a hook file from its header. Primary signal is the
+ * explicit `// cap-hook-lifecycle: <Name>` marker. Fallback is a heuristic regex over
+ * `(SessionStart|Stop|PostToolUse|PreToolUse|UserPromptSubmit|Notification|statusLine)\s*hook`.
+ * Returns null when neither signal matches.
+ * @param {string} hookPath - Absolute path to the hook .js file
+ * @returns {string|null}
+ */
+function expectedHookLifecycle(hookPath) {
+  const header = readHookHeader(hookPath);
+  if (!header) return null;
+  const explicit = header.match(/^\/\/\s*cap-hook-lifecycle:\s*([A-Za-z]+)\b/m);
+  if (explicit) {
+    const name = explicit[1];
+    return KNOWN_LIFECYCLES.has(name) ? name : null;
+  }
+  const tokens = ['SessionStart', 'Stop', 'PostToolUse', 'PreToolUse', 'UserPromptSubmit', 'Notification', 'statusLine'];
+  const re = new RegExp(`\\b(${tokens.join('|')})\\b\\s*hook`, 'i');
+  const m = header.match(re);
+  if (m) {
+    // Normalize case: heuristic might catch "Stop hook" or "stop hook"; map back to canonical name.
+    const lower = m[1].toLowerCase();
+    for (const t of tokens) if (t.toLowerCase() === lower) return t;
+  }
+  return null;
+}
+
+/**
+ * Walk a settings.json hooks tree and collect all referenced hook file basenames keyed by
+ * lifecycle. Also collects broken pointers (registered but file missing).
+ * @param {Object} settings - Parsed settings.json
+ * @param {string} hooksDir - Directory hosting CAP hook files
+ * @returns {{ registered: Map<string, string>, broken: Array<{file: string, lifecycle: string}> }}
+ *   `registered` maps hook basename -> lifecycle. `broken` lists references to missing files.
+ */
+function _collectRegisteredHooks(settings, hooksDir) {
+  const registered = new Map();
+  const broken = [];
+  const seen = new Set();
+
+  const extractCmds = (lifecycle, blocks) => {
+    if (!Array.isArray(blocks)) return;
+    for (const block of blocks) {
+      if (!block || !Array.isArray(block.hooks)) continue;
+      for (const h of block.hooks) {
+        if (!h || h.type !== 'command' || typeof h.command !== 'string') continue;
+        // Match a quoted absolute path ending in .js (any cap-*.js or other). We
+        // care only about CAP hooks — those whose basename starts with cap-.
+        const m = h.command.match(/"([^"]+\.js)"|'([^']+\.js)'|(\S+\.js)/);
+        if (!m) continue;
+        const filePath = m[1] || m[2] || m[3];
+        const base = path.basename(filePath);
+        if (!base.startsWith('cap-')) continue;
+        const key = `${lifecycle}::${base}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const expected = path.join(hooksDir, base);
+        if (!fs.existsSync(filePath) && !fs.existsSync(expected)) {
+          broken.push({ file: base, lifecycle, command: filePath });
+          continue;
+        }
+        if (!registered.has(base)) registered.set(base, lifecycle);
+      }
+    }
+  };
+
+  if (settings && settings.hooks && typeof settings.hooks === 'object') {
+    for (const [lifecycle, blocks] of Object.entries(settings.hooks)) {
+      extractCmds(lifecycle, blocks);
+    }
+  }
+  // statusLine is registered as a top-level field, not under hooks.*
+  if (settings && settings.statusLine && typeof settings.statusLine.command === 'string') {
+    const m = settings.statusLine.command.match(/"([^"]+\.js)"|'([^']+\.js)'|(\S+\.js)/);
+    if (m) {
+      const filePath = m[1] || m[2] || m[3];
+      const base = path.basename(filePath);
+      if (base.startsWith('cap-')) {
+        const expected = path.join(hooksDir, base);
+        if (!fs.existsSync(filePath) && !fs.existsSync(expected)) {
+          broken.push({ file: base, lifecycle: 'statusLine', command: filePath });
+        } else if (!registered.has(base)) {
+          registered.set(base, 'statusLine');
+        }
+      }
+    }
+  }
+  return { registered, broken };
+}
+
+/**
+ * Verify that every CAP hook installed under `<homeDir>/.claude/hooks/` is registered to
+ * its expected lifecycle in `<homeDir>/.claude/settings.json`. Returns a 3-bucket report.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.homeDir] - Override HOME root (testing). Defaults to process.env.HOME or os.homedir().
+ * @param {string} [opts.hooksDir] - Direct override of the hooks directory. Wins over homeDir.
+ * @param {string} [opts.settingsPath] - Direct override of the settings.json path. Wins over homeDir.
+ * @returns {HookReport}
+ */
+function verifyHookRegistration(opts) {
+  const options = opts || {};
+  const homeDir = options.homeDir || process.env.HOME || os.homedir();
+  const hooksDir = options.hooksDir || path.join(homeDir, '.claude', 'hooks');
+  const settingsPath = options.settingsPath || path.join(homeDir, '.claude', 'settings.json');
+
+  let settings = null;
+  try {
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+  } catch (_e) {
+    // Malformed settings.json — treat as empty so the check still surfaces unregistered hooks.
+    settings = null;
+  }
+
+  const { registered: regMap, broken } = _collectRegisteredHooks(settings || {}, hooksDir);
+
+  const installed = [];
+  if (fs.existsSync(hooksDir)) {
+    try {
+      installed.push(...fs.readdirSync(hooksDir).filter(f => f.startsWith('cap-') && f.endsWith('.js')));
+    } catch (_e) { /* unreadable dir — fall through with empty list */ }
+  }
+
+  const hooks = [];
+  for (const name of installed) {
+    const fullPath = path.join(hooksDir, name);
+    const expected = expectedHookLifecycle(fullPath);
+    const registeredLifecycle = regMap.get(name) || null;
+    const isRegistered = registeredLifecycle != null;
+    const mismatched = isRegistered && expected != null && registeredLifecycle !== expected;
+    const entry = {
+      name,
+      fullPath,
+      exists: true,
+      expectedLifecycle: expected,
+      registeredLifecycle,
+      registered: isRegistered,
+      mismatched,
+      bucket: isRegistered ? 'registered' : 'unregistered',
+    };
+    if (!isRegistered) {
+      entry.recommendation = expected
+        ? `Add to settings.json under "hooks"."${expected}"`
+        : 'Declare lifecycle via `// cap-hook-lifecycle: <Name>` in the header, then re-run --fix';
+    } else if (mismatched) {
+      entry.recommendation = `Move from "hooks"."${registeredLifecycle}" to "hooks"."${expected}"`;
+    }
+    hooks.push(entry);
+  }
+
+  const brokenEntries = broken.map(b => ({
+    name: b.file,
+    fullPath: path.join(hooksDir, b.file),
+    exists: false,
+    expectedLifecycle: null,
+    registeredLifecycle: b.lifecycle,
+    registered: true,
+    mismatched: false,
+    bucket: 'broken',
+    recommendation: `settings.json references missing file (${b.command}). Reinstall CAP or remove the entry.`,
+  }));
+
+  const all = [...hooks, ...brokenEntries];
+  const registered = all.filter(h => h.bucket === 'registered');
+  const unregistered = all.filter(h => h.bucket === 'unregistered');
+  const brokenPointers = all.filter(h => h.bucket === 'broken');
+  const mismatched = registered.filter(h => h.mismatched);
+
+  return {
+    hooks: all,
+    registered,
+    unregistered,
+    brokenPointers,
+    mismatched,
+    ok: unregistered.length === 0 && brokenPointers.length === 0 && mismatched.length === 0,
+    settingsPath,
+    hooksDir,
+  };
+}
+
+/**
+ * Compute a JSON-patch (RFC 6902 'add' ops) that, when applied, would register every
+ * installed-but-unregistered hook to its expected lifecycle. Pure function — does not write.
+ * Returns an empty array when there's nothing to add.
+ * @param {HookReport} report
+ * @returns {Array<{op: 'add', path: string, value: any}>}
+ */
+function computeRegistrationPatch(report) {
+  const patches = [];
+  if (!report || !Array.isArray(report.unregistered)) return patches;
+  for (const entry of report.unregistered) {
+    if (!entry.expectedLifecycle) continue;
+    const lifecycle = entry.expectedLifecycle;
+    const block = {
+      hooks: [
+        {
+          type: 'command',
+          command: `node "${entry.fullPath}"`,
+          timeout: 10,
+        },
+      ],
+    };
+    if (lifecycle === 'statusLine') {
+      patches.push({ op: 'add', path: '/statusLine', value: { type: 'command', command: `node "${entry.fullPath}"` } });
+    } else {
+      patches.push({ op: 'add', path: `/hooks/${lifecycle}/-`, value: block });
+    }
+  }
+  return patches;
+}
+
+/**
+ * Apply a registration patch to `settings.json`, writing a timestamped backup first.
+ * Strict opt-in: caller must pass `apply: true` or only the proposed result is returned.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.settingsPath] - settings.json path (defaults via homeDir)
+ * @param {string} [opts.homeDir] - homeDir override
+ * @param {Object} [opts.report] - precomputed report (skips re-verification)
+ * @param {boolean} [opts.apply=false] - when true, writes the patched settings + backup
+ * @returns {{ patches: Array, backupPath: string|null, applied: boolean, settings: Object }}
+ */
+function applyRegistrationFix(opts) {
+  const options = opts || {};
+  const homeDir = options.homeDir || process.env.HOME || os.homedir();
+  const settingsPath = options.settingsPath || path.join(homeDir, '.claude', 'settings.json');
+  const report = options.report || verifyHookRegistration({ homeDir, settingsPath });
+  const patches = computeRegistrationPatch(report);
+
+  let settings = {};
+  if (fs.existsSync(settingsPath)) {
+    try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); }
+    catch (_e) { settings = {}; }
+  }
+
+  // Pure mirror — apply patches in-memory regardless of `apply` so the caller can preview.
+  const next = JSON.parse(JSON.stringify(settings));
+  if (!next.hooks || typeof next.hooks !== 'object') next.hooks = {};
+  for (const patch of patches) {
+    if (patch.path === '/statusLine') {
+      next.statusLine = patch.value;
+      continue;
+    }
+    const m = patch.path.match(/^\/hooks\/([^/]+)\/-$/);
+    if (!m) continue;
+    const lifecycle = m[1];
+    if (!Array.isArray(next.hooks[lifecycle])) next.hooks[lifecycle] = [];
+    next.hooks[lifecycle].push(patch.value);
+  }
+
+  let backupPath = null;
+  let applied = false;
+  if (options.apply && patches.length > 0) {
+    if (fs.existsSync(settingsPath)) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      backupPath = `${settingsPath}.bak-pre-fix-${stamp}`;
+      fs.copyFileSync(settingsPath, backupPath);
+    }
+    fs.writeFileSync(settingsPath, JSON.stringify(next, null, 2) + '\n', 'utf8');
+    applied = true;
+  }
+
+  return { patches, backupPath, applied, settings: next };
+}
+
+/**
+ * Format the hook-registration section for inclusion in cap doctor's text output.
+ * @param {HookReport} report
+ * @returns {string[]} lines
+ */
+function formatHookSection(report) {
+  const lines = [];
+  lines.push('  Hook Registration:');
+  if (!report || !Array.isArray(report.hooks) || report.hooks.length === 0) {
+    lines.push('    - no CAP hooks found in ' + (report ? report.hooksDir : '(unknown)'));
+    return lines;
+  }
+  if (report.ok) {
+    lines.push(`    ✓ All ${report.registered.length} CAP hooks registered to their expected lifecycle`);
+    return lines;
+  }
+  for (const h of report.registered) {
+    if (h.mismatched) {
+      lines.push(`    ⚠ ${h.name}  ← registered to ${h.registeredLifecycle}, expected ${h.expectedLifecycle}`);
+    }
+  }
+  for (const h of report.unregistered) {
+    const exp = h.expectedLifecycle || 'unknown';
+    lines.push(`    ⚠ ${h.name}  ← installed but not registered (expected: ${exp})`);
+  }
+  for (const h of report.brokenPointers) {
+    lines.push(`    ✗ ${h.name}  ← settings.json references a missing file (${h.registeredLifecycle})`);
+  }
+  if (report.unregistered.length > 0) {
+    lines.push('');
+    lines.push('    Run `cap doctor --fix` to add missing registrations (writes settings.json backup).');
+  }
+  return lines;
+}
+
 module.exports = {
   checkTool,
   runDoctor,
@@ -741,5 +1127,11 @@ module.exports = {
   checkModuleIntegrity,
   checkPlatformPaths,
   detectInstallMode,
+  verifyHookRegistration,
+  computeRegistrationPatch,
+  applyRegistrationFix,
+  expectedHookLifecycle,
+  formatHookSection,
   CAP_MODULE_MANIFEST,
+  KNOWN_LIFECYCLES,
 };
