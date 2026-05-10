@@ -116,7 +116,7 @@ console.log('Active app set to: ' + (selected || '(root)'));
 **If monorepo and activeApp is set:**
 
 Log: "Monorepo session restored. Active app: {activeApp}"
-Continue with existing activeApp. User can switch later with /cap:switch-app.
+Continue with existing activeApp. User can switch later with `/cap:start --app=<name>`.
 
 **If not a monorepo:**
 

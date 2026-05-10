@@ -8,7 +8,6 @@ This workflow wires Phase 1 (session pipeline) and Phase 2 (profiling engine) in
 Read all files referenced by the invoking prompt's execution_context before starting.
 
 Key references:
-- @$HOME/.claude/cap/references/ui-brand.md (display patterns)
 - @$HOME/.claude/cap/agents/gsd-user-profiler.md (profiler agent definition)
 - @$HOME/.claude/cap/references/user-profiling.md (profiling reference doc)
 </required_reading>

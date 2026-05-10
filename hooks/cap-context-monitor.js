@@ -1,32 +1,52 @@
 #!/usr/bin/env node
 // @cap-feature(feature:F-009) Hooks System — context window monitor (PostToolUse hook)
 // cap-hook-version: {{CAP_VERSION}}
-// Context Monitor - PostToolUse/AfterTool hook (Gemini uses AfterTool)
-// Reads context metrics from the statusline bridge file and injects
-// warnings when context usage is high. This makes the AGENT aware of
-// context limits (the statusline only shows the user).
-//
-// How it works:
-// 1. The statusline hook writes metrics to /tmp/claude-ctx-{session_id}.json
-// 2. This hook reads those metrics after each tool use
-// 3. When remaining context drops below thresholds, it injects a warning
-//    as additionalContext, which the agent sees in its conversation
-//
-// Thresholds:
-//   WARNING  (remaining <= 35%): Agent should wrap up current task
-//   CRITICAL (remaining <= 25%): Agent should stop immediately and save state
-//
-// Debounce: 5 tool uses between warnings to avoid spam
-// Severity escalation bypasses debounce (WARNING -> CRITICAL fires immediately)
+/**
+ * Context Monitor - PostToolUse/AfterTool hook (Gemini uses AfterTool)
+ *
+ * Reads context metrics from the statusline bridge file and injects
+ * advisory hints when context usage is high. This makes the AGENT aware of
+ * context limits (the statusline only shows the user).
+ *
+ * How it works:
+ *   1. The statusline hook writes metrics to /tmp/claude-ctx-{session_id}.json
+ *   2. This hook reads those metrics after each tool use
+ *   3. When remaining context drops below thresholds, it injects an advisory
+ *      hint as additionalContext, which the agent sees in its conversation
+ *
+ * Behavior changes (vs. earlier revisions):
+ *   - Tonality is **advisory**, not imperative. Messages no longer say
+ *     "Inform the user…" — they say "Hinweis (vom CAP-Framework, vom
+ *     User-Prompt unabhängig): … Der Agent kann den User informieren falls
+ *     relevant für die Aufgabe." This avoids overriding user preferences
+ *     such as "terse responses, no summaries".
+ *   - Warning threshold lowered from 35% → 30% to reduce early warnings;
+ *     focus is on the truly critical 25% escalation.
+ *   - New ENV `CAP_DISABLE_CONTEXT_MONITOR=1` silences the hook entirely
+ *     (for power users who don't want any advisory injection).
+ *
+ * Thresholds:
+ *   WARNING  (remaining <= 30%): advisory hint, agent decides whether to surface
+ *   CRITICAL (remaining <= 25%): stronger advisory, agent decides whether to surface
+ *
+ * Debounce: 5 tool uses between warnings to avoid spam.
+ * Severity escalation bypasses debounce (WARNING -> CRITICAL fires immediately).
+ */
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const WARNING_THRESHOLD = 35;  // remaining_percentage <= 35%
+const WARNING_THRESHOLD = 30;  // remaining_percentage <= 30% (was 35%)
 const CRITICAL_THRESHOLD = 25; // remaining_percentage <= 25%
 const STALE_SECONDS = 60;      // ignore metrics older than 60s
 const DEBOUNCE_CALLS = 5;      // min tool uses between warnings
+
+// Power-user kill switch: if set, hook is fully silent regardless of context state.
+if (process.env.CAP_DISABLE_CONTEXT_MONITOR === '1' ||
+    process.env.CAP_DISABLE_CONTEXT_MONITOR === 'true') {
+  process.exit(0);
+}
 
 let input = '';
 // Timeout guard: if stdin doesn't close within 10s (e.g. pipe issues on
@@ -120,26 +140,34 @@ process.stdin.on('end', () => {
     // Detect if GSD is active (has .planning/STATE.md in working directory)
     const isGsdActive = fs.existsSync(path.join(cwd, '.planning', 'STATE.md'));
 
-    // Build advisory warning message (never use imperative commands that
-    // override user preferences — see #884)
+    // Build advisory message (no imperative commands — see #884).
+    // The framework-prefix makes it explicit that this is metadata
+    // independent of the user prompt, so user preferences like
+    // "terse responses" are not violated by the agent itself.
+    const PREFIX = 'Hinweis (vom CAP-Framework, vom User-Prompt unabhängig): ';
+    const SUFFIX = ' Der Agent kann den User informieren falls relevant für die Aufgabe.';
+
     let message;
     if (isCritical) {
       message = isGsdActive
-        ? `CONTEXT CRITICAL: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
-          'Context is nearly exhausted. Do NOT start new complex work or write handoff files — ' +
-          'GSD state is already tracked in STATE.md. Inform the user so they can run ' +
-          '/gsd:pause-work at the next natural stopping point.'
-        : `CONTEXT CRITICAL: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
-          'Context is nearly exhausted. Inform the user that context is low and ask how they ' +
-          'want to proceed. Do NOT autonomously save state or write handoff files unless the user asks.';
+        ? `${PREFIX}CONTEXT CRITICAL — Auslastung bei ${usedPct}%, verbleibend ${remaining}%. ` +
+          'Context ist nahezu erschöpft. GSD-State ist bereits in STATE.md getrackt; ' +
+          'es ist nicht nötig, autonom Handoff-Dateien zu schreiben oder neue komplexe Arbeit zu starten.' +
+          SUFFIX
+        : `${PREFIX}CONTEXT CRITICAL — Auslastung bei ${usedPct}%, verbleibend ${remaining}%. ` +
+          'Context ist nahezu erschöpft. Autonomes Speichern von State oder Handoff-Dateien ' +
+          'ist nicht erforderlich, sofern der User nicht ausdrücklich danach fragt.' +
+          SUFFIX;
     } else {
       message = isGsdActive
-        ? `CONTEXT WARNING: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
-          'Context is getting limited. Avoid starting new complex work. If not between ' +
-          'defined plan steps, inform the user so they can prepare to pause.'
-        : `CONTEXT WARNING: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
-          'Be aware that context is getting limited. Avoid unnecessary exploration or ' +
-          'starting new complex work.';
+        ? `${PREFIX}CONTEXT WARNING — Auslastung bei ${usedPct}%, verbleibend ${remaining}%. ` +
+          'Context-Budget wird knapp. Größere neue Arbeit zwischen definierten Plan-Schritten ' +
+          'ist günstig zu vermeiden.' +
+          SUFFIX
+        : `${PREFIX}CONTEXT WARNING — Auslastung bei ${usedPct}%, verbleibend ${remaining}%. ` +
+          'Context-Budget wird knapp. Unnötige Exploration oder das Anstoßen neuer komplexer ' +
+          'Arbeit ist günstig zu vermeiden.' +
+          SUFFIX;
     }
 
     const output = {

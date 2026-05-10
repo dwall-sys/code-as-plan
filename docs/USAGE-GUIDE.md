@@ -70,7 +70,7 @@ Anything that lives in code tags or in explicit session hook events is **100 % r
 - **Hook observation**: yes, with an exit: `CAP_SKIP_TAG_OBSERVER=1` disables it for a specific run if you need to.
 - **Confidence math**: yes, round-to-2-decimals eliminates float drift around the 0.3 dim threshold.
 - **Prune**: yes with `--apply`, defaults to dry-run. Pre-F-055 files without `last_seen` trigger a migration warning on first prune — heed it, review archive candidates before committing.
-- **Clustering**: requires ≥2 threads to produce output. No threads → `/cap:cluster` prints "No clusters detected" and that is correct behaviour, not a bug.
+- **Clustering**: requires ≥2 threads to produce output. No threads → `/cap:memory status` prints "No clusters detected" and that is correct behaviour, not a bug.
 
 ---
 
@@ -87,7 +87,7 @@ New default behaviour on `/cap:prototype`: before spawning the prototyper, CAP p
   │   ├─ checkStackDocs for each hit (missing / stale / fresh)
   │   └─ if missing ∪ stale > 0:
   │        ├─ print warning block
-  │        ├─ suggest `/cap:refresh-docs {libs}`
+  │        ├─ suggest `npx ctx7@latest docs /<org>/<lib> "<question>"` (see docs/setup-and-upgrade.md)
   │        └─ prompt "Proceed anyway? [y/N]"
   └─ Step 2+: prototyper proceeds or exits based on user answer
 ```
@@ -103,7 +103,7 @@ New default behaviour on `/cap:prototype`: before spawning the prototyper, CAP p
 
 **Scaffolding-only feature** (no external library surface): pass `--skip-docs`. The gate skip and the outcome are recorded in `.cap/session-log.jsonl` — next week you can tell which prototypes skipped research and whether the ones that ran into bugs were the ones that skipped.
 
-**Unfamiliar SDK** (Supabase auth, Stripe webhooks, a freshly-bumped framework version): answer `y` with intent, and plan to run `/cap:refresh-docs {libs}` right after. Even better: refresh *before* answering so the prototyper has fresh docs to work with.
+**Unfamiliar SDK** (Supabase auth, Stripe webhooks, a freshly-bumped framework version): answer `y` with intent, and plan to fetch fresh docs via `npx ctx7@latest` right after (see [`docs/setup-and-upgrade.md`](setup-and-upgrade.md)). Even better: refresh *before* answering so the prototyper has fresh docs to work with.
 
 **Well-known library** (React, Lodash, Zod): the gate firing is low-signal. Opus 4.7 already knows these. Proceed.
 
@@ -177,7 +177,7 @@ Between the prototype→test→review passes, the hook observer (F-054) is captu
 /cap:deps                     # diff source-import DAG vs FEATURE-MAP DEPENDS_ON
 /cap:test-audit               # assertion density + mutation score
 /cap:completeness             # 4-signal implementation completeness per AC
-/cap:doctor                   # health of all required + optional tools
+# environment health: see docs/setup-and-upgrade.md (formerly /cap:doctor)
 ```
 
 ---

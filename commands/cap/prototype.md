@@ -156,7 +156,7 @@ Parse the JSON output. If `warning` is a non-empty string:
 1. Print `warning` verbatim to the user.
 2. Ask the user: "Proceed anyway? [y/N]"
 3. On `y` / `yes`: continue to Step 2.
-4. On anything else (including empty input / `N` / Ctrl+C): STOP with message "Aborted by research-first gate. Run `/cap:refresh-docs {libs}` or retry with `--skip-docs`." Do not spawn the prototyper.
+4. On anything else (including empty input / `N` / Ctrl+C): STOP with message "Aborted by research-first gate. Run `npx ctx7@latest docs <lib> ...` to refresh, or retry with `--skip-docs`." Do not spawn the prototyper.
 
 Regardless of whether the gate fired or was skipped, log the outcome:
 
@@ -173,7 +173,7 @@ gate.logGateCheck(process.cwd(), {
 "
 ```
 
-<!-- @cap-todo(ac:F-059/AC-3) Warning includes /cap:refresh-docs recommendation + y/N prompt — emitted by formatWarning. -->
+<!-- @cap-todo(ac:F-059/AC-3) Warning includes ctx7 refresh recommendation + y/N prompt — emitted by formatWarning. -->
 <!-- @cap-todo(ac:F-059/AC-6) logGateCheck appends a JSONL event with libsChecked + missing counts to .cap/session-log.jsonl. -->
 
 ## Step 2: Present ACs for confirmation

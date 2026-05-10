@@ -325,7 +325,7 @@ Use AskUserQuestion:
 > Options: "Go through now" / "Save for later" / "Skip manual tests"
 
 If "Go through now": Walk through each item with the user, asking them to confirm each check.
-If "Save for later": Remind them: "Run /cap:report to include manual test status in the team overview."
+If "Save for later": Remind them: ".cap/MANUAL-TESTS.md keeps the manual checklist; revisit it with `/cap:status` or run the checks directly when ready."
 If "Skip": Warn: "Manual tests skipped. Feature will be marked as shipped but .cap/MANUAL-TESTS.md remains open."
 
 ## Step 7: Final report

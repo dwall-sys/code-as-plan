@@ -346,17 +346,9 @@ flowchart LR
     ANNOTATE_D["Add @cap-* tags<br/>to existing code"]:::desc
     ANNOTATE --- ANNOTATE_D
 
-    DOCTOR["/cap:doctor"]:::support
-    DOCTOR_D["Environment<br/>health check"]:::desc
-    DOCTOR --- DOCTOR_D
-
     MEMORY["/cap:memory"]:::support
-    MEMORY_D["Bootstrap or view<br/>project memory"]:::desc
+    MEMORY_D["Bootstrap or view<br/>project memory + clusters"]:::desc
     MEMORY --- MEMORY_D
-
-    REFRESH["/cap:refresh-docs"]:::support
-    REFRESH_D["Update Context7<br/>stack documentation"]:::desc
-    REFRESH --- REFRESH_D
 
     START_CMD["/cap:start"]:::support
     START_D["Resume previous<br/>session state"]:::desc
@@ -462,8 +454,8 @@ Joining Existing Project:
 
 Periodic:
   /cap:scan               # Keep Feature Map in sync
-  /cap:refresh-docs       # Update library documentation
   /cap:memory init        # Bootstrap memory from all past sessions
+  # Environment / install / library docs: see docs/setup-and-upgrade.md
 ```
 
 ---

@@ -248,7 +248,7 @@ Keep following threads. Each answer opens new threads to explore. Ask about:
 - What it would actually look like
 - What's already decided
 
-Consult `questioning.md` for techniques:
+Apply these questioning techniques:
 
 - Challenge vagueness
 - Make abstract concrete
@@ -258,7 +258,7 @@ Consult `questioning.md` for techniques:
 
 **Check context (background, not out loud):**
 
-As you go, mentally check the context checklist from `questioning.md`. If gaps remain, weave questions naturally. Don't suddenly switch to checklist mode.
+As you go, mentally check that you understand: what they're building, why it needs to exist, who it's for, and what "done" looks like. If gaps remain, weave questions naturally. Don't suddenly switch to checklist mode.
 
 **Decision gate:**
 

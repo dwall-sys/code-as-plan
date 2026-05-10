@@ -13,14 +13,14 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 
 ## Step 0: Resolve Model Profile
 
-@~/.claude/cap/references/model-profile-resolution.md
+@~/.claude/cap/references/model-profiles.md
 
 Resolve model for:
 - `gsd-phase-researcher`
 
 ## Step 1: Normalize and Validate Phase
 
-@~/.claude/cap/references/phase-argument-parsing.md
+@~/.claude/cap/references/phase-numbering.md
 
 ```bash
 PHASE_INFO=$(node "$HOME/.claude/cap/bin/cap-tools.cjs" roadmap get-phase "${PHASE}")

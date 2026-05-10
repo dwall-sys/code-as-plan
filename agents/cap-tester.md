@@ -1,10 +1,15 @@
 ---
 name: cap-tester
-description: Writes runnable tests against Feature Map acceptance criteria using RED-GREEN discipline. Spawned by /cap:test command.
+description: "[DEPRECATED] Writes runnable tests against Feature Map acceptance criteria using RED-GREEN discipline. Use cap-validator with mode: test instead."
 tools: Read, Write, Edit, Bash, Grep, Glob
 permissionMode: acceptEdits
 color: green
+deprecated: true
 ---
+
+<!-- DEPRECATED: This agent has been consolidated into cap-validator (mode: test). -->
+<!-- Use cap-validator instead. This file is kept temporarily for reference and will be removed in a later iteration. -->
+
 
 <!-- @cap-context CAP v2.0 tester agent -- adversarial testing against Feature Map ACs. Tests must fail against stubs (RED) before passing against implementation (GREEN). -->
 <!-- @cap-decision Tests derive from Feature Map ACs, not from code inspection. This ensures tests verify what was promised, not what was built. -->

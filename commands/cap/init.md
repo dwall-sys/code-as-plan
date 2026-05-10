@@ -18,13 +18,13 @@ allowed-tools:
 <!-- @cap-todo(ref:AC-81) Detect all dependencies from package.json / requirements.txt / Cargo.toml / go.mod and fetch docs via Context7 -->
 <!-- @cap-todo(ref:AC-82) Store fetched stack docs in .cap/stack-docs/{library-name}.md compressed to API surface, config, breaking changes -->
 <!-- @cap-todo(ref:AC-83) Agents receive .cap/stack-docs/ as context input on every invocation -->
-<!-- @cap-todo(ref:AC-84) Stack-docs carry freshness marker (fetch date). Docs older than 7 days auto-refreshed. Manual refresh via /cap:refresh-docs -->
+<!-- @cap-todo(ref:AC-84) Stack-docs carry freshness marker (fetch date). Docs older than 7 days auto-refreshed. Manual refresh: see docs/setup-and-upgrade.md (`npx ctx7@latest docs ...`) -->
 <!-- @cap-todo(ref:AC-85) Context7 fetching is MANDATORY at init. If unreachable, warning emitted and init continues with explicit marker -->
 <!-- @cap-todo(ref:AC-86) Brownfield init performs one-time codebase analysis: architecture detection, convention detection, test setup detection -->
 <!-- @cap-todo(ref:AC-87) Brownfield analysis result NOT persisted as separate document -- used as init context for /cap:annotate suggestion -->
 <!-- @cap-todo(ref:AC-88) After brownfield init, suggest /cap:annotate to retroactively annotate existing code -->
 <!-- @cap-todo(ref:AC-90) No /cap:map command. Codebase analysis is part of /cap:init -->
-<!-- @cap-todo(ref:AC-91) To refresh codebase information: /cap:annotate + /cap:refresh-docs -->
+<!-- @cap-todo(ref:AC-91) To refresh codebase information: /cap:annotate; for library docs see docs/setup-and-upgrade.md -->
 <!-- @cap-todo(ref:AC-92) The 7 documents from .planning/codebase/ shall NOT be generated in v2.0 -->
 
 <objective>
@@ -197,7 +197,7 @@ If ALL fetches fail (context7_available = false):
 2. Emit warning:
    ```
    WARNING: Context7 is unreachable. Stack documentation could not be fetched.
-   Init continues without stack docs. Run /cap:refresh-docs when network is available.
+   Init continues without stack docs. Re-fetch via `npx ctx7@latest` when network is available (see docs/setup-and-upgrade.md).
    ```
 
 If some fetches succeeded:
@@ -310,7 +310,8 @@ Next steps:
   /cap:annotate      -- add @cap-feature tags to existing code
   /cap:prototype     -- build features from Feature Map
   /cap:status        -- view project dashboard
-  /cap:refresh-docs  -- manually refresh stack documentation
+
+To refresh stack documentation later, run `npx ctx7@latest` directly (see docs/setup-and-upgrade.md).
 ```
 
 ## Step 8b: Lightweight doctor check
@@ -328,7 +329,7 @@ if (missing.length > 0) {
     console.log('  - ' + t.name + ': ' + t.purpose);
     console.log('    Install: ' + t.installHint);
   }
-  console.log('\nRun /cap:doctor for a full environment check.');
+  console.log('\nFor a full environment check, see docs/setup-and-upgrade.md.');
 } else {
   console.log('All optional tools available.');
 }

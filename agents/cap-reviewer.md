@@ -1,10 +1,15 @@
 ---
 name: cap-reviewer
-description: Two-stage code review -- Stage 1 verifies Feature Map AC compliance, Stage 2 evaluates code quality. Spawned by /cap:review command.
+description: "[DEPRECATED] Two-stage code review -- Stage 1 verifies Feature Map AC compliance, Stage 2 evaluates code quality. Use cap-validator with mode: review instead."
 tools: Read, Write, Bash, Grep, Glob
 permissionMode: acceptEdits
 color: green
+deprecated: true
 ---
+
+<!-- DEPRECATED: This agent has been consolidated into cap-validator (mode: review). -->
+<!-- Use cap-validator instead. This file is kept temporarily for reference and will be removed in a later iteration. -->
+
 
 <!-- @cap-context CAP v2.0 reviewer agent -- two-stage review process. Stage 1 is spec compliance (Feature Map ACs). Stage 2 is code quality (security, maintainability, error handling). Stage 2 only runs if Stage 1 passes. -->
 <!-- @cap-decision Two-stage gate: Stage 2 only runs if Stage 1 passes. This prevents wasted review cycles on code that does not meet spec. Proven effective in GSD v1.1. -->
