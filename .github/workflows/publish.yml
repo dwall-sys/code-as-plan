@@ -56,7 +56,10 @@ jobs:
 
       - name: Publish with provenance
         if: steps.version.outputs.changed == 'true'
-        run: npm publish --provenance
+        # --access public is required for the first publish of a scoped or
+        # newly-created package (cap-pro). It is a no-op once the package
+        # exists with public access set.
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
