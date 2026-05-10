@@ -1,22 +1,23 @@
 {
-  "name": "code-as-plan",
+  "name": "cap-pro",
   "owner": {
     "name": "TÂCHES"
   },
   "metadata": {
-    "description": "Official marketplace for CAP — Code as Plan.",
+    "description": "Official marketplace for CAP Pro — Code-First engineering framework.",
     "version": "1.0.0"
   },
   "plugins": [
     {
-      "name": "cap",
+      "name": "cap-pro",
       "source": "./",
-      "description": "CAP — build first, plan from code, annotation-driven workflow.",
+      "description": "CAP Pro — build first, plan from code, annotation-driven workflow.",
       "category": "productivity",
       "tags": [
         "engineering",
         "workflow",
-        "annotation-driven"
+        "annotation-driven",
+        "code-first"
       ]
     }
   ]

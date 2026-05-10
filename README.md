@@ -1,10 +1,10 @@
-# CAP -- Code as Plan
+# CAP Pro
 
 > Build first. Plan from code. Ship with confidence.
 
-CAP is a developer framework for AI-assisted coding that follows the Code-First principle: instead of writing requirements documents before touching code, you build a prototype, annotate it with lightweight tags, and let the framework derive your project plan from what you actually built.
+**CAP Pro** is a developer framework for AI-assisted coding that follows the Code-First principle: instead of writing requirements documents before touching code, you build a prototype, annotate it with lightweight tags, and let the framework derive your project plan from what you actually built.
 
-Works with Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, and Antigravity.
+Works with **Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, and Antigravity** — 8 runtimes from a single install.
 
 ```
   brainstorm --> prototype --> iterate --> test --> review
@@ -12,7 +12,10 @@ Works with Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, 
   FEATURE-MAP    @cap-tags    scan+fix    green=done  ship
 ```
 
-> **Daily workflow guide**: [`docs/USAGE-GUIDE.md`](docs/USAGE-GUIDE.md) — what's new in v4.1, how to get maximum leverage, what to watch out for.
+> **Heads-up — version reset (May 2026):** the npm package was renamed from `code-as-plan` to **`cap-pro`** and the version was reset to **`1.0.0`**. The CLI command (`cap`), slash commands (`/cap:*`), tags (`@cap-*`) and project artefacts are unchanged. The installer auto-cleans legacy `code-as-plan@7.x` files. See [`CHANGELOG.md`](CHANGELOG.md#100---2026-05-10--cap-pro-10-rebrand--reset) for details.
+
+> **Full documentation**: [https://dwall-sys.github.io/code-as-plan](https://dwall-sys.github.io/code-as-plan) — features, workflow, multi-user handoff, roadmap.
+> **Daily workflow guide**: [`docs/USAGE-GUIDE.md`](docs/USAGE-GUIDE.md).
 
 ---
 
@@ -53,36 +56,38 @@ CAP eliminates accidental complexity by making code the single source of truth.
 **Via npx (primary):**
 
 ```bash
-npx code-as-plan@latest
+npx cap-pro@latest
 ```
 
-**Via Claude Code plugin marketplace (v4.1+):**
+**Via Claude Code plugin marketplace:**
 
 ```
-/plugin install code-as-plan
+/plugin install cap-pro
 ```
 
-Both paths coexist. The plugin name is `cap` (slash commands stay `/cap:*`); the marketplace / npm slug is `code-as-plan`. See [`docs/setup-and-upgrade.md`](docs/setup-and-upgrade.md) for environment-health checks (formerly `/cap:doctor`).
+Both paths coexist. The plugin and npm slug are `cap-pro`; the CLI binary, slash commands and tags all stay `cap` / `/cap:*` / `@cap-*`. See [`docs/setup-and-upgrade.md`](docs/setup-and-upgrade.md) for environment-health checks (formerly `/cap:doctor`).
+
+> If you previously installed `code-as-plan@7.x` or earlier, the CAP Pro installer detects it and offers to clean up legacy agent/command/hook files automatically before installing — no duplicate `cap-*` files post-install.
 
 ### Runtime flags
 
 Install for a specific AI coding tool:
 
 ```bash
-npx code-as-plan@latest --claude
-npx code-as-plan@latest --gemini
-npx code-as-plan@latest --codex
-npx code-as-plan@latest --copilot
-npx code-as-plan@latest --cursor
-npx code-as-plan@latest --windsurf
-npx code-as-plan@latest --all       # install for all runtimes
+npx cap-pro@latest --claude
+npx cap-pro@latest --gemini
+npx cap-pro@latest --codex
+npx cap-pro@latest --copilot
+npx cap-pro@latest --cursor
+npx cap-pro@latest --windsurf
+npx cap-pro@latest --all       # install for all runtimes
 ```
 
 ### Scope
 
 ```bash
-npx code-as-plan@latest --local     # current project only (default)
-npx code-as-plan@latest --global    # all projects
+npx cap-pro@latest --local     # current project only (default)
+npx cap-pro@latest --global    # all projects
 ```
 
 ---
@@ -486,7 +491,7 @@ npm audit signatures
 **Verify your install.**
 
 ```bash
-npm view code-as-plan dist.attestations   # check provenance exists
+npm view cap-pro dist.attestations   # check provenance exists
 ```
 
 ---
@@ -763,7 +768,7 @@ CAP works with both greenfield and brownfield codebases. Here is how to initiali
 ### Single repository
 
 ```bash
-npx code-as-plan@latest          # install CAP
+npx cap-pro@latest                # install CAP Pro
 /cap:init                         # detects stack, creates .cap/, runs brownfield analysis
 /cap:brainstorm                   # discover features from existing code
 /cap:annotate                     # retroactively tag existing code with @cap-feature / @cap-todo
@@ -773,7 +778,7 @@ npx code-as-plan@latest          # install CAP
 ### Monorepo (NX, Turbo, pnpm, npm workspaces)
 
 ```bash
-npx code-as-plan@latest          # install CAP (auto-detects monorepo)
+npx cap-pro@latest                # install CAP Pro (auto-detects monorepo)
 /cap:init                         # creates root .cap/, detects all workspace apps
 /cap:start --app=booking          # select which app to focus on (e.g., apps/booking)
 /cap:brainstorm                   # discover features for the active app

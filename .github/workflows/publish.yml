@@ -1,10 +1,17 @@
-name: Publish to npm (with provenance)
+name: Publish CAP Pro to npm (with provenance)
+
+# Triggers on any push to main that touches package.json. The "Check if version
+# changed" step is the actual gate — it compares the local version to whatever
+# is published under the package name from package.json (cap-pro). If they
+# differ, we publish; otherwise we skip. This means: bump the version in
+# package.json, push to main, GitHub Actions does the rest.
 
 on:
   push:
     branches: [main]
     paths:
       - 'package.json'
+  workflow_dispatch: {}
 
 jobs:
   publish:
@@ -26,15 +33,17 @@ jobs:
         id: version
         run: |
           LOCAL=$(node -p "require('./package.json').version")
-          PUBLISHED=$(npm view code-as-plan version 2>/dev/null || echo "0.0.0")
+          NAME=$(node -p "require('./package.json').name")
+          PUBLISHED=$(npm view "$NAME" version 2>/dev/null || echo "0.0.0")
           echo "local=$LOCAL" >> "$GITHUB_OUTPUT"
           echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
           if [ "$LOCAL" != "$PUBLISHED" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Version changed: $PUBLISHED -> $LOCAL"
+            echo "Version changed: $NAME@$PUBLISHED -> $NAME@$LOCAL"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Version unchanged ($LOCAL), skipping publish."
+            echo "Version unchanged ($NAME@$LOCAL), skipping publish."
           fi
 
       - name: Install dev dependencies (locked)

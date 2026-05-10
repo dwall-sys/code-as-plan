@@ -1,10 +1,47 @@
 # Changelog
 
-All notable changes to CAP (Code as Plan) will be documented in this file.
+All notable changes to CAP Pro will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [7.0.0] - 2026-05-10 — `iteration/cap-pro-1` (CAP-Pro)
+## [1.0.0] - 2026-05-10 — CAP Pro 1.0 (Rebrand & Reset)
+
+**The framework formerly known as `code-as-plan` is now `cap-pro`.**
+
+This is a hard rebrand and version reset. The product was completely re-architected over the `iteration/cap-pro-1` through `iteration/cap-pro-4` cycles (formerly versioned as 5.x → 7.0). Rather than continuing to bump on top of the legacy versioning, we re-baselined as **CAP Pro v1.0.0** under a new npm package name (`cap-pro`).
+
+### Why the rebrand?
+
+- **New npm package name:** `cap-pro` (the legacy `code-as-plan@7.x` package remains on npm but receives no further updates).
+- **CLI binary stays `cap`** — all slash commands (`/cap:init`, `/cap:prototype`, …) and tags (`@cap-feature`, `@cap-todo`) are unchanged.
+- **Plugin name in `.claude-plugin/plugin.json`:** `cap-pro`.
+- **Clean install:** the installer now detects legacy `code-as-plan` artefacts (agents/commands/hooks installed by 7.x or earlier) and removes them before installing CAP Pro 1.0, so there are no duplicate or stale files post-install.
+
+### Added
+
+- **Brand-new docs site** under `docs-site/` (VitePress, deployable to GitHub Pages). Covers all features, the workflow philosophy, the 9-agent architecture, the tag system, multi-user handoff patterns, best practices for Code-First and Test-First, and the public roadmap.
+- **Polished post-install onboarding:** the installer now prints a structured welcome screen explaining what CAP Pro is, the 5-step Quick Start, and links to docs/issues/update/uninstall.
+- **`--skip-legacy-cleanup` flag** for users who explicitly want to keep older `code-as-plan` files alongside CAP Pro (not recommended).
+- **GitHub Pages deploy workflow** (`docs-deploy.yml`) — pushes to `main` that touch `docs-site/**` automatically build and deploy the docs.
+
+### Changed
+
+- `package.json`: `name` → `cap-pro`, `version` → `1.0.0`.
+- `.claude-plugin/plugin.json` + `marketplace.json`: name + description aligned with CAP Pro branding.
+- Installer help text and welcome banner refreshed (`npx cap-pro` instead of `npx code-as-plan`).
+- Publish workflow (`publish.yml`): now compares against `npm view cap-pro version`.
+
+### Migration from `code-as-plan@7.x`
+
+- Run `npx cap-pro@latest` — the installer detects 7.x artefacts and offers to clean them up automatically.
+- Tags, Feature Map, `.cap/` artefacts, and project memory are 100% format-compatible — no migration of project state needed.
+- Update any local docs/scripts that reference `npx code-as-plan` to `npx cap-pro`.
+
+---
+
+The remainder of this changelog documents the underlying technical work that landed during the `iteration/cap-pro-1` … `cap-pro-4` cycles. It is preserved here for historical context (these were previously published as `code-as-plan@5.x` … `7.0.0`).
+
+## [Legacy 7.0.0] - 2026-05-10 — `iteration/cap-pro-1` (CAP-Pro pre-rebrand)
 
 Major housekeeping release. Outcome of an A/B-test-style audit of CAP against native Claude Opus 4.7 capabilities. Net diff vs. `6.4.0`: **102 files changed, +3.394 / −4.766 = −1.372 lines** across 5 commits, full test suite green at every step (`npm test` exit 0).
 

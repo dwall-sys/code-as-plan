@@ -396,16 +396,23 @@ function detectInstallMode(opts) {
   // Fallback to the hard-coded plugin name when cap-plugin-manifest.cjs is not
   // loadable (install-hardening fixture path). The name hasn't changed since
   // F-058 and is covered by a dedicated contract test there.
-  const pluginName = (pluginManifest && pluginManifest.PLUGIN_NAME) || 'cap';
+  const pluginName = (pluginManifest && pluginManifest.PLUGIN_NAME) || 'cap-pro';
+  const legacyPluginName = (pluginManifest && pluginManifest.LEGACY_PLUGIN_NAME) || 'cap';
+  // Accept both the current plugin manifest (cap-pro) and the legacy one (cap)
+  // so a user with a leftover `code-as-plan@7.x` install is still detected.
   const isCapManifest = (pluginManifest && pluginManifest.isCapPluginManifest)
-    || ((m) => !!(m && typeof m === 'object' && m.name === pluginName));
+    || ((m) => !!(m && typeof m === 'object' && (m.name === pluginName || m.name === legacyPluginName)));
   const pluginCacheDir = path.join(homeDir, '.claude', 'plugins', 'cache');
   if (fs.existsSync(pluginCacheDir)) {
     try {
       const entries = fs.readdirSync(pluginCacheDir);
       const capPrefix = `${pluginName}@`;
+      const legacyPrefix = `${legacyPluginName}@`;
       for (const entry of entries) {
-        if (entry === pluginName || entry.startsWith(capPrefix)) {
+        if (
+          entry === pluginName || entry.startsWith(capPrefix) ||
+          entry === legacyPluginName || entry.startsWith(legacyPrefix)
+        ) {
           pluginPaths.push(path.join(pluginCacheDir, entry));
         }
       }
@@ -711,7 +718,7 @@ function formatReport(report) {
     if (toolsMissing && modulesMissing) {
       lines.push('  ✗ UNHEALTHY — required tools missing and module integrity failures detected.');
     } else if (modulesMissing) {
-      lines.push('  ✗ UNHEALTHY — module integrity failures detected. Try: npx code-as-plan@latest --force');
+      lines.push('  ✗ UNHEALTHY — module integrity failures detected. Try: npx cap-pro@latest --force');
     } else {
       lines.push('  ✗ UNHEALTHY — required tools missing. CAP cannot function correctly.');
     }

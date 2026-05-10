@@ -83,9 +83,12 @@ describe('plugin.json (AC-1)', () => {
     assert.equal(manifest.version, pkg.version, 'plugin.json version must match package.json version');
   });
 
-  it('plugin name "cap" matches the slash-command namespace /cap:*', () => {
+  it('plugin name "cap-pro" — slash-command namespace /cap:* is preserved at the file-layout level', () => {
+    // CAP Pro 1.0 rebrand: plugin name is cap-pro on disk; the /cap:* slash-command
+    // namespace is preserved by the file layout (commands/cap/*.md), not by the
+    // plugin name itself.
     const manifest = JSON.parse(fs.readFileSync(PLUGIN_MANIFEST, 'utf8'));
-    assert.equal(manifest.name, 'cap', 'plugin name must be "cap" to preserve /cap: slash-command namespace');
+    assert.equal(manifest.name, 'cap-pro', 'plugin name must be "cap-pro" (CAP Pro 1.0 rebrand)');
   });
 });
 
@@ -157,11 +160,11 @@ describe('marketplace.json (AC-2)', () => {
     );
   });
 
-  it('contains a "cap" plugin entry with source "./"', () => {
+  it('contains a "cap-pro" plugin entry with source "./"', () => {
     const mp = JSON.parse(fs.readFileSync(MARKETPLACE_MANIFEST, 'utf8'));
-    const capEntry = mp.plugins.find(p => p.name === 'cap');
-    assert.ok(capEntry, 'marketplace.plugins must list a "cap" entry');
-    assert.equal(capEntry.source, './', 'cap plugin source must be "./" (self-hosted from repo root)');
+    const capEntry = mp.plugins.find(p => p.name === 'cap-pro');
+    assert.ok(capEntry, 'marketplace.plugins must list a "cap-pro" entry');
+    assert.equal(capEntry.source, './', 'cap-pro plugin source must be "./" (self-hosted from repo root)');
     assert.equal(typeof capEntry.description, 'string');
     assert.ok(capEntry.description.length > 0);
   });
@@ -170,7 +173,8 @@ describe('marketplace.json (AC-2)', () => {
     // @cap-decision Claude docs: "plugin manifest always wins silently, so set in only one place".
     // Set version in plugin.json only; marketplace entries stay versionless.
     const mp = JSON.parse(fs.readFileSync(MARKETPLACE_MANIFEST, 'utf8'));
-    const capEntry = mp.plugins.find(p => p.name === 'cap');
+    const capEntry = mp.plugins.find(p => p.name === 'cap-pro');
+    assert.ok(capEntry, 'cap-pro plugin entry must exist');
     assert.equal(
       Object.prototype.hasOwnProperty.call(capEntry, 'version'),
       false,
@@ -191,9 +195,9 @@ describe('npx install path intact (AC-4)', () => {
     assert.ok(pkg.bin.cap.length > 0, 'bin.cap must point to the installer');
   });
 
-  it('package.json keeps the code-as-plan npm name', () => {
+  it('package.json carries the cap-pro npm name (CAP Pro 1.0 rebrand)', () => {
     const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
-    assert.equal(pkg.name, 'code-as-plan');
+    assert.equal(pkg.name, 'cap-pro');
   });
 
   it('package.json is not marked deprecated', () => {
@@ -221,7 +225,9 @@ describe('detectInstallMode (AC-5)', () => {
       fs.mkdirSync(path.join(tmp, '.claude', 'cap'), { recursive: true });
     }
     if (which === 'plugin' || which === 'both') {
-      const pluginCache = path.join(tmp, '.claude', 'plugins', 'cache', 'cap@code-as-plan');
+      // Cache layout: ~/.claude/plugins/cache/<plugin-name>@<marketplace>/
+      // CAP Pro 1.0: both names are `cap-pro`.
+      const pluginCache = path.join(tmp, '.claude', 'plugins', 'cache', 'cap-pro@cap-pro');
       fs.mkdirSync(pluginCache, { recursive: true });
       fs.writeFileSync(path.join(pluginCache, 'plugin.json'), '{}');
     }
@@ -309,7 +315,7 @@ describe('detectInstallMode (AC-5)', () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-cwd-local-'));
     try {
       fs.mkdirSync(path.join(cwd, '.claude-plugin'), { recursive: true });
-      fs.writeFileSync(path.join(cwd, '.claude-plugin', 'plugin.json'), '{"name":"cap"}');
+      fs.writeFileSync(path.join(cwd, '.claude-plugin', 'plugin.json'), '{"name":"cap-pro"}');
       const r = detectInstallMode({ homeDir: fakeHome, cwd });
       assert.equal(r.plugin, true, 'local manifest must count as plugin footprint');
       assert.equal(r.active, 'plugin');

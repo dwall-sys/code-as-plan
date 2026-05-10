@@ -1,7 +1,7 @@
 {
-  "name": "cap",
-  "version": "7.0.0",
-  "description": "CAP — Code as Plan. Build first, plan from code. Farley-aligned engineering framework.",
+  "name": "cap-pro",
+  "version": "1.0.0",
+  "description": "CAP Pro — Code-First engineering framework. Build first, plan from code.",
   "author": {
     "name": "TÂCHES"
   },
@@ -9,6 +9,8 @@
   "repository": "https://github.com/dwall-sys/code-as-plan",
   "license": "MIT",
   "keywords": [
+    "cap",
+    "cap-pro",
     "claude",
     "claude-code",
     "ai",
