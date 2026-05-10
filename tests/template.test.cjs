@@ -42,7 +42,9 @@ describe('template select command', () => {
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.strictEqual(out.type, 'minimal');
-    assert.ok(out.template.includes('summary-minimal'));
+    assert.strictEqual(out.mode, 'minimal');
+    assert.ok(out.template.endsWith('summary.md'),
+      `expected merged summary.md, got ${out.template}`);
   });
 
   test('selects standard template for moderate plan', () => {
@@ -66,6 +68,8 @@ describe('template select command', () => {
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.strictEqual(out.type, 'standard');
+    assert.strictEqual(out.mode, 'standard');
+    assert.ok(out.template.endsWith('summary.md'));
   });
 
   test('selects complex template for plan with decisions and many files', () => {
@@ -84,6 +88,8 @@ describe('template select command', () => {
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.strictEqual(out.type, 'complex');
+    assert.strictEqual(out.mode, 'complex');
+    assert.ok(out.template.endsWith('summary.md'));
   });
 
   test('errors when no plan-path provided', () => {
@@ -97,7 +103,30 @@ describe('template select command', () => {
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
     assert.strictEqual(out.type, 'standard');
+    assert.strictEqual(out.mode, 'standard');
+    assert.ok(out.template.endsWith('summary.md'));
     assert.ok(out.error, 'should include error message');
+  });
+
+  test('merged summary.md contains all three Mode sections', () => {
+    // F-pro-1: the four legacy summary template files were merged into a
+    // single summary.md with `## Mode: minimal|standard|complex` sections.
+    const tmplPath = path.join(__dirname, '..', 'cap', 'templates', 'summary.md');
+    assert.ok(fs.existsSync(tmplPath), 'merged summary.md must exist');
+    const content = fs.readFileSync(tmplPath, 'utf-8');
+    assert.ok(content.includes('## Mode: minimal'),
+      'merged template must contain minimal mode section');
+    assert.ok(content.includes('## Mode: standard'),
+      'merged template must contain standard mode section');
+    assert.ok(content.includes('## Mode: complex'),
+      'merged template must contain complex mode section');
+
+    // Legacy per-mode template files must be gone.
+    for (const legacy of ['summary-minimal.md', 'summary-standard.md', 'summary-complex.md']) {
+      const legacyPath = path.join(__dirname, '..', 'cap', 'templates', legacy);
+      assert.ok(!fs.existsSync(legacyPath),
+        `legacy template ${legacy} should have been removed in the merge`);
+    }
   });
 });
 

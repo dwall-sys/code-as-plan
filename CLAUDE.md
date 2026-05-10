@@ -42,13 +42,20 @@ brainstorm → prototype → iterate → test → review
 
 > Setup, install, update, and upgrade procedures (formerly `/cap:doctor`, `/cap:update`, `/cap:upgrade`) live in [`docs/setup-and-upgrade.md`](docs/setup-and-upgrade.md). The `/cap:refresh-docs`, `/cap:report`, `/cap:cluster`, `/cap:switch-app`, `/cap:quick`, and `/cap:finalize` commands have been retired in favor of native Claude features, `/cap:start --app=`, `/cap:memory status`, and `/loop`-based composition.
 
-### Agents (5)
+### Agents (9 active)
 
+**Per-feature (micro-workflow):**
 - `cap-brainstormer` — conversational feature discovery
 - `cap-prototyper` — 4 modes: prototype, iterate, architecture, annotate
 - `cap-designer` — 9-family aesthetic system, anti-slop review
 - `cap-validator` — 3 modes: test (RED-GREEN), review (Stage 1+2 AC + code quality), audit (F-048 completeness score)
 - `cap-debugger` — scientific method, persistent state
+
+**Project-wide (macro-workflow, introduced in iteration/cap-pro-1):**
+- `cap-historian` — 3 modes: save (snapshot + JSONL index), continue (mtime-diff + targeted re-read), fork (branch-point with divergence rationale)
+- `cap-curator` — 5 read-only modes: status, report, clusters, learn-board, drift (single dashboard agent; only mutates `.cap/REPORT.md`)
+- `cap-architect` — 3 read-only modes: audit (system review), refactor (per-module proposals), boundaries (feature-group API contracts). No auto-apply
+- `cap-migrator` — 4 modes (gsd / tags / feature-map / memory) behind a unified plan → diff → apply → verify pipeline with atomic backup + rollback under `.cap/migrations/<id>/`
 
 > `cap-tester` and `cap-reviewer` are **deprecated** as of `iteration/cap-pro-1` — both have been consolidated into `cap-validator` (use `mode: test` and `mode: review`). The legacy files remain temporarily for reference and will be removed in a later iteration. New invocations should target `cap-validator`.
 

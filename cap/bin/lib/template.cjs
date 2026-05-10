@@ -35,22 +35,30 @@ function cmdTemplateSelect(cwd, planPath, raw) {
     }
     const fileCount = fileMentions.size;
 
-    let template = 'templates/summary-standard.md';
-    let type = 'standard';
+    // Templates are now merged into a single file `templates/summary.md`
+    // with three Mode sections (minimal/standard/complex). The `mode` field
+    // selects which section a consumer should use; the `template` field
+    // remains for backwards compat and now points at the merged file.
+    const template = 'templates/summary.md';
+    let mode = 'standard';
 
     if (taskCount <= 2 && fileCount <= 3 && !hasDecisions) {
-      template = 'templates/summary-minimal.md';
-      type = 'minimal';
+      mode = 'minimal';
     } else if (hasDecisions || fileCount > 6 || taskCount > 5) {
-      template = 'templates/summary-complex.md';
-      type = 'complex';
+      mode = 'complex';
     }
 
-    const result = { template, type, taskCount, fileCount, hasDecisions };
+    // `type` retained as a deprecated alias for `mode` — older consumers
+    // (tests, downstream scripts) read `out.type` directly.
+    const result = { template, mode, type: mode, taskCount, fileCount, hasDecisions };
     output(result, raw, template);
   } catch (e) {
-    // Fallback to standard
-    output({ template: 'templates/summary-standard.md', type: 'standard', error: e.message }, raw, 'templates/summary-standard.md');
+    // Fallback to standard mode against the merged template.
+    output(
+      { template: 'templates/summary.md', mode: 'standard', type: 'standard', error: e.message },
+      raw,
+      'templates/summary.md',
+    );
   }
 }
 

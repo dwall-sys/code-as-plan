@@ -540,7 +540,7 @@ user_setup:
 
 **Result:** Execute-plan generates `{phase}-USER-SETUP.md` with checklist for the user.
 
-See `~/.claude/cap/templates/user-setup.md` for full schema and examples
+See `~/.claude/cap/templates/user-preferences.md` (section: setup) for full schema and examples
 
 ---
 
