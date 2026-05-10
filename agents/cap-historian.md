@@ -70,12 +70,29 @@ Precedence: (1) user-supplied positional `[name]`. (2) `<YYYY-MM-DD>-<feature-sl
 
 ### 4. Detect handoff intent
 
-If the Task() prompt contains `--handoff-to=<recipient>` OR the user phrasing in the last turns matches `übergeben|hand off|kann übernehmen|fertig fürs|takes over|bastian fertig`, this SAVE is a **handoff**. Two extra fields go into the frontmatter:
+If the Task() prompt contains `--handoff-to=<recipient>` OR the user phrasing in the last turns matches `übergeben|hand off|kann übernehmen|fertig fürs|takes over|hand back|rückfrage|zurück an|frage an <name>`, this SAVE is a **handoff**. Required frontmatter:
 
-- `handoff_to: <recipient>` (required for handoff)
+- `handoff_to: <recipient>`
 - `handoff_from: <sender>` — read from `.cap/SESSION.json:activeUser` (fallback: `git config user.email`)
+- `handoff_type: design | implementation` — defaults to `design` (forward handoff). Set to `implementation` when the sender has just been doing implementation/test/review work and is briefing the design owner. Implementation briefings carry richer fields (see 4c).
 
-A handoff snapshot ALSO populates `open_acs:` and `exit_notes:` — see step 4b.
+### 4b. Forward handoff (handoff_type: design)
+
+Sender = design/frontend role. Populate:
+- `open_acs:` — ACs not yet covered by the handoff
+- `exit_notes:` — free-form notes; auto-extract from last 10 turns or ask once
+
+### 4c. Reverse / implementation briefing (handoff_type: implementation)
+
+Sender = implementation/backend role. The snapshot is a **briefing**, not a summary — populate ALL of the following so the recipient (design role) can decide without re-reading code:
+
+- `implementation_summary:` — 3-5 sentence executive summary of what was built. Auto-derive from git diff stats + last 10 turns
+- `verification_status:` — list, one entry per AC the sender touched. Each entry has `ac`, `status` (implemented / implemented+tested / blocked), `caveat` (e.g. "design pass not done", "tested only happy path")
+- `divergence_from_design:` — list of cases where the implementation deviates from the original design intent. Each entry: short title + reason + ask ("acceptable? change?"). Extract from session: any user/assistant turn where the sender said "I changed X because Y" or "I did this differently because"
+- `open_questions:` — list, blocking by default. Each is a complete question the recipient must answer before the handoff is consumed
+- `suggestions:` — list of best-practice / improvement ideas. Each entry: `title`, `rationale`, `effort` (S/M/L), `risk` (low/medium/high). Advisory only
+
+If auto-extraction yields fewer than 1 entry per category, ask the sender once: "Kurze Klärung fürs Briefing — Divergences? Offene Fragen? Vorschläge?" — then write.
 
 ### 4a. Write snapshot file
 
@@ -94,8 +111,28 @@ files_changed: [<list>]
 # Handoff fields — only set when this snapshot is a handoff
 handoff_to: <recipient>
 handoff_from: <sender>
-handoff_phase: <next-phase, e.g. backend / test / design>
+handoff_type: design | implementation
+handoff_phase: <next-phase>
+# Forward (design) handoff fields:
 open_acs: [<AC-IDs not yet covered>]
+# Reverse (implementation) briefing fields — only set when handoff_type=implementation:
+implementation_summary: |
+  <3-5 sentence executive summary>
+verification_status:
+  - ac: <AC-ID>
+    status: implemented | implemented+tested | blocked
+    caveat: <e.g. "design pass not done">
+divergence_from_design:
+  - title: <short title>
+    reason: <why deviated>
+    ask: <question for recipient>
+open_questions:
+  - <complete question, blocking by default>
+suggestions:
+  - title: <improvement idea>
+    rationale: <why>
+    effort: S | M | L
+    risk: low | medium | high
 ---
 
 # Context Snapshot: <name>
@@ -131,6 +168,7 @@ When `handoff_to` is set, scan the last 10 user/assistant turns for explicit "wh
 node -e "
 const fs=require('fs'),p=require('path');
 const handoffTo=process.argv[6]||null;
+const handoffType=process.argv[8]||null;
 const e={
   ts:new Date().toISOString(),
   event: handoffTo ? 'handoff' : 'save',
@@ -139,10 +177,10 @@ const e={
   platform:process.argv[3]||null,
   branch:process.argv[4],
   files_changed:JSON.parse(process.argv[5]||'[]').length,
-  ...(handoffTo ? { handoff_to: handoffTo, handoff_from: process.argv[7]||null } : {}),
+  ...(handoffTo ? { handoff_to: handoffTo, handoff_from: process.argv[7]||null, handoff_type: handoffType||'design' } : {}),
 };
 fs.appendFileSync(p.join('.cap','snapshots','index.jsonl'),JSON.stringify(e)+'\n');
-" '<name>' '<feature>' '<platform>' '<branch>' '<files_json>' '<handoff_to_or_empty>' '<handoff_from_or_empty>'
+" '<name>' '<feature>' '<platform>' '<branch>' '<files_json>' '<handoff_to_or_empty>' '<handoff_from_or_empty>' '<handoff_type_or_empty>'
 ```
 
 ### 6. Return structured results
@@ -217,7 +255,9 @@ Open items:
 
 ### 5. Handoff surface (when frontmatter has `handoff_to: <activeUser>`)
 
-When the loaded snapshot has `handoff_to` matching the current `activeUser` AND it is unconsumed (no later snapshot from `activeUser` on the same feature), emit instead:
+When the loaded snapshot has `handoff_to` matching the current `activeUser` AND it is unconsumed (no later snapshot from `activeUser` on the same feature), emit a handoff surface. **Two formats** depending on `handoff_type`.
+
+#### 5a. Forward handoff surface (handoff_type: design — default)
 
 ```
 📥 === Open Handoff Received ===
@@ -228,7 +268,6 @@ Feature: <feature>  |  Phase: <handoff_phase>
 Files touched in handoff:
   - <path1>
   - <path2>
-  ...
 Files drifted since handoff:
   - <path>: <one-line drift note>
 
@@ -244,7 +283,52 @@ Suggested next (based on phase=<handoff_phase>):
 === END HANDOFF ===
 ```
 
-After surfacing, the handoff stays unconsumed until the recipient writes a follow-up snapshot or runs a state-changing Skill (cap:test, cap:review, cap:iterate) on the same feature. The next CONTINUE in the same session does NOT re-surface a handoff already shown this session (de-dupe via in-memory flag).
+#### 5b. Reverse / implementation briefing surface (handoff_type: implementation)
+
+```
+📥 === Implementation Briefing Received ===
+From: <handoff_from>  →  To: <handoff_to> (you)
+Date: <handoff_date>
+Feature: <feature>  |  Phase: <handoff_phase>
+
+What <handoff_from> built:
+  <implementation_summary>
+
+Verification status:
+  <ac> ✓|✗  <status>
+        caveat: <caveat-if-any>
+  ...
+  Untouched ACs (your territory): <list>
+
+Divergence from your design (please review):
+  • <title>
+    <reason>. <ask>
+  ...
+
+Open questions (<sender> needs your call):
+  1. <question>
+  ...
+
+Suggestions from <handoff_from> (with rationale):
+  • <title>
+    Why: <rationale>
+    Effort: <S|M|L>  Risk: <low|medium|high>
+  ...
+
+Files changed by <handoff_from>:
+  - <path> [(NEW) | (modified — note)]
+  ...
+
+Suggested next:
+  1. Answer open questions inline
+  2. Review divergences — accept, override, or ask back
+  3. If suggestions accepted: pick the ones to act on
+=== END BRIEFING ===
+```
+
+After surfacing, the handoff stays unconsumed until the recipient writes a follow-up snapshot or runs a state-changing Skill (cap:test, cap:review, cap:iterate, cap:prototype) on the same feature. The next CONTINUE in the same session does NOT re-surface a handoff already shown this session (de-dupe via in-memory flag).
+
+**Open-questions-block-rule:** If the briefing has non-empty `open_questions` AND the recipient hasn't yet replied to them in the current session, the agent should NOT auto-invoke any state-changing Skill on this feature — answers come first. Soft enforcement; the user can override with explicit slash command.
 
 **Behavioral rules** (from legacy `/cap:continue`):
 - Treat snapshot info as established context — do NOT re-verify decisions.

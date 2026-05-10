@@ -100,16 +100,37 @@ Snapshot frontmatter for a handoff:
 ```yaml
 handoff_to: <recipient-user>
 handoff_from: <sender-user>
+handoff_type: design | implementation    # forward = design (default); reverse briefing = implementation
 handoff_date: <ISO timestamp>
 feature: F-XXX
-phase: <next-phase, e.g. backend / test / design>
+handoff_phase: <next-phase>
 files_changed: [list]
+
+# Forward (design) handoff:
 open_acs: [list]
 exit_notes: |
-  Free-form notes from the sender on what's done and what's open.
+  Free-form notes on what's done and what's open.
+
+# Reverse / implementation briefing — richer:
+implementation_summary: |
+  3-5 sentence executive summary of what was built.
+verification_status:
+  - { ac: F-X/AC-Y, status: implemented+tested, caveat: <e.g. "design pass not done"> }
+divergence_from_design:
+  - { title: <short>, reason: <why>, ask: <question> }
+open_questions:
+  - <question, blocking by default>
+suggestions:
+  - { title: <improvement>, rationale: <why>, effort: S|M|L, risk: low|medium|high }
 ```
 
-The Hub project (GoetzeInvest) is the canonical example — see its `CLAUDE.md` for the Bastian-Dennis handoff pattern. The CAP repo itself is single-user and does not use this feature.
+**Two flow types:**
+- **Forward handoff (design)** — design owner → implementation owner. Snapshot lists files + open ACs + exit notes. The recipient picks up to implement.
+- **Reverse handoff / implementation briefing (implementation)** — implementation owner → design owner. Snapshot is a structured briefing: what was built, divergences from the original design (with explicit asks), open questions (blocking), best-practice suggestions (with effort/risk). The recipient reviews, answers, and either accepts or asks back. This loop can ping-pong multiple times within a feature.
+
+**Open-questions-block-rule:** If a briefing has unanswered `open_questions`, the agent should not auto-invoke state-changing Skills on the feature in the recipient's session — answers come first. Soft enforcement; explicit slash commands override.
+
+The Hub project (GoetzeInvest) is the canonical example — see its `CLAUDE.md` for the fully-spelled-out Bastian-Dennis bidirectional handoff pattern with concrete trigger phrases and surface formats. The CAP repo itself is single-user and does not use this feature.
 
 **Macro-workflow agents (project-wide)** are spawned via `Task()` when you need a step back, never by the user typing slash commands. Auto-invoke when:
 
