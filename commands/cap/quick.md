@@ -11,6 +11,8 @@ allowed-tools:
 <!-- @cap-decision /cap:quick is a STATE TOGGLE, not an action. It does not spawn agents or modify code. -->
 <!-- @cap-feature(feature:F-092, primary:true) /cap:quick surfaces startQuickMode to the user. -->
 
+> **DEPRECATED (2026-05-09):** F-092 explicit toggle is superseded by F-098 (Implicit Quick-Mode). The Stop hook now detects raw-chat sessions automatically (no formal `/cap:command` + ≥5 edits + activeFeature → silent `@cap-feature` annotation). You can keep using `/cap:quick` for now; the command will be removed after 2–3 weeks of dogfooding F-098. To opt out of implicit catch-up, set `CAP_SKIP_IMPLICIT_QUICK=1` or `.cap/config.json: { "implicitQuick": { "enabled": false } }`.
+
 <objective>
 Enter Phase 1 (Visual Iteration) for a feature. Optimized for rapid frontend tweaks where speed matters more than rigor:
 
