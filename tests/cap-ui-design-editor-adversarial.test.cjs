@@ -898,7 +898,8 @@ describe('F-068 adv: module-split back-compat preserves the cap-ui.cjs surface',
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
     // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added (Sharded Feature Map).
-    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 92);
+    // @cap-decision(F-098) Bumped 92 -> 93 when cap-implicit-quick.cjs was added (Implicit Quick-Mode supersedes F-092).
+    assert.strictEqual(doctorLib.CAP_MODULE_MANIFEST.length, 93);
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-design-editor.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-mind-map.cjs'));
     assert.ok(doctorLib.CAP_MODULE_MANIFEST.includes('cap-ui-thread-nav.cjs'));

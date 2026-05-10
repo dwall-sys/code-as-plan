@@ -14,6 +14,8 @@ allowed-tools:
 <!-- @cap-decision /cap:finalize is a SEQUENCED PIPELINE — it does not introduce new logic, only orchestrates annotate/iterate/test/enrich on the changed-files set. -->
 <!-- @cap-feature(feature:F-092) /cap:finalize chains existing CAP tools post-hoc. -->
 
+> **DEPRECATED (2026-05-09):** F-092 explicit toggle is superseded by F-098 (Implicit Quick-Mode). The Stop hook auto-annotates raw-chat sessions (silent `@cap-feature` injection); when you need the heavy ritual (iterate / test / review), invoke those commands explicitly. The implicit path replaces the `/cap:quick → /cap:finalize` pair; this command will be removed after 2–3 weeks of dogfooding F-098.
+
 <objective>
 Solidify the visual-iteration work done in `/cap:quick` mode. Identifies files changed since quick-mode entry (committed + unstaged + untracked) and runs the full CAP rigor on them:
 

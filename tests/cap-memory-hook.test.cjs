@@ -105,6 +105,19 @@ describe('cap-memory hook', () => {
     assert.ok(content.includes('process.stderr.write'), 'Should write errors to stderr not stdout');
   });
 
+  it('F-098/AC-3: wires implicit-quick processSession after the memory pipeline', () => {
+    const content = fs.readFileSync(HOOK_PATH, 'utf8');
+    assert.ok(content.includes('cap-implicit-quick.cjs'), 'Stop hook must load cap-implicit-quick.cjs');
+    assert.ok(content.includes('processSession'), 'Stop hook must invoke processSession');
+    // notice goes to stderr per AC-3
+    assert.ok(/result\.notice[\s\S]{0,200}process\.stderr/.test(content),
+      'notice must be written to stderr (AC-3)');
+    // skip when init mode (avoid double-running on bootstrap)
+    assert.ok(/!options\.init[\s\S]{0,200}cap-implicit-quick/.test(content)
+      || /options\.init[\s\S]{0,400}cap-implicit-quick/.test(content),
+      'implicit-quick must be gated on !options.init');
+  });
+
   it('should handle the init mode with monorepo support', { skip: process.platform === 'win32' }, () => {
     // Running with init flag in a dir with no sessions should exit cleanly
     const result = execSync(`NODE_V8_COVERAGE= node "${HOOK_PATH}" init`, {

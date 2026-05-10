@@ -258,6 +258,26 @@ function run(options = {}) {
   // Save last-run timestamp
   writeLastRun(cwd);
 
+  // @cap-todo(ac:F-098/AC-1) Implicit Quick-Mode catch-up — runs after the memory pipeline so it
+  //   sees the freshly-updated artifacts and can rely on a stable cwd. Best-effort: any failure
+  //   here must NOT block session end, so the entire block is wrapped and logged to stderr only.
+  // @cap-decision(F-098) We deliberately skip implicit-quick in `init` mode — bootstrap runs
+  //   process the full session corpus, which would defeat the per-session edit-count heuristic.
+  if (!options.init) {
+    const implicitQuick = tryRequire(path.join(capLib, 'cap-implicit-quick.cjs'));
+    if (implicitQuick && typeof implicitQuick.processSession === 'function') {
+      try {
+        const result = implicitQuick.processSession({ projectRoot: cwd });
+        if (result && !result.skipped && result.notice) {
+          // AC-3: notice goes to stderr, exit code remains 0.
+          try { process.stderr.write(result.notice + '\n'); } catch (_eOut) { /* ignore */ }
+        }
+      } catch (_e) {
+        // Best-effort contract — never throw from the Stop hook.
+      }
+    }
+  }
+
   // Stats for reporting
   const stats = {
     decisions: allEntries.filter(e => e.category === 'decision').length,

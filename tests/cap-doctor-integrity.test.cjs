@@ -41,7 +41,8 @@ describe('CAP_MODULE_MANIFEST', () => {
     //   by the on-disk-vs-manifest deepEqual contract once cap-feature-map-internals.cjs landed.
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added (Project Onboarding & Migration Orchestrator).
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added (shared scope filter for tag-scanner + migrate-tags).
-    assert.equal(CAP_MODULE_MANIFEST.length, 92);
+    // @cap-decision(F-098) Bumped 92 -> 93 when cap-implicit-quick.cjs was added (Implicit Quick-Mode supersedes F-092).
+    assert.equal(CAP_MODULE_MANIFEST.length, 93);
   });
 
   it('every entry ends with .cjs', () => {
@@ -85,7 +86,7 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added.
     // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added.
-    assert.equal(result.modulesTotal, 92);
+    assert.equal(result.modulesTotal, 93);
     for (const m of result.modules) {
       assert.ok(m.ok, `${m.name} should be OK`);
       assert.ok(m.exists, `${m.name} should exist`);
@@ -116,7 +117,7 @@ describe('checkModuleIntegrity', () => {
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added.
     // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added.
-    assert.equal(result.modulesTotal, 92);
+    assert.equal(result.modulesTotal, 93);
     for (const m of result.modules) {
       assert.ok(!m.ok, `${m.name} should fail`);
       assert.ok(!m.exists, `${m.name} should not exist`);
@@ -255,7 +256,7 @@ describe('runDoctor includes module integrity', () => {
     // @cap-decision(F-084) Bumped 88 -> 89 when cap-upgrade.cjs was added.
     // @cap-decision(F-085) Bumped 89 -> 90 when cap-scope-filter.cjs was added.
     // @cap-decision(F-089) Bumped 90 -> 92 when cap-feature-map-shard.cjs and cap-feature-map-migrate.cjs were added.
-    assert.equal(report.modulesTotal, 92);
+    assert.equal(report.modulesTotal, 93);
   });
 
   it('report includes platformPaths', () => {

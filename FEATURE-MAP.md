@@ -1810,7 +1810,10 @@ Die Files werden trotzdem geladen: `.claude/rules/cap-memory.md` instruiert den 
 - `tests/cap-memory-engine-source-confidence.test.cjs` (neu, 17 Tests)
 - 4 angepasste Bestands-Tests (cap-memory-confidence + adversarial) — explizite Tags assert nun 0.8/0.7
 
-### F-092: Two-Phase Workflow — /cap:quick + /cap:finalize [shipped]
+### F-092: Two-Phase Workflow — /cap:quick + /cap:finalize [shipped — deprecated by F-098]
+
+> **Deprecation note (2026-05-09):** Empirical Hub-session-data (31 sessions, 0× /cap:quick adoption, ~620 missed editAfterWrite signals) showed the explicit toggle is redundant surface — users live in raw-chat-mode by default but forget to flip the switch. F-098 replaces the explicit `/cap:quick → /cap:finalize` pair with implicit Stop-hook detection + light catch-up. Files `commands/cap/quick.md` + `commands/cap/finalize.md` carry deprecation banners; full removal scheduled after 2–3 weeks of F-098 dogfooding at the Hub.
+
 
 **Depends on:** F-003 (SESSION.json), F-047 (annotate), F-002 (Feature Map)
 
@@ -2000,23 +2003,23 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - `commands/cap/doctor.md` — `--fix` Pfad dokumentiert.
 - `hooks/cap-memory.js`, `hooks/cap-statusline.js` — explizite `// cap-hook-lifecycle:` Marker (Sonderfälle wo Header-Text vom registrierten Lifecycle abwich).
 
-### F-098: Implicit Quick-Mode (supersedes F-092) [planned]
+### F-098: Implicit Quick-Mode (supersedes F-092) [tested]
 
 **Motivation:** Empirisches Befund (2026-05-09 Hub-Session-Analyse): `/cap:quick` wurde in 31 Hub-Sessions **0×** aufgerufen. 65 % der Sessions sind raw-chat (kein /cap-Command), 32 % formal-cap, 1 hybrid. Der explizite `/cap:quick`-Toggle ist **redundante Surface** — der User lebt schon in Quick-Mode by default, vergisst aber den Toggle. Folge: 620+ editAfterWrite-events ohne F-070-Signal-Capture (vor 2026-05-09 mittag-Hook-Aktivierung), keine retrospektive Tag-Coverage, FEATURE-MAP-Drift bei raw-chat-Sessions.
 
-**Approach:** Catch-up wird **implicit + light**, nicht explicit + heavy. Statt expliziter Toggle: Detection per Heuristik (no /cap:prototype + n+ edits + activeFeature gesetzt → war Quick-Mode-Session). Catch-up läuft auto im Stop-Hook oder bei `/cap:save`, mit minimaler Hygiene (annotate + scan), nicht heavy ritual (iterate + test). Heavy ritual bleibt explizit verfügbar via existierende Commands (`/cap:annotate`, `/cap:iterate`, `/cap:test`).
+**Approach:** Catch-up wird **implicit + light**, nicht explicit + heavy. Statt expliziter Toggle: Detection per Heuristik (kein formaler /cap:command + ≥5 Edits + activeFeature gesetzt → raw-chat-Session). Catch-up läuft auto im Stop-Hook nach der memory-pipeline, mit minimaler Hygiene (silent `@cap-feature`-Annotation), nicht heavy ritual (iterate + test). Heavy ritual bleibt explizit verfügbar via existierende Commands (`/cap:annotate`, `/cap:iterate`, `/cap:test`).
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | Auto-Detection: Stop-Hook erkennt "war raw-chat-Session" wenn (a) kein `/cap:prototype` aufgerufen wurde, (b) ≥5 Edits/Writes auf Source-Files seit session-start, (c) `SESSION.json.activeFeature` gesetzt. Sonst: skip catch-up. |
-| AC-2 | planned | Light Catch-up: für changed-files seit session-start (git diff): wenn File kein `@cap-feature`-Tag hat → Tag silently setzen (`@cap-feature(feature:F-XXX)` aus activeFeature). Atomic write-temp-then-rename. Existing Tags werden nicht überschrieben. |
-| AC-3 | planned | Notice am Session-Ende (stderr, exit 0): `"F-XXX: 5 files annotated, 30 edits captured. /cap:test wenn AC-coverage gewünscht."` — kein automatischer Test/Iterate-Trigger. |
-| AC-4 | planned | F-092 Deprecation: `commands/cap/quick.md` und `commands/cap/finalize.md` werden gelöscht. SESSION.json `quickMode`-struct kann bleiben (für git-HEAD-tracking) oder wird repurposed als `implicitQuick`-struct. |
-| AC-5 | planned | Disable-Flag: `CAP_SKIP_IMPLICIT_QUICK=1` als env-var. Plus per-Project-config `.cap/config.json: { implicitQuick: { enabled: false } }`. Wichtig für Demos/Showcases wo silent annotation unerwünscht ist. |
-| AC-6 | planned | Heuristik-Fallback: wenn `activeFeature` nicht eindeutig (mehrere features gleichzeitig touched, oder featureId stale) → kein silent annotate, statt dessen Notice "5 ambiguous files, run /cap:annotate to assign". Konservativ: lieber gar nichts als wrong. |
-| AC-7 | planned | Tests: typical raw-chat session (5 edits → 5 tags), explicit /cap:prototype session (skip catch-up), ambiguous activeFeature (no auto-annotate, notice issued), CAP_SKIP_IMPLICIT_QUICK=1 (skip), Files mit existing tags (preserve), F-092-removal-roundtrip (commands/quick.md gone, SESSION.json migration). ≥10 Tests in `tests/cap-implicit-quick.test.cjs`. |
+| AC-1 | tested | Auto-Detection: `detectQuickSession()` erkennt raw-chat-Session wenn (a) `lastCommand` nicht in `FORMAL_COMMANDS` (`/cap:prototype`, `/cap:iterate`, `/cap:test`, `/cap:review`, `/cap:annotate`, `/cap:brainstorm`, `/cap:debug`), (b) ≥5 distinct Files im F-070 written-files-Ledger für die `sessionId`, (c) `activeFeature` gesetzt und matching `^F-[A-Za-z0-9][A-Za-z0-9_-]*$` (akzeptiert long-form monorepo IDs wie `F-Hub-Spotlight-Carousel`). |
+| AC-2 | tested | Light Catch-up: `processSession()` ruft `classifyFiles` (touched files → needsAnnotate / hasTag / skipped) und annotiert via `annotateFile` (atomic write: temp-suffix + rename in selber dir, preserves shebang + 'use strict'). Comment-prefix per Extension (`//` für JS/TS/Go/Rust/Java/C/CPP, `#` für Python/Ruby/Shell/TOML/YAML). Existing Tags werden NIE überschrieben. |
+| AC-3 | tested | Notice via stderr (exit 0). Format: `"[cap:implicit-quick] F-XXX: <N> files annotated, <M> edits captured. Run /cap:test for AC coverage."`. Stop-hook ruft `process.stderr.write(notice)` nach memory-pipeline. Source-level test in `cap-memory-hook.test.cjs` pinnt die Wire-Position. |
+| AC-4 | tested (Phase 1) | F-092 Deprecation-Banner an `commands/cap/quick.md` + `commands/cap/finalize.md` + `### F-092` FEATURE-MAP-Header. SESSION.json `quickMode`-struct bleibt unverändert (kein break für laufende Sessions). Full removal nach 2–3 Wochen Dogfood am Hub (Follow-up commit). |
+| AC-5 | tested | Disable-Channels: `CAP_SKIP_IMPLICIT_QUICK=1` env-var (fastest off-switch) und `.cap/config.json: { "implicitQuick": { "enabled": false } }` (durable per-project). `isDisabled()` checkt env zuerst, dann config. `processSession` returnt `{skipped:true, reason:'disabled-env-var'\|'disabled-config'}` ohne Files anzufassen. |
+| AC-6 | tested | Ambiguity-Fallback: wenn ein berührtes File bereits `@cap-feature` für eine **andere** Feature-ID trägt → `ambiguous:true`, **null** Annotations geschrieben, ambiguous-Notice issued (`"<N> ambiguous files touched, run /cap:annotate to assign feature IDs"`). Same-feature-pre-tag triggert KEINE Ambiguity (idempotent). |
+| AC-7 | tested | 30 Tests in `tests/cap-implicit-quick.test.cjs`: detect-Heuristik (alle 4 Gates + long-form-ID + missing SESSION/Ledger), readWrittenFiles (dedup + sessionId-filter + malformed JSONL), annotateFile (shebang/use-strict/python/already-tagged/invalid-id), isDisabled (env-var + config + default), processSession-orchestrator (happy path, formal-skip, ambiguous, env-disabled, same-feature-preserve, notice-format, error-isolation). Plus 1 Source-Wire-Test in `cap-memory-hook.test.cjs`. |
 
-**Supersedes:** F-092 (Two-Phase Workflow). Migration: F-098 ships → 2-3 weeks dogfood am Hub → wenn stable: F-092 deprecaten (delete commands/cap/quick.md + commands/cap/finalize.md, remove quickMode references in cap-session.cjs falls nicht repurposed).
+**Supersedes:** F-092 (Two-Phase Workflow). Migration in zwei Phasen: **Phase 1 (jetzt, F-098-Ship):** Detection + Catch-up live, Deprecation-Banner an /cap:quick + /cap:finalize, F-092-Files behalten. **Phase 2 (in 2-3 Wochen, separater Commit):** Files löschen + `quickMode` aus cap-session.cjs entfernen sofern keine Konsumenten (oder repurposen als `implicitQuick`-struct).
 
 **Depends on:** F-030 (Stop-Hook), F-070 (Edit-Tracking via learning-hook — schon aktiv), F-054 (tag-observer für tag-write-coordination), F-002 (FEATURE-MAP read/write).
 

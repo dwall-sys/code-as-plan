@@ -64,6 +64,8 @@ const CAP_MODULE_MANIFEST = [
   // @cap-decision(F-072) Bumped 77 -> 78 when cap-fitness-score.cjs was added (Two-Layer Fitness Score for Pattern Unlearn).
   'cap-fitness-score.cjs',
   'cap-impact-analysis.cjs',
+  // @cap-feature(feature:F-098) Implicit Quick-Mode — supersedes F-092. Detection + light catch-up.
+  'cap-implicit-quick.cjs',
   // @cap-feature(feature:F-073) Review Patterns via Learn Command — board renderer + Stop-hook gate.
   // @cap-decision(F-073) Bumped 79 -> 80 when cap-learn-review.cjs was added (closes the V5 self-learning loop).
   'cap-learn-review.cjs',
