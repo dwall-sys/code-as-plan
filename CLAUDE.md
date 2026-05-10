@@ -79,6 +79,38 @@ In Phase 2:
 
 This keeps tag discipline and AC traceability intact without slowing down the actual visual work.
 
+### Multi-User Workflow (role-aware sessions, role-aware handoff)
+
+Projects with multiple contributors (e.g. one frontend-focused, one backend-focused) benefit from explicit user-aware behavior. CAP supports this without spawning per-user agents — instead, a single `activeUser` field on `.cap/SESSION.json` plus role rules in the project's CLAUDE.md drives all Skills.
+
+**Detection order (CAP convention):**
+1. `.cap/SESSION.json:activeUser` if explicitly set (use `--user=<name>` on `/cap:start`)
+2. `git config user.email` matched against project-defined patterns
+3. Ask once, persist
+
+**Role rules belong in the project's CLAUDE.md** — CAP itself stays unopinionated about which user owns what. The project lists, per role:
+- What the user owns (file globs, packages, layers)
+- Default Skill priorities for that role
+- Skills that should NOT auto-invoke for that role
+- Topics that should NOT be pushed to that role
+
+**Handoff snapshots** are first-class: `cap-historian` MODE: SAVE accepts a `handoff_to: <user>` frontmatter field. The recipient sees an unconsumed handoff on next `cap:start` via `cap-historian` MODE: CONTINUE; once the recipient writes a follow-up snapshot or runs a state-changing Skill on the same feature, the handoff is implicitly consumed.
+
+Snapshot frontmatter for a handoff:
+```yaml
+handoff_to: <recipient-user>
+handoff_from: <sender-user>
+handoff_date: <ISO timestamp>
+feature: F-XXX
+phase: <next-phase, e.g. backend / test / design>
+files_changed: [list]
+open_acs: [list]
+exit_notes: |
+  Free-form notes from the sender on what's done and what's open.
+```
+
+The Hub project (GoetzeInvest) is the canonical example — see its `CLAUDE.md` for the Bastian-Dennis handoff pattern. The CAP repo itself is single-user and does not use this feature.
+
 **Macro-workflow agents (project-wide)** are spawned via `Task()` when you need a step back, never by the user typing slash commands. Auto-invoke when:
 
 | Situation | Macro-agent |

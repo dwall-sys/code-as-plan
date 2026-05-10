@@ -68,9 +68,18 @@ Parse JSONL for: user/assistant text turns (skip sidechains, tool noise), Write/
 
 Precedence: (1) user-supplied positional `[name]`. (2) `<YYYY-MM-DD>-<feature-slug>` if active feature + recognizable feature title in last turns. (3) `<YYYY-MM-DD>-<HHMM>`. Slug: lowercase kebab, ≤40 chars, ASCII.
 
-### 4. Write snapshot file
+### 4. Detect handoff intent
 
-Use Write. Path: `.cap/snapshots/<name>.md`. **Refuse to overwrite** — Read first; if non-empty, append `-2`, `-3`, ... until free.
+If the Task() prompt contains `--handoff-to=<recipient>` OR the user phrasing in the last turns matches `übergeben|hand off|kann übernehmen|fertig fürs|takes over|bastian fertig`, this SAVE is a **handoff**. Two extra fields go into the frontmatter:
+
+- `handoff_to: <recipient>` (required for handoff)
+- `handoff_from: <sender>` — read from `.cap/SESSION.json:activeUser` (fallback: `git config user.email`)
+
+A handoff snapshot ALSO populates `open_acs:` and `exit_notes:` — see step 4b.
+
+### 4a. Write snapshot file
+
+Use Write. Path: `.cap/snapshots/<name>.md` (handoffs use `handoff-<feature>-<timestamp>.md`). **Refuse to overwrite** — Read first; if non-empty, append `-2`, `-3`, ... until free.
 
 ```markdown
 ---
@@ -82,6 +91,11 @@ feature: <F-NNN>           # OR
 platform: <topic>          # OR neither (unassigned)
 title: <title>
 files_changed: [<list>]
+# Handoff fields — only set when this snapshot is a handoff
+handoff_to: <recipient>
+handoff_from: <sender>
+handoff_phase: <next-phase, e.g. backend / test / design>
+open_acs: [<AC-IDs not yet covered>]
 ---
 
 # Context Snapshot: <name>
@@ -97,9 +111,17 @@ files_changed: [<list>]
 
 ## Open Questions / Next Steps
 <unresolved items>
+
+## Exit Notes (handoff only)
+<for handoffs: free-form notes from sender on what's done and what's open;
+ auto-extracted from last 10 conversation turns, OR asked once if sparse>
 ```
 
-The Conversation transcript from legacy `/cap:save` is dropped here — the JSONL index lets CONTINUE re-read the source JSONL on demand. Snapshots stay summary-grade.
+Conversation transcript from legacy `/cap:save` is dropped — the JSONL index lets CONTINUE re-read the source JSONL on demand. Snapshots stay summary-grade.
+
+### 4b. Handoff exit-notes extraction
+
+When `handoff_to` is set, scan the last 10 user/assistant turns for explicit "what's done / what's open" statements. If extraction yields fewer than 2 sentences, ask sender once: "Eine kurze Notiz fürs Backend-Team: was läuft, was fehlt?" — then write.
 
 ### 5. Append JSONL index entry
 
@@ -108,9 +130,19 @@ The Conversation transcript from legacy `/cap:save` is dropped here — the JSON
 ```bash
 node -e "
 const fs=require('fs'),p=require('path');
-const e={ts:new Date().toISOString(),event:'save',name:process.argv[1],feature:process.argv[2]||null,platform:process.argv[3]||null,branch:process.argv[4],files_changed:JSON.parse(process.argv[5]||'[]').length};
+const handoffTo=process.argv[6]||null;
+const e={
+  ts:new Date().toISOString(),
+  event: handoffTo ? 'handoff' : 'save',
+  name:process.argv[1],
+  feature:process.argv[2]||null,
+  platform:process.argv[3]||null,
+  branch:process.argv[4],
+  files_changed:JSON.parse(process.argv[5]||'[]').length,
+  ...(handoffTo ? { handoff_to: handoffTo, handoff_from: process.argv[7]||null } : {}),
+};
 fs.appendFileSync(p.join('.cap','snapshots','index.jsonl'),JSON.stringify(e)+'\n');
-" '<name>' '<feature>' '<platform>' '<branch>' '<files_json>'
+" '<name>' '<feature>' '<platform>' '<branch>' '<files_json>' '<handoff_to_or_empty>' '<handoff_from_or_empty>'
 ```
 
 ### 6. Return structured results
@@ -121,6 +153,7 @@ NAME: <name>
 PATH: .cap/snapshots/<name>.md
 LINKAGE: feature=<F-NNN> | platform=<topic> | unassigned
 FILES_CAPTURED: <N>
+HANDOFF: none | from=<sender> to=<recipient> phase=<phase>
 === END HISTORIAN SAVE RESULTS ===
 ```
 </mode_save>
@@ -133,7 +166,9 @@ FILES_CAPTURED: <N>
 
 ### 1. Resolve target snapshot
 
-If Task() provides `<name>`, load `.cap/snapshots/<name>.md`. Else read `index.jsonl`, pick most recent `event:save` whose `feature` matches `SESSION.json.activeFeature` (fall back to absolute most-recent).
+If Task() provides `<name>`, load `.cap/snapshots/<name>.md`. Else read `index.jsonl`, pick most recent `event:save|handoff` whose `feature` matches `SESSION.json.activeFeature` (fall back to absolute most-recent).
+
+**Handoff-priority:** If the latest snapshot for the active feature has `handoff_to` matching the current `SESSION.json:activeUser` AND no later snapshot from that user on the same feature exists in the index, prefer it. Surface it explicitly as a handoff (see step 5).
 
 ### 2. Parse frontmatter
 
@@ -164,7 +199,9 @@ Token-saving: snapshot lists 30 files, 4 modified → 4 Read calls, not 30.
 
 ### 4. Inject restored context
 
-Output to caller:
+Output to caller. **Two formats** depending on whether this is a regular CONTINUE or a handoff:
+
+**Regular CONTINUE:**
 
 ```
 === Context Restored from: <name> ===
@@ -177,6 +214,37 @@ Open items:
   - <bullet from snapshot>
 === END ===
 ```
+
+### 5. Handoff surface (when frontmatter has `handoff_to: <activeUser>`)
+
+When the loaded snapshot has `handoff_to` matching the current `activeUser` AND it is unconsumed (no later snapshot from `activeUser` on the same feature), emit instead:
+
+```
+📥 === Open Handoff Received ===
+From: <handoff_from>  →  To: <handoff_to> (you)
+Date: <handoff_date>
+Feature: <feature>  |  Phase: <handoff_phase>
+
+Files touched in handoff:
+  - <path1>
+  - <path2>
+  ...
+Files drifted since handoff:
+  - <path>: <one-line drift note>
+
+Open ACs (from sender):
+  - <AC-ID>: <description>
+
+Exit notes from <handoff_from>:
+  <exit_notes verbatim>
+
+Suggested next (based on phase=<handoff_phase>):
+  - <e.g. /cap:test for AC-X, AC-Y>
+  - <e.g. wire backend integration for AC-Z>
+=== END HANDOFF ===
+```
+
+After surfacing, the handoff stays unconsumed until the recipient writes a follow-up snapshot or runs a state-changing Skill (cap:test, cap:review, cap:iterate) on the same feature. The next CONTINUE in the same session does NOT re-surface a handoff already shown this session (de-dupe via in-memory flag).
 
 **Behavioral rules** (from legacy `/cap:continue`):
 - Treat snapshot info as established context — do NOT re-verify decisions.

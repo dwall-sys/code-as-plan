@@ -103,6 +103,32 @@ Triggers — file is `*.tsx/*.jsx/*.css/*.scss`, OR user asks for visual changes
 Triggers — user says "fertig / passt / aufräumen / commit ready", OR shifts topic away from visual.
 → Invoke `cap:annotate` (retroactive tags) + `cap:test` sequentially. Optionally suggest `/cap:save`.
 
+### Multi-User Workflow (optional, only if the project has multiple contributors)
+
+Projects with role-split contributors (e.g. frontend ↔ backend) can drive Skill behavior off `.cap/SESSION.json:activeUser`. Detection order: explicit `--user=` flag → `git config user.email` → ask once + persist.
+
+For each user role, document in this CLAUDE.md:
+- **Owns** (file globs, packages, layers)
+- **Skill priorities** (Skills to lean on)
+- **Do NOT auto-invoke for this user** (Skills out of scope)
+- **Do NOT push to this user** (topics out of scope)
+
+**Handoff snapshots** between users are first-class: `cap-historian` MODE: SAVE writes a snapshot with frontmatter:
+```yaml
+handoff_to: <recipient>
+handoff_from: <sender>
+handoff_date: <ISO timestamp>
+feature: F-XXX
+phase: <next-phase>
+files_changed: [list]
+open_acs: [list]
+exit_notes: |
+  What's done and what's open.
+```
+The recipient's next `cap:start` surfaces the unconsumed handoff via `cap-historian` MODE: CONTINUE. Handoff is consumed implicitly once the recipient writes a follow-up snapshot or runs a state-changing Skill on the same feature.
+
+Skip this section entirely for single-contributor projects.
+
 **Macro-agents (`cap-historian`, `cap-curator`, `cap-architect`, `cap-migrator`) are spawned via Task() when the user wants a step back** — architecture review, snapshot/fork, stakeholder report, or migration. They are not slash commands.
 
 Tag annotations matter: every feature implementation must carry `@cap-feature(feature:F-NNN)` plus `@cap-todo(ac:F-NNN/AC-N)` for each AC. Without tags, the Feature Map drifts from reality.
