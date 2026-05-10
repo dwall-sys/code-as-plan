@@ -1,40 +1,40 @@
 ---
 name: cap:migrate-tags
-description: "Migrate fragmented @cap-feature / @cap-todo(ac:…) tags to unified @cap anchor blocks (F-047, additive: legacy tags preserved)."
-argument-hint: "[--apply] [--json] [--include=<glob>] [--exclude=<glob>] [--allow-large-diff]"
+description: "Migrate fragmented @cap-feature / @cap-todo(ac:…) tags to unified @cap anchor blocks (F-047, additive). Spawns cap-migrator (MODE: TAGS)."
+argument-hint: "[--apply] [--json] [--include=<glob>] [--exclude=<glob>] [--allow-large-diff] [--force]"
 allowed-tools:
   - Read
   - Write
   - Bash
+  - Task
 ---
 
-<!-- @cap-context CAP v3 opt-in migration tool (F-047). Additive: inserts unified anchors, does not delete legacy tags. -->
-<!-- @cap-decision Dry-run is the default. Writes only on explicit --apply after confirmation. -->
-<!-- @cap-feature(feature:F-047, primary:true) /cap:migrate-tags surfaces cap-migrate-tags.cjs to the user. -->
-<!-- @cap-feature(feature:F-085) /cap:migrate-tags now consumes cap-scope-filter.cjs — gitignore-aware, plugin-mirror-aware, with a >500 file safety gate. -->
+<!-- @cap-feature(feature:F-047, primary:true) /cap:migrate-tags — thin wrapper around cap-migrator (MODE: TAGS). -->
+<!-- @cap-feature(feature:F-085) Scope-filter (gitignore + plugin-mirror + 500-file safety gate) is enforced by the agent. -->
+<!-- @cap-decision Wrapper pattern. Plan→Diff→Apply→Verify with atomic backup + rollback lives in cap-migrator. -->
+<!-- @cap-decision Argument compat: --apply, --json, --include=, --exclude=, --allow-large-diff, --force are all preserved. Dry-run remains the default. -->
 
 <objective>
 Plan and optionally apply the migration from fragmented `@cap-*` tags to the unified anchor block format introduced by F-047.
 
-The tool scans the project, groups fragmented `@cap-feature` and `@cap-todo(ac:…)` tags per file, and inserts a single unified anchor block near the file header. Legacy fragmented tags are preserved — this is an **additive migration** so the two formats can coexist while the ecosystem converts. A future cleanup pass (not yet implemented) can delete the fragmented tags once the unified block is adopted everywhere.
+The migration is **additive** — legacy fragmented tags are preserved alongside the new unified block so the two formats can coexist while the ecosystem converts. A future cleanup pass can remove the fragmented tags once the unified block is universal.
 
-Opt-in gate: requires `.cap/config.json → unifiedAnchors.enabled=true`. When disabled, the scanner ignores unified blocks entirely, so running the migration tool alone is safe but its output will not be picked up until the flag is flipped.
+**Opt-in gate (F-047):** requires `.cap/config.json → unifiedAnchors.enabled = true`. Without it, `--apply` is refused; `--force` permits a dry-run preview only.
 
-**Scope (F-085):** the migrator shares `cap-scope-filter.cjs` with `cap-tag-scanner`. By default it skips:
-
+**Scope (F-085):** the migrator shares `cap-scope-filter.cjs` with `cap-tag-scanner`, skipping by default:
 - everything matched by the project's top-level `.gitignore` (typically `.claude/`, `node_modules/`, `dist/`, `coverage/`, …);
 - agent worktrees under `.claude/worktrees/`;
-- the plugin-self-mirror at `.claude/cap/` (detected when both `bin/` and `commands/` are present);
-- test fixtures under `tests/fixtures/` and `**/fixtures/polyglot/` — fixtures are intentionally raw-tagged.
+- the plugin-self-mirror at `.claude/cap/`;
+- test fixtures under `tests/fixtures/` and `**/fixtures/polyglot/`.
 
-A built-in safety gate refuses to apply the migration to more than 500 files in a single run; bypass with `--allow-large-diff` after verifying the dry-run report is what you intended.
+A built-in safety gate refuses to apply the migration to more than 500 files in a single run; bypass with `--allow-large-diff` after verifying the dry-run report.
 
-**Flags:**
-- `--apply` — actually write the migration to disk (after explicit confirmation). Without it, dry-run only.
+**Flags (backwards-compatible):**
+- `--apply` — write the migration to disk after explicit confirmation. Without it, dry-run only.
 - `--json` — emit the structured migration plan as JSON for downstream tools.
 - `--include=<glob>` — restrict the scan to paths matching the pattern (additive, repeatable).
 - `--exclude=<glob>` — additionally skip paths matching the pattern (additive, repeatable).
-- `--allow-large-diff` — permit `--apply` to write more than 500 files (use after a clean dry-run review).
+- `--allow-large-diff` — permit `--apply` to write more than 500 files.
 - `--force` — ignore the F-047 opt-in gate (dry-run preview only).
 </objective>
 
@@ -44,81 +44,48 @@ $ARGUMENTS
 
 <process>
 
-## Step 0: Gate on opt-in config
-
-```bash
-node -e "
-const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
-if (!scanner.isUnifiedAnchorsEnabled(process.cwd())) {
-  console.error('F-047 (unified anchors) is opt-in and not enabled for this project.');
-  console.error('To enable: add { \"unifiedAnchors\": { \"enabled\": true } } to .cap/config.json');
-  console.error('You can still run the migration with --force (dry-run) to preview the diff.');
-  process.exit(2);
-}
-"
-```
-
-On exit 2, stop unless the user passed `--force`. Otherwise continue.
-
 ## Step 1: Parse flags
 
-- `--apply` → `apply = true`
-- `--json` → `json = true`
-- `--force` → ignore the opt-in gate (only for previewing)
+From `$ARGUMENTS`:
+- `apply`, `json`, `force`, `allow_large_diff` — boolean flags
+- `include`, `exclude` — collected glob lists (repeatable)
 
-## Step 2: Plan the migration
+## Step 2: Spawn cap-migrator (MODE: TAGS)
 
-```bash
-node -e "
-const migrate = require('./cap/bin/lib/cap-migrate-tags.cjs');
-const results = migrate.planProjectMigration(process.cwd());
-const json = process.argv[1] === 'true';
-if (json) {
-  console.log(JSON.stringify(results, null, 2));
-} else {
-  console.log(migrate.formatMigrationReport(results));
-}
-" '<JSON>'
+Use the Task tool to spawn `cap-migrator`. Forward `$ARGUMENTS` verbatim.
+
+```
+**MODE: TAGS**
+
+$ARGUMENTS
+
+**Flags resolved by /cap:migrate-tags:**
+- apply: {apply}
+- json: {json}
+- force: {force}
+- allow_large_diff: {allow_large_diff}
+- include: {include or none}
+- exclude: {exclude or none}
+
+**Pipeline obligations (MODE: TAGS):**
+1. Gate on `.cap/config.json → unifiedAnchors.enabled === true` (F-047 opt-in). On gate-fail without --force, refuse and print:
+   "F-047 (unified anchors) is opt-in and not enabled for this project.
+    To enable: add { \"unifiedAnchors\": { \"enabled\": true } } to .cap/config.json
+    You can still run the migration with --force (dry-run) to preview the diff."
+2. Plan via `cap-migrate-tags.cjs::planProjectMigration` honoring include/exclude globs.
+3. Render the plan with `cap-migrate-tags.cjs::formatMigrationReport`. If --json, emit the plan JSON instead.
+4. If --apply AND gate passed: AskUserQuestion → "Apply the unified-anchor migration to the listed files? (yes/no)" — abort on no.
+5. On yes: stage + verify + promote via the MODE: TAGS pipeline. The 500-file ceiling raises `CAP_MIGRATE_LARGE_DIFF` unless --allow-large-diff.
+6. Legacy fragmented tags MUST be preserved (additive migration).
+
+**Output contract:** preserve `cap-migrate-tags.cjs::formatMigrationReport` output verbatim, then append the `=== MIGRATION RESULTS ===` block.
 ```
 
-Display verbatim.
+## Step 3: Suggest next action (based on agent results)
 
-## Step 3: Apply (only with --apply AND after confirmation)
-
-Ask the user:
-
-> "Apply the unified-anchor migration to the listed files? (yes/no)"
-
-On `yes`:
-
-```bash
-node -e "
-const migrate = require('./cap/bin/lib/cap-migrate-tags.cjs');
-const args = process.argv.slice(1);
-const allowLargeDiff = args.includes('--allow-large-diff');
-const results = migrate.planProjectMigration(process.cwd());
-try {
-  const out = migrate.applyMigrations(results, process.cwd(), { allowLargeDiff });
-  console.log('Written: ' + out.written.length + ' file(s)');
-  for (const f of out.written) console.log('  ' + f);
-} catch (e) {
-  if (e.code === 'CAP_MIGRATE_LARGE_DIFF') {
-    console.error(e.message);
-    process.exit(1);
-  }
-  throw e;
-}
-" -- {ARGS}
-```
-
-If the F-085 large-diff gate fires, the command exits non-zero. Verify the dry-run scope, then re-run with `--allow-large-diff` to override.
-
-On `no`: print `Aborted — no files were modified.` and stop.
-
-## Step 4: Suggest next action
-
-- If dry-run completed with changes → "Run `/cap:migrate-tags --apply` to persist the anchors. Legacy tags remain in place; a future cleanup pass can remove them."
-- If the gate blocked the run → "Enable F-047 via `.cap/config.json → unifiedAnchors.enabled=true`, then re-run."
-- If nothing to change → "Project is already migrated or has no fragmented tags."
+- If dry-run completed with changes: "Run `/cap:migrate-tags --apply` to persist the anchors. Legacy tags remain in place; a future cleanup pass can remove them."
+- If the F-047 gate blocked the run: "Enable F-047 via `.cap/config.json → unifiedAnchors.enabled=true`, then re-run."
+- If `CAP_MIGRATE_LARGE_DIFF` fired: "Verify the dry-run scope, then re-run with `--allow-large-diff` to override."
+- If nothing to change: "Project is already migrated or has no fragmented tags."
 
 </process>
