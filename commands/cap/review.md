@@ -1,6 +1,6 @@
 ---
 name: cap:review
-description: Two-stage code review -- Stage 1 checks Feature Map AC compliance, Stage 2 checks code quality. Stage 2 only runs if Stage 1 passes.
+description: Two-stage CAP review — Stage 1 verifies AC compliance against FEATURE-MAP.md and @cap-feature tags, Stage 2 evaluates code quality (security, maintainability, complexity, error handling, test coverage). Stage 2 only runs if Stage 1 passes. TRIGGER when a feature is in state `tested` and the user says "review F-XXX / ready to ship / let's review before merge / final check", after `/cap:test` passes, or proactively before any merge to main of CAP-tagged code. --stage2-only skips the AC compliance gate when only quality review is needed. Spawns cap-validator MODE: REVIEW.
 argument-hint: "[--features NAME] [--stage2-only]"
 allowed-tools:
   - Read

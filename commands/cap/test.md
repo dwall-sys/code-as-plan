@@ -1,6 +1,6 @@
 ---
 name: cap:test
-description: Spawn cap-validator agent to write runnable tests against Feature Map acceptance criteria using RED-GREEN discipline.
+description: Write or extend RED-GREEN tests for a Feature Map entry's acceptance criteria. TRIGGER when a feature is in state `prototyped` and the user wants to verify it works, says "test this / write tests for F-XXX / add coverage / cover this with tests", or after `/cap:prototype` or `/cap:iterate` when code is in place but the feature isn't in state `tested` yet. Auto-detects framework (vitest, jest, node:test). --red-only stops after RED phase (TDD); --deep also runs test-audit (mutation, assertion-density, anti-patterns). DO NOT trigger for one-off test fixes — just edit the test file. Spawns cap-validator MODE: TEST.
 argument-hint: "[--features NAME] [--red-only] [--deep]"
 allowed-tools:
   - Read

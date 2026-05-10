@@ -1,6 +1,6 @@
 ---
 name: cap:prototype
-description: Feature Map-driven prototype pipeline -- reads FEATURE-MAP.md, confirms ACs with user, spawns cap-prototyper to build annotated code scaffold. Supports --architecture and --annotate modes.
+description: Build code for a FEATURE-MAP.md entry, with @cap-feature/@cap-todo annotations inline (Code-First — code IS the plan). TRIGGER when the user asks to implement, build, scaffold, or start coding a feature that has a FEATURE-MAP.md entry in state `planned`, says "build F-XXX / implement this feature / let's start coding X", or after `/cap:brainstorm` when ACs are written and ready to build. Use --architecture for structure-only scaffold, --annotate for retroactive tagging. DO NOT trigger for one-line edits, refactors, or features already in state `prototyped` (use cap:iterate).
 argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch] [--research] [--skip-docs]"
 allowed-tools:
   - Read

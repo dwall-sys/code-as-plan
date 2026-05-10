@@ -68,18 +68,32 @@ Architecture not yet mapped. Follow existing patterns found in the codebase.
 
 ### Workflow Enforcement Section
 ```
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
+<!-- CAP:workflow-start source:CAP 7.0 auto-trigger contract -->
+## CAP Workflow
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+Code-First: build first, extract structure from `@cap-feature` and `@cap-todo` tags. The slash commands (`/cap:brainstorm`, `/cap:prototype`, `/cap:iterate`, `/cap:test`, `/cap:review`) exist for explicit power-user invocation, but in normal use Claude should recognize the workflow moment and invoke the matching Skill — or simply do the work directly when the change is small.
 
-Use these entry points:
-- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd:debug` for investigation and bug fixing
-- `/gsd:execute-phase` for planned phase work
+**Auto-trigger contract — invoke the matching CAP Skill when:**
 
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
+| Situation | Skill |
+|-----------|------|
+| User describes a new feature without a FEATURE-MAP.md entry ("we need X / let's add Y") | `cap:brainstorm` |
+| Feature in state `planned`, user says "build / implement it" | `cap:prototype` |
+| Feature in state `prototyped` with open `@cap-todo` tags, user says "refine / iterate / keep going" | `cap:iterate` |
+| Feature has code but not yet `tested` | `cap:test` |
+| Feature in state `tested`, user says "review / ready to ship" | `cap:review` |
+| User reports a bug or unexpected behavior | `cap:debug` |
+| User asks "where are we / what's the status" | `cap:status` (or `cap-curator` STATUS mode) |
+
+**Do NOT invoke a Skill when:**
+- The change is a one-line edit, typo, or trivial refactor — just edit
+- The user explicitly says "skip cap / just do it"
+- The work is exploratory chat, not yet a feature
+
+**Macro-agents (`cap-historian`, `cap-curator`, `cap-architect`, `cap-migrator`) are spawned via Task() when the user wants a step back** — architecture review, snapshot/fork, stakeholder report, or migration. They are not slash commands.
+
+Tag annotations matter: every feature implementation must carry `@cap-feature(feature:F-NNN)` plus `@cap-todo(ac:F-NNN/AC-N)` for each AC. Without tags, the Feature Map drifts from reality.
+<!-- CAP:workflow-end -->
 ```
 
 ### Profile Section (Placeholder Only)

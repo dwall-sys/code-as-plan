@@ -23,6 +23,38 @@ Five steps, linear by default, re-entrant by design:
 brainstorm → prototype → iterate → test → review
 ```
 
+### Auto-Workflow (when to use slash commands vs. just-do-it)
+
+CAP's per-feature commands (`brainstorm`, `prototype`, `iterate`, `test`, `review`) exist as **explicit power-user triggers**. In normal use you do **not** need to type them — Claude should recognize the workflow moment and invoke the right Skill (or just do the work directly) without being asked. The Skill descriptions are written to be auto-trigger-friendly.
+
+**Auto-trigger contract — Claude SHOULD invoke the matching Skill when:**
+
+| Situation | Auto-action |
+|-----------|-------------|
+| User describes a new feature without a FEATURE-MAP.md entry yet ("we need X", "let's add Y") | Invoke `cap:brainstorm` Skill — produces structured ACs |
+| FEATURE-MAP.md has an entry in state `planned` and user says "build / implement / start coding it" | Invoke `cap:prototype` Skill — Code-First with @cap-* tags |
+| Feature in state `prototyped` with open `@cap-todo` tags, user says "iterate / refine / keep going" | Invoke `cap:iterate` Skill — loop until ACs satisfied |
+| Feature in state `prototyped`, code in place but not yet `tested` | Invoke `cap:test` Skill — RED-GREEN, framework auto-detected |
+| Feature in state `tested`, user says "review / ready to ship / final check" | Invoke `cap:review` Skill — two-stage AC + quality |
+| User reports a bug, error, or "this works locally but not in prod" | Invoke `cap:debug` Skill — hypothesis logbook with persistent state |
+| User asks for project status, wants to see the dashboard, or asks "where are we?" | Invoke `cap:status` (or spawn `cap-curator` MODE: STATUS) |
+
+**Auto-trigger contract — Claude should NOT invoke a Skill when:**
+- The change is a one-line edit, typo, or trivial refactor — just do it
+- The user explicitly says "don't use cap" or "just write it directly"
+- The work is exploratory and not yet ready for FEATURE-MAP.md (decide first whether brainstorm is warranted)
+- Inside another agent's context (subagents shouldn't recursively spawn each other)
+
+**Macro-workflow agents (project-wide)** are spawned via `Task()` when you need a step back, never by the user typing slash commands. Auto-invoke when:
+
+| Situation | Macro-agent |
+|-----------|-------------|
+| User asks "how is the architecture", "what should we refactor", "is module X bloated" | `cap-architect` (audit / refactor / boundaries) |
+| User wants a stakeholder-readable summary or a non-technical project overview | `cap-curator` MODE: REPORT (writes `.cap/REPORT.md`) |
+| Before a risky pivot or experiment, or when user says "let me try a different approach" | `cap-historian` MODE: FORK |
+| At the start of a session, or when user says "where were we" | `cap-historian` MODE: CONTINUE on the latest snapshot |
+| Migration request (GSD→CAP, V5→V6, monolithic→sharded, fragmented→unified anchors) | `cap-migrator` (always plan→diff→apply→verify with rollback) |
+
 ### Commands
 
 | Command | What it does |
