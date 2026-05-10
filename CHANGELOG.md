@@ -4,6 +4,92 @@ All notable changes to CAP (Code as Plan) will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [7.0.0] - 2026-05-10 — `iteration/cap-pro-1` (CAP-Pro)
+
+Major housekeeping release. Outcome of an A/B-test-style audit of CAP against native Claude Opus 4.7 capabilities. Net diff vs. `6.4.0`: **102 files changed, +3.394 / −4.766 = −1.372 lines** across 5 commits, full test suite green at every step (`npm test` exit 0).
+
+The release establishes a clean two-layer agent topology: per-feature micro-workflow agents and project-wide macro-workflow agents.
+
+### Added — Macro-Workflow Agents (`cap-pro-2`, commit `7ea70aa`)
+
+Four new project-wide agents complement the five existing per-feature agents:
+
+- **`cap-historian` (280 lines, 3 modes)** — active snapshot lifecycle. `MODE: SAVE` writes a snapshot with frontmatter (feature/platform/forked_from/title/files_changed) and an append-only event row in `.cap/snapshots/index.jsonl`. `MODE: CONTINUE` does mtime-vs-snapshot diff per file and re-reads only drifted files (token-sparing). `MODE: FORK` creates branch-points with explicit divergence rationale; the parent snapshot is never mutated. Reuses existing libs (`cap-snapshot-linkage.cjs`, `cap-session-extract.cjs`).
+- **`cap-curator` (276 lines, 5 read-only modes)** — single dashboard agent. `STATUS`, `REPORT`, `CLUSTERS`, `LEARN-BOARD`, `DRIFT`. Strictly read-only except `MODE: REPORT` (writes `.cap/REPORT.md`, which is a view artefact). DRIFT preserves the existing CI exit-code semantics (0 clean / 1 drift detected).
+- **`cap-architect` (268 lines, 3 read-only modes)** — system-architecture review without auto-apply. `MODE: AUDIT` sweeps for god-modules (>800 LOC), high-fanout modules (>10 imports), circular dependencies, code duplication. `MODE: REFACTOR` targets a specific module and **must consult `pitfalls.md`** before suggesting splits. `MODE: BOUNDARIES` proposes API contracts between feature groups via affinity clustering. Tools list deliberately excludes Write/Edit; `permissionMode: default` (not `acceptEdits`).
+- **`cap-migrator` (291 lines, 4 modes)** — unified migration pipeline. `GSD`, `TAGS`, `FEATURE-MAP`, `MEMORY` (V5→V6). All modes share a **plan → diff → apply → verify** pipeline with atomic backup under `.cap/migrations/<id>/backup/` (cp -al hardlinks, fallback cp -p, fallback tar) and three rollback paths (verify-failure, promote-failure, user-initiated). `--dry-run` is the default; `--allow-large-diff` gate at 100 KB total / 500 files.
+
+CLAUDE.md sections updated to list the **9 active agents** in two groups: per-feature (5) and project-wide (4).
+
+### Added — Library and Templates (`cap-pro-2`, commit `7ea70aa`)
+
+- **CLI router decomposition** — `cap/bin/cap-tools.cjs` reduced from 1.140 to 853 lines (-25%). Ten new router modules under `cap/bin/lib/cli/` (`arg-helpers`, `state-router`, `phase-router`, `init-router`, `template-router`, `frontmatter-router`, `verification-router`, `validation-router`, `workstream-router`, `uat-router`). CLI output is byte-identical; `tests/workspace.test.cjs` required three white-box path adjustments only.
+- **Summary-template merge** — `cap/templates/summary-{minimal,standard,complex}.md` consolidated into a single `summary.md` with `## Mode: minimal|standard|complex` sections. `cmdTemplateSelect` now returns `{ template, mode, type }`; the `type` field is preserved as a backwards-compat alias of `mode`.
+- **User-preference template merge** — `cap/templates/{user-profile,user-setup,dev-preferences}.md` merged into `user-preferences.md` with `## Section: profile|setup|dev-preferences` anchors. New helper `extractTemplateSection()` in `cap/bin/lib/profile-output.cjs`. Mustache variable names unchanged.
+- **F-040/AC-6 marked `[RETIRED in iteration/cap-pro-1]`** in `FEATURE-MAP.md:701` — the cluster.md command the AC required has been retired in favor of `cap-curator MODE: CLUSTERS`.
+
+### Added — Wiring (`cap-pro-3`, commit `3ef8cdb`)
+
+Eight commands re-implemented as thin wrappers around the new agents:
+
+| Command | Lines before | Lines after | Δ | Backend |
+|---------|--------------|-------------|---|---------|
+| `commands/cap/migrate.md` | 217 | 131 | -40% | `cap-migrator MODE: GSD` |
+| `commands/cap/migrate-tags.md` | 124 | 91 | -27% | `cap-migrator MODE: TAGS` |
+| `commands/cap/migrate-feature-map.md` | 115 | 91 | -21% | `cap-migrator MODE: FEATURE-MAP` |
+| `commands/cap/migrate-memory.md` | — | 108 | NEW | `cap-migrator MODE: MEMORY` (V5→V6 previously had no slash command) |
+| `commands/cap/save.md` | 205 | 72 | -65% | `cap-historian MODE: SAVE` (FORK exposed via `--fork=<parent>`) |
+| `commands/cap/continue.md` | 87 | 72 | -17% | `cap-historian MODE: CONTINUE` |
+| `commands/cap/checkpoint.md` | 99 | 106 | +7% | breakpoint-detection heuristic preserved (substantive); only the save-action leg routed to historian. F-057 AC-1..AC-6 traceability comments retained per `tests/agent-frontmatter*`. |
+| `commands/cap/status.md` | 327 | 117 | -64% | `cap-curator MODE: STATUS` (default) and `MODE: DRIFT` (`--drift`). `--completeness` kept inline as a fast path — routing to `cap-validator AUDIT` would silently change user-facing output (`formatFeatureBreakdown` vs. `formatCompletenessReport`). |
+
+All inline `node -e "..."` shell blocks (planMigration, applyMigration, formatPlan, JSON parsing) moved into the agents. Backwards-compatibility preserved for every public flag.
+
+### Removed — Retired Commands (`cap-pro-1`, commit `d3d8ffa`)
+
+Nine slash commands retired in favor of native Claude features, direct CLI invocations, or composition primitives:
+
+- `/cap:doctor`, `/cap:update`, `/cap:upgrade` — environment health and setup procedures migrated to **`docs/setup-and-upgrade.md`**.
+- `/cap:refresh-docs` — replaced by direct invocation of `npx ctx7@latest`.
+- `/cap:report` — superseded by `cap-curator MODE: REPORT`.
+- `/cap:cluster` — superseded by `cap-curator MODE: CLUSTERS`.
+- `/cap:switch-app` — superseded by `/cap:start --app=<name>`.
+- `/cap:quick`, `/cap:finalize` — replaced by `/loop` composition over `/cap:annotate`, `/cap:iterate`, `/cap:test`.
+
+### Removed — Deprecated Agents (`cap-pro-4`, commit `72ffc2b`)
+
+`cap-tester` and `cap-reviewer` removed entirely. Both responsibilities consolidated into `cap-validator` (`MODE: TEST` and `MODE: REVIEW`) since `iteration/cap-pro-1`. Cross-references cleaned up across:
+
+- `bin/install.js` — `CAP_AGENT_SANDBOX` updated (tester/reviewer out, `cap-validator: workspace-write` in)
+- `cap/bin/lib/core.cjs` — `checkAgentsInstalled.expectedAgents` updated to `[brainstormer, prototyper, validator, debugger]`
+- `commands/cap/{test,review}.md` — Task spawn targets re-pointed to `cap-validator` with explicit `**MODE: TEST**` / `**MODE: REVIEW**` prefix
+- `cap/references/cap-agent-architecture.md`, `security/contract/property-test-templates.md` — agent attribution updated
+- 5 tests updated (copilot-install, codex-config, cap-pattern-apply-adversarial, fixtures/f060-signatures, cap-terse-rules-adversarial); historical F-044 audit docs marked with a header note but content preserved for traceability.
+
+### Removed — References, Templates, Hooks Surface (`cap-pro-1`)
+
+- **References (24 → 18)**: removed `questioning.md`, `ui-brand.md`, `workstream-flag.md` (legacy GSD); merged `decimal-phase-calculation.md` + `phase-argument-parsing.md` → `phase-numbering.md`; merged `model-profile-resolution.md` → `model-profiles.md`. `cap-zero-deps.md` retained (architecturally substantive — Allowed-Modules table, forbidden patterns).
+- **Templates (33 → 26)**: removed `DEBUG.md`, `UI-SPEC.md`, `VALIDATION.md` (overlap with DESIGN/cap-debugger/verification-report); removed `discovery.md`, `retrospective.md` (ad-hoc meeting artefacts). `copilot-instructions.md` and `discussion-log.md` kept (used by `bin/install.js` and tests).
+
+### Changed — Hooks Entschärft (`cap-pro-1`)
+
+- **`hooks/cap-context-monitor.js`** — message tonality changed from imperative ("Inform the user…") to advisory; threshold lowered from 35% to 30% to focus on the meaningful 25% escalation; new ENV `CAP_DISABLE_CONTEXT_MONITOR` for power-user opt-out.
+- **`hooks/cap-workflow-guard.js`** — completely silent unless `CAP_WORKFLOW_GUARD=1` is set; advisory wording; new "allow-once" suspension for 10 minutes after 3 advisories (marker in `/tmp`) to prevent spam.
+
+### Documentation
+
+- New `docs/setup-and-upgrade.md` consolidates all setup/install/update/upgrade flows previously spread across `/cap:doctor`, `/cap:update`, `/cap:upgrade`.
+- `CLAUDE.md` and `README.md` updated to reflect the 9-active-agent surface and the retired commands.
+- Cross-references updated in 8 `cap/workflows/` files, `docs/CAP-WORKFLOW.md`, `docs/USAGE-GUIDE.md`, and the `init.md`, `prototype.md`, `review.md`, `start.md` orchestrators.
+
+### Not Done in This Release (Intentional)
+
+- **`/cap:learn review`** was *not* re-pointed to `cap-curator MODE: LEARN-BOARD`. The two surfaces look similar but `cap-curator`'s LEARN-BOARD does its own raw `fs.readFileSync` rendering and shares zero library surface with `cap-learn-review.cjs`. A naïve switch would drop F-073/AC-1 eligibility filter, AC-2 threshold gate, AC-5 stale archive sweep, AC-7 apply-failure exit-code propagation, the `.cap/learning/board.md` artefact itself, and `clearBoardPendingFlag`. The principled inverse fix (have `cap-curator`'s LEARN-BOARD call `review.buildReviewBoard()` + `renderBoardMarkdown()` so the *display* surface is shared and the mutation half stays in `learn.md`) is deferred — on closer inspection, the two views serve legitimately different purposes (top-by-confidence vs. eligibility-filtered) and don't need to share rendering.
+
+### Auto-Pipeline Telemetry (commit `d0abe28`)
+
+`@cap-history` annotation refresh from the `cap-memory` hook. Five files, telemetry-only, no logic changes. Identical pattern to the prior `ac84524` release-engineering commit.
+
 ## [6.0.0] - 2026-05-07
 
 Major release: V5 Self-Learning Stack + V6 Memory Foundation + V6.1 Format-Tolerance + V6.2 Onboarding-Orchestrator. Closes the gap between code and project knowledge — every decision, pitfall, and pattern lives in a structured memory layer that agents consume automatically.
