@@ -258,6 +258,37 @@ function detectManualEdit(fileContent, sectionName, expectedContent) {
   return normalize(currentContent) !== normalize(expectedContent);
 }
 
+/**
+ * Extracts the body of a `## Section: <name>` block from a merged template.
+ *
+ * The merged `user-preferences.md` template hosts multiple logical templates
+ * (profile, setup, dev-preferences) under per-section anchor headings of the
+ * form `## Section: <name>`. The block runs from the line after the anchor
+ * up to (but not including) the next `## Section: ` heading, or end-of-file.
+ *
+ * Inner `##` headings inside a block (e.g. `## Communication Style`) are
+ * preserved verbatim because the boundary regex matches only the literal
+ * `Section: ` prefix.
+ *
+ * Returns the trimmed section body, or `null` if the anchor is absent.
+ */
+function extractTemplateSection(content, sectionName) {
+  if (!content || typeof content !== 'string') return null;
+  // Escape regex metachars in section name (defensive — section names are
+  // controlled inputs, but keep the helper safe for future call sites).
+  const escaped = sectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const startRe = new RegExp(`^## Section: ${escaped}\\s*$`, 'm');
+  const startMatch = content.match(startRe);
+  if (!startMatch) return null;
+  const bodyStart = startMatch.index + startMatch[0].length;
+  const rest = content.slice(bodyStart);
+  // Find next "## Section: " heading at line start; if none, take to EOF.
+  const nextRe = /^## Section: /m;
+  const nextMatch = rest.match(nextRe);
+  const body = nextMatch ? rest.slice(0, nextMatch.index) : rest;
+  return body.replace(/^\n+/, '').replace(/\n+$/, '\n');
+}
+
 function extractMarkdownSection(content, sectionName) {
   if (!content) return null;
   const lines = content.split('\n');
@@ -447,9 +478,11 @@ function cmdWriteProfile(cwd, options, raw) {
     process.stderr.write(`Sensitive content redacted: ${redactedCount} pattern(s) removed from evidence quotes\n`);
   }
 
-  const templatePath = path.join(__dirname, '..', '..', 'templates', 'user-profile.md');
+  const templatePath = path.join(__dirname, '..', '..', 'templates', 'user-preferences.md');
   if (!fs.existsSync(templatePath)) error(`Template not found: ${templatePath}`);
-  let template = fs.readFileSync(templatePath, 'utf-8');
+  const mergedTemplate = fs.readFileSync(templatePath, 'utf-8');
+  let template = extractTemplateSection(mergedTemplate, 'profile');
+  if (!template) error(`Template section "profile" not found in ${templatePath}`);
 
   const dimensionLabels = {
     communication_style: 'Communication',
@@ -640,9 +673,11 @@ function cmdGenerateDevPreferences(cwd, options, raw) {
     learning_style: 'Learning Support',
   };
 
-  const templatePath = path.join(__dirname, '..', '..', 'templates', 'dev-preferences.md');
+  const templatePath = path.join(__dirname, '..', '..', 'templates', 'user-preferences.md');
   if (!fs.existsSync(templatePath)) error(`Template not found: ${templatePath}`);
-  let template = fs.readFileSync(templatePath, 'utf-8');
+  const mergedTemplate = fs.readFileSync(templatePath, 'utf-8');
+  let template = extractTemplateSection(mergedTemplate, 'dev-preferences');
+  if (!template) error(`Template section "dev-preferences" not found in ${templatePath}`);
 
   const directiveLines = [];
   const dimensionsIncluded = [];
@@ -948,6 +983,7 @@ module.exports = {
   cmdGenerateDevPreferences,
   cmdGenerateClaudeProfile,
   cmdGenerateClaudeMd,
+  extractTemplateSection,
   PROFILING_QUESTIONS,
   CLAUDE_INSTRUCTIONS,
 };

@@ -5,7 +5,7 @@
 
 'use strict';
 
-// @cap-history(sessions:5, edits:15, since:2026-04-20, learned:2026-05-08) Frequently modified — 5 sessions, 15 edits
+// @cap-history(sessions:6, edits:23, since:2026-04-20, learned:2026-05-08) Frequently modified — 6 sessions, 23 edits
 // @cap-history(sessions:2, edits:3, since:2026-04-20, learned:2026-04-21) Frequently modified — 2 sessions, 3 edits
 const fs = require('node:fs');
 const path = require('node:path');

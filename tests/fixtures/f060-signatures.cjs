@@ -4,15 +4,19 @@
 // Shared between tests/cap-terse-rules.test.cjs and
 // tests/cap-terse-rules-adversarial.test.cjs. Drift between the two lists
 // would let one file catch a rule removal the other missed.
+//
+// @cap-history(learned:cap-pro-4) cap-tester and cap-reviewer were removed.
+// Their universal + agent-specific terseness rules now live in cap-validator
+// (which absorbed both agents' responsibilities). The OUT_OF_SCOPE_FILE
+// concept was retired — every remaining hotspot agent now carries the F-060
+// terseness block, so there is no longer a clean negative case to assert.
 
 const IN_SCOPE_FILES = [
   'cap-prototyper.md',
-  'cap-reviewer.md',
+  'cap-validator.md',
   'cap-brainstormer.md',
   'cap-debugger.md',
 ];
-
-const OUT_OF_SCOPE_FILE = 'cap-tester.md';
 
 const UNIVERSAL_RULE_SIGNATURES = [
   'No procedural narration before tool calls',
@@ -28,9 +32,9 @@ const AGENT_SPECIFIC_SIGNATURES = [
     label: 'cap-prototyper forbids markdown tables under 3 rows',
   },
   {
-    file: 'cap-reviewer.md',
+    file: 'cap-validator.md',
     signature: 'No status recaps between tool calls',
-    label: 'cap-reviewer forbids status recaps',
+    label: 'cap-validator forbids status recaps (inherited from cap-reviewer)',
   },
   {
     file: 'cap-brainstormer.md',
@@ -46,7 +50,6 @@ const AGENT_SPECIFIC_SIGNATURES = [
 
 module.exports = {
   IN_SCOPE_FILES,
-  OUT_OF_SCOPE_FILE,
   UNIVERSAL_RULE_SIGNATURES,
   AGENT_SPECIFIC_SIGNATURES,
 };

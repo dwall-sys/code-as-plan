@@ -413,30 +413,27 @@ describe('workspace command files', () => {
 // ─── Routing in gsd-tools ───────────────────────────────────────────────────
 
 describe('workspace routing in gsd-tools', () => {
+  // Routing for `init <workflow>` lives in cap/bin/lib/cli/init-router.cjs as of
+  // the cap-pro-1 router decomposition. The string-matching assertions below
+  // exercise that file, since cap-tools.cjs now delegates the entire `init`
+  // switch to the router module.
+  const initRouterPath = path.join(__dirname, '..', 'cap', 'bin', 'lib', 'cli', 'init-router.cjs');
+
   test('init new-workspace is routed correctly', () => {
-    const toolsContent = fs.readFileSync(
-      path.join(__dirname, '..', 'cap', 'bin', 'cap-tools.cjs'),
-      'utf8'
-    );
-    assert.ok(toolsContent.includes("case 'new-workspace'"));
-    assert.ok(toolsContent.includes('cmdInitNewWorkspace'));
+    const routerContent = fs.readFileSync(initRouterPath, 'utf8');
+    assert.ok(routerContent.includes("case 'new-workspace'"));
+    assert.ok(routerContent.includes('cmdInitNewWorkspace'));
   });
 
   test('init list-workspaces is routed correctly', () => {
-    const toolsContent = fs.readFileSync(
-      path.join(__dirname, '..', 'cap', 'bin', 'cap-tools.cjs'),
-      'utf8'
-    );
-    assert.ok(toolsContent.includes("case 'list-workspaces'"));
-    assert.ok(toolsContent.includes('cmdInitListWorkspaces'));
+    const routerContent = fs.readFileSync(initRouterPath, 'utf8');
+    assert.ok(routerContent.includes("case 'list-workspaces'"));
+    assert.ok(routerContent.includes('cmdInitListWorkspaces'));
   });
 
   test('init remove-workspace is routed correctly', () => {
-    const toolsContent = fs.readFileSync(
-      path.join(__dirname, '..', 'cap', 'bin', 'cap-tools.cjs'),
-      'utf8'
-    );
-    assert.ok(toolsContent.includes("case 'remove-workspace'"));
-    assert.ok(toolsContent.includes('cmdInitRemoveWorkspace'));
+    const routerContent = fs.readFileSync(initRouterPath, 'utf8');
+    assert.ok(routerContent.includes("case 'remove-workspace'"));
+    assert.ok(routerContent.includes('cmdInitRemoveWorkspace'));
   });
 });

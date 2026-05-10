@@ -1,8 +1,9 @@
 ---
 name: cap:checkpoint
-description: Advisory checkpoint detection — nudges /compact at natural breakpoints, saves a labeled snapshot before the context fills up.
+description: Advisory checkpoint detection — nudges /compact at natural breakpoints, saves a labeled snapshot via cap-historian before the context fills up.
 argument-hint: ""
 allowed-tools:
+  - Task
   - Bash
   - Read
   - Write
@@ -10,25 +11,24 @@ allowed-tools:
 
 <!-- @cap-feature(feature:F-057) Checkpoint Command for Strategic Compact -->
 <!-- @cap-todo(ac:F-057/AC-1) /cap:checkpoint ist aufrufbar — this file registers the slash command. -->
-<!-- @cap-todo(ac:F-057/AC-2) Command prueft SESSION.json (step-Transitions, AC-Status-Updates) und FEATURE-MAP-Diff seit letzter Checkpoint-Zeit auf logische Breakpoints. Delegated to cap-checkpoint.analyze(). -->
+<!-- @cap-todo(ac:F-057/AC-2) Command prueft SESSION.json (step-Transitions, AC-Status-Updates) und FEATURE-MAP-Diff seit letzter Checkpoint-Zeit auf logische Breakpoints. Delegated to cap-checkpoint.analyzeAndApply(). -->
 <!-- @cap-todo(ac:F-057/AC-3) Bei erkanntem Breakpoint gibt Command Empfehlung aus: "Jetzt /compact, weil {konkreter Grund}". -->
-<!-- @cap-todo(ac:F-057/AC-4) Command ruft /cap:save checkpoint-{feature_id} implizit auf, bevor die Empfehlung ausgegeben wird. -->
-<!-- @cap-decision Deviated from F-057/AC-4: /cap:save takes a positional [name] arg, not --label; using "checkpoint-{feature_id}" as the name. -->
-<!-- @cap-decision /cap:save is chained at the orchestrator level (Claude runs /cap:save as the next command), not spawned as a subprocess from inside this command. This keeps the advisory boundary clean and preserves the "pure logic in .cjs, orchestration in .md" separation. -->
+<!-- @cap-todo(ac:F-057/AC-4) Bei erkanntem Breakpoint wird vor der Empfehlung implizit ein Snapshot mit Label `checkpoint-{feature_id}` angelegt. -->
+<!-- @cap-decision Breakpoint-Heuristik bleibt in cap-checkpoint.cjs (analyzeAndApply). Die Save-Aktion wurde von "/cap:save chained" auf "Task() → cap-historian MODE: SAVE" umgestellt — gleiches Outcome (Snapshot in .cap/snapshots/), zusätzlich JSONL-Index-Eintrag. -->
+<!-- @cap-todo(ac:F-057/AC-6) /cap:checkpoint bleibt advisory: KEIN Auto-/compact, KEIN --force-Flag. User entscheidet. -->
 <!-- @cap-todo(ac:F-057/AC-5) Kein Breakpoint erkannt -> Message "Kein natürlicher Kontextbruch erkannt.", keine weitere Action. -->
-<!-- @cap-todo(ac:F-057/AC-6) Command ist rein advisory — KEIN Auto-/compact, KEIN --force-Flag. Der User entscheidet. -->
 
 <objective>
-Detect natural breakpoints in the CAP workflow and nudge the user toward `/compact` before auto-compact degrades context quality. When a breakpoint is detected, the command also chains a `/cap:save checkpoint-{feature_id}` so the session state is snapshotted before the user-initiated compact.
+Detect natural breakpoints in the CAP workflow and nudge the user toward `/compact` before auto-compact degrades context quality. When a breakpoint is detected, the command first writes a `checkpoint-{feature_id}` snapshot via the cap-historian agent.
 
-**This command is purely advisory.** It never runs `/compact` itself. It never takes a `--force` flag. The user decides whether to compact.
+**Purely advisory.** Never runs `/compact` itself. No `--force` flag. The user decides.
 </objective>
 
 <process>
 
-## Step 1: Analyze and persist in a single call
+## Step 1: Analyze and persist breakpoint state
 
-Run the checkpoint analyzer. `analyzeAndApply` reads SESSION.json and FEATURE-MAP.md, computes the plan, and — if a breakpoint was detected — persists the snapshot inside the same Node process. Collapsing the two legs into one call closes the TOCTOU window where the orchestrator's previous two-step version could observe a FEATURE-MAP mutation between analyze and persist.
+`analyzeAndApply` reads SESSION.json and FEATURE-MAP.md, computes the plan, and — if a breakpoint was detected — persists `lastCheckpointAt` + `lastCheckpointSnapshot` in a single Node call (closes the TOCTOU window).
 
 ```bash
 node -e "
@@ -38,48 +38,56 @@ console.log(JSON.stringify(result, null, 2));
 "
 ```
 
-The output shape:
+Output shape:
 
 ```
 {
-  \"breakpoint\": { \"kind\": \"...\", \"featureId\": \"F-057\", \"reason\": \"...\" } | null,
-  \"plan\": {
-    \"shouldSave\": true | false,
-    \"saveLabel\": \"checkpoint-F-057\" | null,
-    \"message\": \"Jetzt /compact, weil ...\" | \"Kein natürlicher Kontextbruch erkannt.\"
+  "breakpoint": { "kind": "...", "featureId": "F-057", "reason": "..." } | null,
+  "plan": {
+    "shouldSave": true | false,
+    "saveLabel": "checkpoint-F-057" | null,
+    "message": "Jetzt /compact, weil ..." | "Kein natürlicher Kontextbruch erkannt."
   },
-  \"currentSnapshot\": { \"featureStates\": {...}, \"acStatuses\": {...} },
-  \"persisted\": true | false
+  "currentSnapshot": { "featureStates": {...}, "acStatuses": {...} },
+  "persisted": true | false
 }
 ```
 
 ## Step 2: Branch on breakpoint
 
-**If `plan.breakpoint` is null (no breakpoint):**
+**If `plan.breakpoint` is null:**
 
-Print to the user:
+Print verbatim and stop:
 
 ```
 Kein natürlicher Kontextbruch erkannt.
 ```
 
-Then stop. Do NOT proceed to save or recommend. (AC-5)
+(AC-5)
 
-**If `plan.breakpoint` is non-null (breakpoint detected):**
+**If `plan.breakpoint` is non-null:** continue. Checkpoint state is already persisted (AC-4).
 
-Continue to Step 3. The checkpoint state is already persisted at this point (AC-4) — `analyzeAndApply` wrote `lastCheckpointAt` and `lastCheckpointSnapshot` with an FS post-condition read-back verifying the write landed.
+## Step 3: Save snapshot via cap-historian
 
-## Step 3: Chain /cap:save with the derived label
+Spawn `cap-historian` in SAVE mode with `plan.saveLabel` as the snapshot name:
 
-Instruct Claude to invoke the `/cap:save` slash command with the `saveLabel` from the plan as its positional argument. Example:
+```
+**MODE: SAVE**
 
-> Run `/cap:save checkpoint-F-057`
+{plan.saveLabel}
 
-Wait for `/cap:save` to complete.
+Save the current session as a checkpoint snapshot. Use the active feature for
+linkage (default behavior — no --unassigned, no --platform). Reuse
+cap-snapshot-linkage.cjs and cap-session-extract.cjs.
 
-## Step 4: Print the recommendation
+Return `=== HISTORIAN SAVE RESULTS ===` verbatim.
+```
 
-Print the recommendation message from `plan.message` verbatim:
+Wait for cap-historian to complete.
+
+## Step 4: Print recommendation
+
+Print `plan.message` verbatim:
 
 ```
 Jetzt /compact, weil {konkreter Grund}.
@@ -87,13 +95,12 @@ Jetzt /compact, weil {konkreter Grund}.
 
 ## Step 5: Advisory boundary
 
-**Do not invoke `/compact` automatically. The user decides.**
+Do NOT invoke `/compact`. The only side effects of this command are:
 
-This command never runs `/compact` on its own and never takes a `--force` flag. Its only effects are:
-1. Writing a snapshot via the `/cap:save` chain.
-2. Updating `lastCheckpointAt` + `lastCheckpointSnapshot` in SESSION.json.
-3. Printing a recommendation to the user.
+1. The checkpoint snapshot written by cap-historian (Step 3).
+2. `lastCheckpointAt` + `lastCheckpointSnapshot` updated in SESSION.json (Step 1).
+3. The recommendation printed to the user (Step 4).
 
-If the user wants to compact, they run `/compact` themselves afterward.
+If the user wants to compact, they run `/compact` themselves.
 
 </process>

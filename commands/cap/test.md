@@ -1,6 +1,6 @@
 ---
 name: cap:test
-description: Spawn cap-tester agent to write runnable tests against Feature Map acceptance criteria using RED-GREEN discipline.
+description: Write or extend RED-GREEN tests for a Feature Map entry's acceptance criteria. TRIGGER when a feature is in state `prototyped` and the user wants to verify it works, says "test this / write tests for F-XXX / add coverage / cover this with tests", or after `/cap:prototype` or `/cap:iterate` when code is in place but the feature isn't in state `tested` yet. Auto-detects framework (vitest, jest, node:test). --red-only stops after RED phase (TDD); --deep also runs test-audit (mutation, assertion-density, anti-patterns). DO NOT trigger for one-off test fixes — just edit the test file. Spawns cap-validator MODE: TEST.
 argument-hint: "[--features NAME] [--red-only] [--deep]"
 allowed-tools:
   - Read
@@ -13,14 +13,14 @@ allowed-tools:
   - AskUserQuestion
 ---
 
-<!-- @cap-context CAP v2.0 test command -- orchestrates test generation against Feature Map ACs. Spawns cap-tester agent, collects test results, updates Feature Map test status. -->
+<!-- @cap-context CAP v2.0 test command -- orchestrates test generation against Feature Map ACs. Spawns cap-validator agent, collects test results, updates Feature Map test status. -->
 <!-- @cap-decision Tests derive from Feature Map ACs, not from code inspection. This ensures tests verify the specification, not the implementation. -->
 <!-- @cap-pattern --red-only flag stops after RED phase -- useful for TDD workflows where developer writes GREEN implementation manually. -->
 
 <objective>
-<!-- @cap-todo(ref:AC-52) /cap:test shall invoke the cap-tester agent with a RED-GREEN discipline mindset. -->
+<!-- @cap-todo(ref:AC-52) /cap:test shall invoke the cap-validator agent with a RED-GREEN discipline mindset. -->
 
-Spawns cap-tester to write tests against Feature Map acceptance criteria. Tests must demonstrate RED (fail against stubs) before GREEN (pass against implementation).
+Spawns cap-validator to write tests against Feature Map acceptance criteria. Tests must demonstrate RED (fail against stubs) before GREEN (pass against implementation).
 
 **Arguments:**
 - `--features NAME` -- scope to specific Feature Map entries
@@ -46,7 +46,7 @@ Check `$ARGUMENTS` for:
 
 ## Step 1: Read Feature Map and extract ACs for test generation
 
-<!-- @cap-todo(ref:AC-54) cap-tester shall write tests that verify the acceptance criteria from the Feature Map entry for the active feature. -->
+<!-- @cap-todo(ref:AC-54) cap-validator shall write tests that verify the acceptance criteria from the Feature Map entry for the active feature. -->
 
 ```bash
 node -e "
@@ -81,7 +81,7 @@ If `test_features` is empty: STOP and report:
 
 ## Step 2: Detect test framework
 
-<!-- @cap-todo(ref:AC-56) cap-tester shall use node:test for CJS code and vitest for SDK TypeScript code. -->
+<!-- @cap-todo(ref:AC-56) cap-validator shall use node:test for CJS code and vitest for SDK TypeScript code. -->
 
 ```bash
 node -e "
@@ -124,14 +124,16 @@ console.log(JSON.stringify(result));
 
 Store as `test_config`.
 
-## Step 3: Spawn cap-tester agent
+## Step 3: Spawn cap-validator agent
 
-<!-- @cap-todo(ref:AC-53) cap-tester shall approach testing with a "how do I break this?" adversarial mindset. -->
+<!-- @cap-todo(ref:AC-53) cap-validator shall approach testing with a "how do I break this?" adversarial mindset. -->
 <!-- @cap-todo(ref:AC-57) Green tests shall replace the need for a separate VERIFICATION.md artifact. -->
 
-Spawn `cap-tester` via Task tool:
+Spawn `cap-validator` via Task tool:
 
 ```
+**MODE: TEST**
+
 $ARGUMENTS
 
 **RED-GREEN DISCIPLINE**
@@ -187,7 +189,7 @@ UNTESTED_PATHS: [list of code paths without test coverage]
 === END TEST RESULTS ===
 ```
 
-Wait for cap-tester to complete. Parse results.
+Wait for cap-validator to complete. Parse results.
 
 ## Step 4: Run tests and capture results
 
@@ -199,7 +201,7 @@ Store exit code and output.
 
 ## Step 5: Update Feature Map status
 
-<!-- @cap-todo(ref:AC-55) cap-tester shall update the feature state in FEATURE-MAP.md from prototyped to tested when all tests pass. -->
+<!-- @cap-todo(ref:AC-55) cap-validator shall update the feature state in FEATURE-MAP.md from prototyped to tested when all tests pass. -->
 
 If all tests pass and `red_only` is false:
 

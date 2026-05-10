@@ -1,21 +1,34 @@
 ---
 name: cap:migrate
-description: "Migrate GSD Code-First v1.x projects to CAP v2.0 -- converts @gsd-* tags, planning artifacts, and session format."
-argument-hint: "[--dry-run] [--tags-only] [--rescope] [--force]"
+description: "Migrate GSD Code-First v1.x projects to CAP v2.0 — converts @gsd-* tags, planning artifacts, and session format. Spawns cap-migrator (MODE: GSD)."
+argument-hint: "[--dry-run] [--apply] [--tags-only] [--rescope] [--force] [--allow-large-diff]"
 allowed-tools:
   - Read
   - Write
   - Bash
+  - Task
   - Glob
   - Grep
   - AskUserQuestion
 ---
 
-<!-- @cap-feature(feature:F-MIGRATE) Migration command -- converts GSD v1.x projects to CAP v2.0 format. -->
-<!-- @cap-todo Supports --dry-run, --tags-only, and --force flags. -->
+<!-- @cap-feature(feature:F-MIGRATE) /cap:migrate — thin wrapper around cap-migrator (MODE: GSD). -->
+<!-- @cap-decision Wrapper pattern (mirrors /cap:test → cap-validator). All Plan→Diff→Apply→Verify→Rollback logic lives in cap-migrator; this command parses flags and spawns the agent. -->
+<!-- @cap-decision Argument compat: legacy --dry-run is preserved AND remains the default. New --apply flag opts in to write — required by cap-migrator's safety contract. Passing neither = dry-run. -->
+<!-- @cap-decision Legacy --tags-only is forwarded to the agent prompt (agent will run only the migrateTags sub-plan in MODE: GSD). -->
 
 <objective>
-Migrate a GSD Code-First v1.x project to CAP v2.0 format. Converts @gsd-* tags to @cap-* equivalents, transforms planning artifacts into FEATURE-MAP.md entries, and migrates .planning/SESSION.json to .cap/SESSION.json.
+Migrate a GSD Code-First v1.x project to CAP v2.0 format. Converts `@gsd-*` tags to `@cap-*` equivalents, transforms `.planning/*` artifacts into FEATURE-MAP.md entries, and migrates `.planning/SESSION.json` to `.cap/SESSION.json`.
+
+This command is a thin wrapper that spawns the `cap-migrator` agent in **MODE: GSD**. The agent owns the atomic Plan→Diff→Apply→Verify pipeline with backup + rollback under `.cap/migrations/<id>/`.
+
+**Flags (backwards-compatible):**
+- `--dry-run` — preview only, no writes (default; identical to omitting `--apply`).
+- `--apply` — perform the migration. Without this flag the run is a dry-run, regardless of `--dry-run` presence.
+- `--tags-only` — run only the tag-rewrite sub-plan; skip artifact + session migration.
+- `--rescope` — split the root FEATURE-MAP.md into per-app Feature Maps (monorepo only).
+- `--force` — skip the user-confirmation gate.
+- `--allow-large-diff` — bypass the 100 KB / 500-file safety gate after a clean dry-run review.
 </objective>
 
 <context>
@@ -26,183 +39,84 @@ $ARGUMENTS
 
 <process>
 
-## Step 0: Parse flags
+## Step 1: Parse flags
 
-Check `$ARGUMENTS` for:
-- `--dry-run` — show what would change without writing files
-- `--tags-only` — only migrate tags, skip artifact and session migration
-- `--rescope` — split root FEATURE-MAP.md into per-app Feature Maps (monorepo only)
-- `--force` — skip user confirmation gate
+From `$ARGUMENTS`:
+- `apply = $ARGUMENTS contains "--apply"` (otherwise dry-run)
+- `tags_only = $ARGUMENTS contains "--tags-only"`
+- `rescope = $ARGUMENTS contains "--rescope"`
+- `force = $ARGUMENTS contains "--force"`
+- `allow_large_diff = $ARGUMENTS contains "--allow-large-diff"`
 
-## Step 1: Analyze migration scope
+`--dry-run` is the default; mention it in the prompt only if explicitly passed (signals user intent).
 
-Run the analysis to determine what needs migrating:
+## Step 2: Spawn cap-migrator (MODE: GSD)
 
-```bash
-node -e "
-const migrate = require('./cap/bin/lib/cap-migrate.cjs');
-const report = migrate.analyzeMigration(process.cwd());
-console.log(JSON.stringify(report, null, 2));
-"
-```
-
-Store as `analysis`. Present a summary to the user:
+Use the Task tool to spawn `cap-migrator` with the prompt below. Forward `$ARGUMENTS` verbatim so the agent sees every flag.
 
 ```
-Migration Analysis
-==================
+**MODE: GSD**
 
-@gsd-* tags found:     {gsdTagCount}
-Legacy artifacts:       {gsdArtifacts.length} ({list})
-.planning/ directory:   {yes/no}
-SESSION.json (v1.x):   {yes/no}
+$ARGUMENTS
 
-Recommendations:
-{For each recommendation:}
-  - {recommendation}
+**Flags resolved by /cap:migrate:**
+- apply: {apply}
+- tags_only: {tags_only}
+- rescope: {rescope}
+- force: {force}
+- allow_large_diff: {allow_large_diff}
+
+**Sub-plans to compose (MODE: GSD pipeline):**
+1. migrateTags — rewrite @gsd-* → @cap-*
+{If NOT tags_only:}
+2. migrateArtifacts — .planning/* → FEATURE-MAP.md entries
+3. migrateSession — .planning/SESSION.json → .cap/SESSION.json
+{End if}
+{If rescope:}
+4. rescopeFeatures — split root FEATURE-MAP.md per workspace package (cap-feature-map.cjs::rescopeFeatures). Abort with a clear message if not a monorepo.
+{End if}
+
+**Confirmation:**
+{If apply AND NOT force:}
+Use AskUserQuestion before promoting the staged tree:
+> "Proceed with migration? Plan shows N files, +K bytes. Run with --dry-run first to preview."
+{End if}
+
+**Output contract:** emit the standard `=== MIGRATION RESULTS ===` block. Include the GSD-specific sub-plan counters (tagsConverted, tagsRemoved, featuresFound, sessionMigrated, rescope distribution if applicable) so the wrapper can render the legacy summary verbatim.
 ```
 
-## Step 2: Confirm with user (unless --force)
+## Step 3: Render the legacy summary
 
-If `--force` is NOT set and this is NOT `--dry-run`, use AskUserQuestion to confirm:
-
-> "Proceed with migration? This will modify source files and create CAP v2.0 artifacts. Use --dry-run first if you want to preview changes."
-
-If user declines, abort with message: "Migration cancelled. Run with --dry-run to preview changes."
-
-## Step 3: Migrate tags
-
-```bash
-node -e "
-const migrate = require('./cap/bin/lib/cap-migrate.cjs');
-const dryRun = process.argv[1] === 'true';
-const result = migrate.migrateTags(process.cwd(), { dryRun });
-console.log(JSON.stringify(result, null, 2));
-" '<DRY_RUN_VALUE>'
-```
-
-Store as `tag_result`. Report:
+Parse the agent's `=== MIGRATION RESULTS ===` block plus its sub-plan counters, then print:
 
 ```
-Tag Migration
-=============
-Files scanned:    {filesScanned}
-Files modified:   {filesModified}
-Tags converted:   {tagsConverted}
-Tags removed:     {tagsRemoved}
-
-{If changes.length > 0, show first 20 changes:}
-Changes:
-  {file}:{line} [{action}]
-    - {original}
-    + {replaced}
-```
-
-If `--tags-only` is set, skip to Step 6.
-
-## Step 4: Migrate artifacts
-
-```bash
-node -e "
-const migrate = require('./cap/bin/lib/cap-migrate.cjs');
-const dryRun = process.argv[1] === 'true';
-const result = migrate.migrateArtifacts(process.cwd(), { dryRun });
-console.log(JSON.stringify(result, null, 2));
-" '<DRY_RUN_VALUE>'
-```
-
-Store as `artifact_result`. Report:
-
-```
-Artifact Migration
-==================
-Source:            {source}
-Features found:    {featuresFound}
-Feature Map:       {featureMapCreated ? 'created/updated' : 'no changes'}
-```
-
-## Step 5: Migrate session
-
-```bash
-node -e "
-const migrate = require('./cap/bin/lib/cap-migrate.cjs');
-const dryRun = process.argv[1] === 'true';
-const result = migrate.migrateSession(process.cwd(), { dryRun });
-console.log(JSON.stringify(result, null, 2));
-" '<DRY_RUN_VALUE>'
-```
-
-Store as `session_result`. Report:
-
-```
-Session Migration
-=================
-Old format:   {oldFormat}
-New format:   {newFormat}
-Migrated:     {migrated ? 'yes' : 'no'}
-```
-
-## Step 5b: Rescope Feature Map for monorepo (if --rescope)
-
-If `--rescope` is set, split the root FEATURE-MAP.md into per-app Feature Maps:
-
-```bash
-node -e "
-const fm = require('./cap/bin/lib/cap-feature-map.cjs');
-const scanner = require('./cap/bin/lib/cap-tag-scanner.cjs');
-const dryRun = process.argv[1] === 'true';
-
-// Detect workspace apps
-const workspaces = scanner.detectWorkspaces(process.cwd());
-if (!workspaces.isMonorepo || workspaces.packages.length === 0) {
-  console.log(JSON.stringify({ error: 'Not a monorepo or no packages found. --rescope only works in monorepos.' }));
-  process.exit(0);
-}
-
-const result = fm.rescopeFeatures(process.cwd(), workspaces.packages, { dryRun });
-console.log(JSON.stringify(result, null, 2));
-" '<DRY_RUN_VALUE>'
-```
-
-Store as `rescope_result`. Report:
-
-```
-Feature Map Rescoping
-=====================
-Apps with features:     {appsCreated}
-Features distributed:   {featuresDistributed}
-Features kept at root:  {featuresKeptAtRoot}
-
-Distribution:
-{For each app in distribution:}
-  {appPath}: {feature_ids.length} features ({feature_ids.join(', ')})
-Root: {featuresKeptAtRoot} features (cross-app or no file refs)
-```
-
-If `--rescope` is NOT set, skip this step.
-
-## Step 6: Final report and session update
-
-```
-Migration Complete
+Migration {Complete | Plan-only}
 ==================
 
 Tags:       {tagsConverted} converted, {tagsRemoved} removed
 Artifacts:  {featuresFound} features extracted → FEATURE-MAP.md
-Session:    {migrated ? 'migrated to .cap/SESSION.json' : 'no session to migrate'}
+Session:    {sessionMigrated ? 'migrated to .cap/SESSION.json' : 'no session to migrate'}
+{If rescope:}
+Rescope:    {appsCreated} apps, {featuresDistributed} features distributed, {featuresKeptAtRoot} kept at root
+{End if}
 
-{If dry run:}
-NOTE: This was a dry run. No files were modified. Run without --dry-run to apply changes.
+Backup:     {tx_backup_path}
+Verify:     {PASS | FAIL — reason}
 
-{If not dry run:}
+{If NOT apply:}
+NOTE: This was a dry run. No files were modified. Run with --apply to execute.
+{Else if PASS:}
 Next steps:
   1. Review changes with `git diff`
   2. Run /cap:scan to verify tag migration
-  3. Run /cap:status to see project state from Feature Map
+  3. Run /cap:status to see Feature Map state
   4. Commit migrated files
+{Else:}
+Migration rolled back. Inspect: {tx_dir}
+{End if}
 ```
 
-Update session state (unless dry run):
+## Step 4: Update session (only after a successful apply)
 
 ```bash
 node -e "

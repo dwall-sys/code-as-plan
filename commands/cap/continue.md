@@ -1,22 +1,23 @@
 ---
 name: cap:continue
-description: Load a saved context snapshot into the current session -- restores decisions, conversation context, and file change history without compression losses.
-argument-hint: "[name]"
+description: Load a saved context snapshot via the cap-historian agent — restores decisions and file-change history with diff-aware re-reads (only modified files are re-read).
+argument-hint: "[name] [--snapshot=<path>]"
 allowed-tools:
-  - Bash
+  - Task
   - Read
-  - Glob
+  - Bash
   - AskUserQuestion
 ---
 
-<!-- @cap-context CAP context restore system -- loads a snapshot saved by /cap:save and injects it into the current conversation as structured context. -->
-<!-- @cap-decision Snapshots are READ into the conversation, not executed -- Claude uses them as context, not as commands. -->
+<!-- @cap-context Thin orchestrator. Snapshot loading + mtime-diff lives in agents/cap-historian.md MODE: CONTINUE. -->
+<!-- @cap-decision /cap:continue delegates to cap-historian. Token-sparing core (stat-first diff, only re-read drifted files) is owned by the agent, not duplicated here. -->
 
 <objective>
-Load a previously saved context snapshot (from `/cap:save`) into this fresh session so you can continue working with full context and zero compression losses.
+Spawn `cap-historian` in CONTINUE mode to load a previously saved snapshot into this session. The agent computes an mtime-based diff between snapshot capture time and the working tree, and re-reads only the files that drifted.
 
-**Arguments:**
-- `[name]` -- snapshot name to load. If omitted, lists available snapshots for selection.
+**Arguments (backwards-compatible):**
+- `[name]` — snapshot name to load. If omitted, the agent picks the most-recent snapshot whose `feature:` matches `SESSION.json.activeFeature` (falls back to absolute most-recent).
+- `--snapshot=<path>` — explicit path to a snapshot `.md` file (overrides `[name]`).
 </objective>
 
 <context>
@@ -25,63 +26,47 @@ $ARGUMENTS
 
 <process>
 
-## Step 1: List or select snapshot
+## Step 1: Optional snapshot listing
 
-**If no name argument provided:**
-
-```bash
-ls -t .cap/snapshots/*.md 2>/dev/null
-```
-
-If multiple snapshots exist, list them with dates and let the user pick:
+If `$ARGUMENTS` is empty AND no active feature is set, list available snapshots so the user can pick:
 
 ```bash
-for f in .cap/snapshots/*.md; do
-  name=$(basename "$f" .md)
-  date=$(head -5 "$f" | grep "date:" | sed 's/date: //')
-  summary=$(grep "^# Context Snapshot:" "$f" | sed 's/# Context Snapshot: //')
-  echo "$name | $date | $summary"
-done
+ls -t .cap/snapshots/*.md 2>/dev/null | head -10
 ```
 
-Ask the user which snapshot to load.
+Then ask the user which snapshot to load. Otherwise skip to Step 2.
 
-**If name argument provided:**
-Check `.cap/snapshots/<name>.md` exists.
+## Step 2: Spawn cap-historian
 
-## Step 2: Read the snapshot
-
-Read the full snapshot file:
+Invoke `cap-historian` via Task tool:
 
 ```
-@.cap/snapshots/<name>.md
+**MODE: CONTINUE**
+
+$ARGUMENTS
+
+Resolve target snapshot (positional [name], --snapshot=<path>, or most-recent
+matching SESSION.json.activeFeature). Parse frontmatter, run mtime-diff against
+files_changed, Read ONLY drifted files. Append a `continue` event to
+.cap/snapshots/index.jsonl.
+
+Return the structured `=== HISTORIAN CONTINUE RESULTS ===` block AND the
+`=== Context Restored from: <name> ===` user-facing summary.
 ```
 
-## Step 3: Restore context
+Wait for the agent to complete.
 
-After reading the snapshot, present a brief summary to the user:
+## Step 3: Behavioral rules (post-restore)
 
-```
-=== Context Restored from: <name> ===
+After the snapshot is restored:
 
-**Date:** <date from snapshot>
-**Branch:** <branch from snapshot>
-**Topic:** <What We Were Working On, 1-2 lines>
-**Decisions:** <count> key decisions loaded
-**Files touched:** <count> files
-**Open items:** <list any open questions/next steps>
+- Treat all snapshot information as **established context** — do not re-verify decisions.
+- For files flagged as **modified**, the CURRENT file content is authoritative; the snapshot is history.
+- If the snapshot lists open questions or next steps, proactively suggest picking up from there.
+- Do NOT re-summarize the snapshot back to the user — they lived through it.
 
-Ready to continue. What would you like to do next?
-```
+## Step 4: Optional /cap:start chain
 
-**IMPORTANT behavioral rules:**
-- After loading the snapshot, treat ALL information in it as established context -- don't re-verify decisions that were already made
-- If the snapshot mentions files that were changed, read those files to get their CURRENT state (the snapshot has the history, the files have the present)
-- If the snapshot lists open questions or next steps, proactively suggest picking up from there
-- Do NOT re-explain or summarize the entire snapshot back to the user -- they lived through it, they just need you to have the context
-
-## Step 4: Optionally chain with /cap:start
-
-If the snapshot references an active feature from the Feature Map, automatically set that as the active feature in SESSION.json (same as /cap:start would do).
+If the snapshot's frontmatter carries a `feature: F-NNN` and `SESSION.json.activeFeature` differs, set the active feature to match (same as `/cap:start` would).
 
 </process>

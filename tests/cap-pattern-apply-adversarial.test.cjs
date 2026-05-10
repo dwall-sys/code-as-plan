@@ -279,8 +279,8 @@ describe('L3 target prefix gate', () => {
     assert.equal(result.reason, 'l3-target-not-allowed');
   });
 
-  it('accepts agents/cap-tester.md', () => {
-    assert.equal(apply.isAllowedL3Target('agents/cap-tester.md'), true);
+  it('accepts agents/cap-validator.md', () => {
+    assert.equal(apply.isAllowedL3Target('agents/cap-validator.md'), true);
   });
 
   it('accepts commands/cap/learn.md', () => {

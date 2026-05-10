@@ -1,6 +1,6 @@
 # Property-Based Test Templates
 
-Reference document for the cap-tester agent when generating property-based tests. Property-based testing verifies invariants that hold for ALL valid inputs, not just hand-picked examples. Recommend `fast-check` as the property testing library.
+Reference document for the cap-validator agent (test mode) when generating property-based tests. Property-based testing verifies invariants that hold for ALL valid inputs, not just hand-picked examples. Recommend `fast-check` as the property testing library.
 
 ---
 

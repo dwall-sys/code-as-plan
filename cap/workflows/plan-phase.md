@@ -4,8 +4,6 @@ Create executable phase prompts (PLAN.md files) for a roadmap phase with integra
 
 <required_reading>
 Read all files referenced by the invoking prompt's execution_context before starting.
-
-@~/.claude/cap/references/ui-brand.md
 </required_reading>
 
 <available_agent_types>

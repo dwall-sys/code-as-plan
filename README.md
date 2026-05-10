@@ -1,10 +1,10 @@
-# CAP -- Code as Plan
+# CAP Pro
 
 > Build first. Plan from code. Ship with confidence.
 
-CAP is a developer framework for AI-assisted coding that follows the Code-First principle: instead of writing requirements documents before touching code, you build a prototype, annotate it with lightweight tags, and let the framework derive your project plan from what you actually built.
+**CAP Pro** is a developer framework for AI-assisted coding that follows the Code-First principle: instead of writing requirements documents before touching code, you build a prototype, annotate it with lightweight tags, and let the framework derive your project plan from what you actually built.
 
-Works with Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, and Antigravity.
+Works with **Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, and Antigravity** — 8 runtimes from a single install.
 
 ```
   brainstorm --> prototype --> iterate --> test --> review
@@ -12,7 +12,10 @@ Works with Claude Code, Gemini CLI, Codex, Copilot, Cursor, Windsurf, OpenCode, 
   FEATURE-MAP    @cap-tags    scan+fix    green=done  ship
 ```
 
-> **Daily workflow guide**: [`docs/USAGE-GUIDE.md`](docs/USAGE-GUIDE.md) — what's new in v4.1, how to get maximum leverage, what to watch out for.
+> **Heads-up — version reset (May 2026):** the npm package was renamed from `code-as-plan` to **`cap-pro`** and the version was reset to **`1.0.0`**. The CLI command (`cap`), slash commands (`/cap:*`), tags (`@cap-*`) and project artefacts are unchanged. The installer auto-cleans legacy `code-as-plan@7.x` files. See [`CHANGELOG.md`](CHANGELOG.md#100---2026-05-10--cap-pro-10-rebrand--reset) for details.
+
+> **Full documentation**: [https://dwall-sys.github.io/code-as-plan](https://dwall-sys.github.io/code-as-plan) — features, workflow, multi-user handoff, roadmap.
+> **Daily workflow guide**: [`docs/USAGE-GUIDE.md`](docs/USAGE-GUIDE.md).
 
 ---
 
@@ -53,36 +56,38 @@ CAP eliminates accidental complexity by making code the single source of truth.
 **Via npx (primary):**
 
 ```bash
-npx code-as-plan@latest
+npx cap-pro@latest
 ```
 
-**Via Claude Code plugin marketplace (v4.1+):**
+**Via Claude Code plugin marketplace:**
 
 ```
-/plugin install code-as-plan
+/plugin install cap-pro
 ```
 
-Both paths coexist. `cap:doctor` warns (but does not fail) if both install modes are active, so you can migrate without breaking state. The plugin name is `cap` (slash commands stay `/cap:*`); the marketplace / npm slug is `code-as-plan`.
+Both paths coexist. The plugin and npm slug are `cap-pro`; the CLI binary, slash commands and tags all stay `cap` / `/cap:*` / `@cap-*`. See [`docs/setup-and-upgrade.md`](docs/setup-and-upgrade.md) for environment-health checks (formerly `/cap:doctor`).
+
+> If you previously installed `code-as-plan@7.x` or earlier, the CAP Pro installer detects it and offers to clean up legacy agent/command/hook files automatically before installing — no duplicate `cap-*` files post-install.
 
 ### Runtime flags
 
 Install for a specific AI coding tool:
 
 ```bash
-npx code-as-plan@latest --claude
-npx code-as-plan@latest --gemini
-npx code-as-plan@latest --codex
-npx code-as-plan@latest --copilot
-npx code-as-plan@latest --cursor
-npx code-as-plan@latest --windsurf
-npx code-as-plan@latest --all       # install for all runtimes
+npx cap-pro@latest --claude
+npx cap-pro@latest --gemini
+npx cap-pro@latest --codex
+npx cap-pro@latest --copilot
+npx cap-pro@latest --cursor
+npx cap-pro@latest --windsurf
+npx cap-pro@latest --all       # install for all runtimes
 ```
 
 ### Scope
 
 ```bash
-npx code-as-plan@latest --local     # current project only (default)
-npx code-as-plan@latest --global    # all projects
+npx cap-pro@latest --local     # current project only (default)
+npx cap-pro@latest --global    # all projects
 ```
 
 ---
@@ -162,11 +167,10 @@ Green tests mean verified. No separate verification document.
 |  /cap:test-audit ->  Mutation score + trust score                 |
 |  /cap:review     ->  Stage 1 (ACs) + Stage 2 (quality)           |
 |                      + Stage 3 (manual checklist)                 |
-|  /cap:report     ->  Human-readable team overview                 |
 |  git tag v1.0    ->  Milestone complete                           |
 +-------------------------------------------------------------------+
 |                          Agents                                   |
-|  cap-brainstormer | cap-prototyper | cap-tester | cap-reviewer    |
+|  cap-brainstormer | cap-prototyper | cap-validator                |
 |                          cap-debugger                             |
 +-------------------------------------------------------------------+
 |                        Infrastructure                             |
@@ -189,19 +193,13 @@ Green tests mean verified. No separate verification document.
 | `/cap:debug` | Systematic debugging with persistent state across context resets |
 | `/cap:scan` | Scan codebase for `@cap-feature` and `@cap-todo` tags, update Feature Map |
 | `/cap:status` | Show project status derived from Feature Map -- completion, coverage, open risks |
-| `/cap:start` | Initialize session -- restore previous state, detect project context |
-| `/cap:switch-app` | Switch active app in a monorepo |
+| `/cap:start` | Initialize session -- restore previous state, detect project context (use `--app=<name>` for monorepo app switch) |
 | `/cap:annotate` | Retroactively add `@cap-feature` and `@cap-todo` tags to existing code |
-| `/cap:refresh-docs` | Fetch or refresh library documentation via Context7 |
-| `/cap:update` | Update CAP to the latest version with changelog display |
 | `/cap:migrate` | Migrate from GSD Code-First v1.x to CAP v2.0 (supports `--rescope` for per-app Feature Maps) |
 | `/cap:test-audit` | Test quality analysis: assertion density, coverage, mutation score, spot-check guide, trust score |
-| `/cap:report` | Human-readable project overview for non-technical stakeholders (no IDs, no tag syntax) |
-| `/cap:doctor` | Health check for all required and optional dependencies |
 | `/cap:save` | Save current session context to snapshot file for cross-session continuity |
 | `/cap:continue` | Restore a saved context snapshot |
-| `/cap:memory` | Project memory management -- `init`, `status`, `pin`, `unpin`, `prune` subcommands |
-| `/cap:cluster` | Neural Memory cluster overview and detail views |
+| `/cap:memory` | Project memory management -- `init`, `status` (includes cluster overview), `pin`, `unpin`, `prune` subcommands |
 | `/cap:checkpoint` | Advisory breakpoint detector — nudges `/compact` at natural workflow boundaries, chains `/cap:save` |
 | `/cap:reconcile` | One-shot drift reconciliation — propose AC promotions and feature-state corrections |
 | `/cap:deps` | Infer feature dependencies from source imports, diff against FEATURE-MAP DEPENDS_ON |
@@ -311,7 +309,7 @@ CAP auto-detects monorepo tooling and scopes all commands to the active app.
 
 ```bash
 /cap:init                  # detects monorepo, creates per-app .cap/ directories
-/cap:switch-app            # interactive app selector with tag counts
+/cap:start --app=<name>    # select active app (lists workspace packages with tag counts)
 /cap:prototype             # scopes to active app only
 /cap:scan                  # scans active app + shared packages
 ```
@@ -322,14 +320,13 @@ Each app gets its own `FEATURE-MAP.md`. Shared packages are scanned and included
 
 ## Agents
 
-CAP ships five specialized agents. You do not invoke them directly -- commands spawn them as needed.
+CAP ships four core micro-workflow agents (plus optional macro-workflow agents introduced in `iteration/cap-pro-1`). You do not invoke them directly -- commands spawn them as needed.
 
 | Agent | Spawned by | Purpose |
 |-------|-----------|---------|
 | `cap-brainstormer` | `/cap:brainstorm` | Guides feature discovery conversation, produces Feature Map entries |
 | `cap-prototyper` | `/cap:prototype`, `/cap:iterate`, `/cap:annotate` | Builds annotated code. Four modes: PROTOTYPE, ITERATE, ARCHITECTURE, ANNOTATE |
-| `cap-tester` | `/cap:test` | Writes tests against Feature Map acceptance criteria using RED-GREEN discipline |
-| `cap-reviewer` | `/cap:review` | Two-stage review: spec compliance (Stage 1), code quality (Stage 2) |
+| `cap-validator` | `/cap:test`, `/cap:review`, `/cap:completeness` | Three modes: TEST (RED-GREEN), REVIEW (Stage 1+2), AUDIT (F-048 completeness) |
 | `cap-debugger` | `/cap:debug` | Systematic debugging with persistent state across context window resets |
 
 ---
@@ -340,7 +337,7 @@ CAP goes beyond "tests are green" with a 6-level trust model:
 
 ### /cap:test -- AI-generated tests
 
-The `cap-tester` agent writes tests with an adversarial mindset ("how do I break this?") and includes specialized templates for:
+The `cap-validator` agent (test mode) writes tests with an adversarial mindset ("how do I break this?") and includes specialized templates for:
 
 - **Security tests** -- RLS policies, auth bypass, input sanitization, data leakage
 - **Contract tests** -- API schema validation between monorepo services
@@ -371,10 +368,6 @@ TRUST SCORE:     87/100
 **Mutation testing** is the strongest automated check: the engine introduces deliberate bugs (flip `===` to `!==`, negate conditions, remove returns) and verifies the tests catch them. A mutation score above 80% means your tests are genuinely testing behavior.
 
 **Spot-checks** guide human reviewers to the 3 most critical tests. Five minutes of human attention at the right places provides more confidence than reading every test file.
-
-### /cap:report -- for your team
-
-Generates a plain-language project overview without feature IDs, tag syntax, or technical jargon. Written so non-technical colleagues can understand what's built, what's in progress, and what's at risk.
 
 ---
 
@@ -498,17 +491,18 @@ npm audit signatures
 **Verify your install.**
 
 ```bash
-npm view code-as-plan dist.attestations   # check provenance exists
+npm view cap-pro dist.attestations   # check provenance exists
 ```
 
 ---
 
 ## Context7 Integration
 
-CAP integrates with Context7 to fetch current library documentation during development. When you run `/cap:init` or `/cap:refresh-docs`, CAP detects your project dependencies and pulls relevant documentation into `.cap/stack-docs/` so agents always have accurate, up-to-date API references -- not stale training data.
+CAP integrates with Context7 to fetch current library documentation during development. When you run `/cap:init`, CAP detects your project dependencies and pulls relevant documentation into `.cap/stack-docs/` so agents always have accurate, up-to-date API references -- not stale training data. To refresh manually, invoke Context7 directly:
 
 ```bash
-/cap:refresh-docs          # fetch/update docs for all detected dependencies
+npx ctx7@latest library <name> "<question>"   # resolve library ID
+npx ctx7@latest docs /<org>/<project> "<question>" > .cap/stack-docs/<name>.md
 ```
 
 ---
@@ -713,12 +707,11 @@ Conversation Threads         Affinity Engine              Clusters
 
 When you run `/cap:start` or `/cap:brainstorm`, CAP passively checks affinity against your selected feature and surfaces related prior threads. No manual lookup required -- relevant context finds you.
 
-### Cluster commands
+### Cluster inspection
 
 ```bash
-/cap:cluster              # show all detected clusters with labels, member counts, affinity scores
-/cap:cluster auth          # detail view: members, pairwise affinity, shared concepts, drift status
-/cap:status               # now includes Neural Memory section (cluster count, dormant nodes, highest pair)
+/cap:memory status        # includes cluster overview (labels, member counts, affinity scores)
+/cap:status               # includes Neural Memory section (cluster count, dormant nodes, highest pair)
 ```
 
 ### Initializing Neural Memory Clustering
@@ -740,8 +733,8 @@ The clustering system works on top of the memory graph and conversation threads.
 # Threads are the input for affinity scoring and clustering
 
 # Step 4: Clustering activates automatically
-# After 2+ threads exist, /cap:cluster shows detected clusters
-/cap:cluster
+# After 2+ threads exist, /cap:memory status surfaces detected clusters
+/cap:memory status
 # /cap:status shows the Neural Memory section
 # /cap:start and /cap:brainstorm surface related threads passively
 ```
@@ -756,7 +749,7 @@ If you have an existing codebase with `@cap-decision` and `@cap-todo` tags but n
 
 **For monorepos:** Threads are stored at the root level (`.cap/memory/threads/`), not per-app. This means clustering works across apps -- a thread about auth in `apps/booking` can cluster with a thread about SSO in `apps/hub`.
 
-**Minimum for clustering:** 2 threads with overlapping keywords, shared features, or shared files. With fewer than 2 threads, `/cap:cluster` shows "No clusters detected."
+**Minimum for clustering:** 2 threads with overlapping keywords, shared features, or shared files. With fewer than 2 threads, `/cap:memory status` shows "No clusters detected."
 
 ### The complete memory evolution
 
@@ -775,7 +768,7 @@ CAP works with both greenfield and brownfield codebases. Here is how to initiali
 ### Single repository
 
 ```bash
-npx code-as-plan@latest          # install CAP
+npx cap-pro@latest                # install CAP Pro
 /cap:init                         # detects stack, creates .cap/, runs brownfield analysis
 /cap:brainstorm                   # discover features from existing code
 /cap:annotate                     # retroactively tag existing code with @cap-feature / @cap-todo
@@ -785,15 +778,15 @@ npx code-as-plan@latest          # install CAP
 ### Monorepo (NX, Turbo, pnpm, npm workspaces)
 
 ```bash
-npx code-as-plan@latest          # install CAP (auto-detects monorepo)
+npx cap-pro@latest                # install CAP Pro (auto-detects monorepo)
 /cap:init                         # creates root .cap/, detects all workspace apps
-/cap:switch-app                   # select which app to focus on (e.g., apps/booking)
+/cap:start --app=booking          # select which app to focus on (e.g., apps/booking)
 /cap:brainstorm                   # discover features for the active app
 /cap:annotate                     # tag existing code in active app
 /cap:memory init                  # bootstrap memory (scans all apps)
 ```
 
-Each app gets its own `FEATURE-MAP.md`. Shared packages are scanned as dependency context. Switch between apps with `/cap:switch-app` at any time.
+Each app gets its own `FEATURE-MAP.md`. Shared packages are scanned as dependency context. Switch between apps with `/cap:start --app=<name>` at any time.
 
 ### What /cap:init does for existing codebases
 

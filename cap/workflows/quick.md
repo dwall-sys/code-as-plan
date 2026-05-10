@@ -238,7 +238,7 @@ AskUserQuestion(
 Rules:
 - Options must be concrete choices, not abstract categories
 - Highlight recommended choice where you have a clear opinion
-- If user selects "Other" with freeform text, switch to plain text follow-up (per questioning.md freeform rule)
+- If user selects "Other" with freeform text, switch to plain text follow-up (do not re-prompt with another AskUserQuestion)
 - If user selects "You decide", capture as Claude's Discretion in CONTEXT.md
 - Max 2 questions per area — this is lightweight, not a deep dive
 

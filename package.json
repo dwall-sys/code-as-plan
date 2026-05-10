@@ -1,7 +1,7 @@
 {
-  "name": "code-as-plan",
-  "version": "6.4.0",
-  "description": "CAP — Code as Plan. Build first, plan from code. Farley-aligned engineering framework.",
+  "name": "cap-pro",
+  "version": "1.0.0",
+  "description": "CAP Pro — Code-First engineering framework for Claude Code, OpenCode, Gemini, Codex, Copilot, Antigravity, Cursor & Windsurf. Build first, plan from code.",
   "bin": {
     "cap": "bin/install.js"
   },
@@ -16,6 +16,8 @@
     "scripts"
   ],
   "keywords": [
+    "cap",
+    "cap-pro",
     "claude",
     "claude-code",
     "ai",
@@ -41,12 +43,16 @@
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
+    "vitepress": "^1.5.0",
     "vitest": "^4.1.2"
   },
   "scripts": {
     "build:hooks": "node scripts/build-hooks.js",
     "prepublishOnly": "npm run build:hooks",
     "test": "node scripts/run-tests.cjs",
-    "test:coverage": "node scripts/run-tests.cjs --coverage"
+    "test:coverage": "node scripts/run-tests.cjs --coverage",
+    "docs:dev": "vitepress dev docs-site",
+    "docs:build": "vitepress build docs-site",
+    "docs:preview": "vitepress preview docs-site"
   }
 }

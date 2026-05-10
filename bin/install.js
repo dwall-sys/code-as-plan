@@ -34,8 +34,7 @@ const CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER = '<!-- /CAP Configuration -->';
 const CAP_AGENT_SANDBOX = {
   'cap-prototyper': 'workspace-write',
   'cap-brainstormer': 'workspace-write',
-  'cap-tester': 'workspace-write',
-  'cap-reviewer': 'read-only',
+  'cap-validator': 'workspace-write',
   'cap-debugger': 'workspace-write',
 };
 
@@ -90,6 +89,7 @@ const hasWindsurf = args.includes('--windsurf');
 const hasBoth = args.includes('--both'); // Legacy flag, keeps working
 const hasAll = args.includes('--all');
 const hasUninstall = args.includes('--uninstall') || args.includes('-u');
+const skipLegacyCleanup = args.includes('--skip-legacy-cleanup');
 
 // Runtime selection - can be set by flags or interactive prompt
 let selectedRuntimes = [];
@@ -300,18 +300,15 @@ function getGlobalDir(runtime, explicitDir = null) {
 }
 
 const banner = '\n' +
-  magenta + bold + '   ██████╗ █████╗ ██████╗\n' +
-  '  ██╔════╝██╔══██╗██╔══██╗\n' +
-  '  ██║     ███████║██████╔╝\n' +
-  '  ██║     ██╔══██║██╔═══╝\n' +
-  '  ╚██████╗██║  ██║██║\n' +
-  '   ╚═════╝╚═╝  ╚═╝╚═╝' + reset + '\n' +
+  magenta + bold + '   ██████╗ █████╗ ██████╗     ██████╗ ██████╗  ██████╗\n' +
+  '  ██╔════╝██╔══██╗██╔══██╗    ██╔══██╗██╔══██╗██╔═══██╗\n' +
+  '  ██║     ███████║██████╔╝    ██████╔╝██████╔╝██║   ██║\n' +
+  '  ██║     ██╔══██║██╔═══╝     ██╔═══╝ ██╔══██╗██║   ██║\n' +
+  '  ╚██████╗██║  ██║██║         ██║     ██║  ██║╚██████╔╝\n' +
+  '   ╚═════╝╚═╝  ╚═╝╚═╝         ╚═╝     ╚═╝  ╚═╝ ╚═════╝' + reset + '\n' +
   '\n' +
-  '  ' + bold + 'Code as Plan' + reset + ' ' + dim + 'v' + pkg.version + reset + '\n' +
-  '  Build first. Plan from code. Ship with confidence.\n' +
-  '\n' +
-  '  ' + cyan + 'New in v3:' + reset + ' Project Memory System — code-first decisions,\n' +
-  '  conversation threading, impact analysis, and connected memory graph.\n';
+  '  ' + bold + 'CAP Pro' + reset + ' ' + dim + 'v' + pkg.version + reset + '  ' + dim + '— Code-First engineering for Claude Code & friends' + reset + '\n' +
+  '  Build first. Plan from code. Ship with confidence.\n';
 
 // Parse --config-dir argument
 function parseConfigDirArg() {
@@ -352,7 +349,7 @@ if (hasUninstall) {
 
 // Show help if requested
 if (hasHelp) {
-  console.log(`  ${yellow}Usage:${reset} npx code-as-plan [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall CAP (remove all CAP files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force${reset}                   Clean reinstall (delete target, reinstall from scratch)\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx code-as-plan\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx code-as-plan --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx code-as-plan --gemini --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx code-as-plan --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx code-as-plan --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx code-as-plan --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx code-as-plan --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx code-as-plan --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx code-as-plan --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx code-as-plan --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx code-as-plan --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx code-as-plan --windsurf --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx code-as-plan --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx code-as-plan --codex --global --config-dir ~/.codex-work\n\n    ${dim}# Install to current project only${reset}\n    npx code-as-plan --claude --local\n\n    ${dim}# Uninstall CAP from Cursor globally${reset}\n    npx code-as-plan --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR environment variables.\n`);
+  console.log(`  ${yellow}Usage:${reset} npx cap-pro [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--gemini${reset}                  Install for Gemini only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall CAP Pro (remove all CAP files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force${reset}                   Clean reinstall (delete target, reinstall from scratch)\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--skip-legacy-cleanup${reset}     Skip auto-cleanup of legacy code-as-plan@7.x installs\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx cap-pro\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx cap-pro --claude --global\n\n    ${dim}# Install for Gemini globally${reset}\n    npx cap-pro --gemini --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx cap-pro --codex --global\n\n    ${dim}# Install for Copilot globally${reset}\n    npx cap-pro --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx cap-pro --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx cap-pro --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx cap-pro --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx cap-pro --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx cap-pro --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx cap-pro --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx cap-pro --windsurf --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx cap-pro --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx cap-pro --codex --global --config-dir ~/.codex-work\n\n    ${dim}# Install to current project only${reset}\n    npx cap-pro --claude --local\n\n    ${dim}# Uninstall CAP Pro from Cursor globally${reset}\n    npx cap-pro --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR / CODEX_HOME / COPILOT_CONFIG_DIR / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR environment variables.\n`);
   process.exit(0);
 }
 
@@ -4501,7 +4498,7 @@ function install(isGlobal, runtime = 'claude') {
       for (const name of integrity.failed) {
         console.error(`    ${yellow}✗${reset} ${name}`);
       }
-      console.error(`\n  ${yellow}Repair:${reset} npx code-as-plan@latest --force`);
+      console.error(`\n  ${yellow}Repair:${reset} npx cap-pro@latest --force`);
       installSummary.errors.push(`integrity: ${integrity.failed.length} module(s) failed`);
       process.exit(1);
     }
@@ -4849,20 +4846,39 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
   if (runtime === 'antigravity') command = '/cap-new-project';
   if (runtime === 'cursor') command = 'cap-new-project (mention the skill name)';
   console.log(`
-  ${magenta}${bold}CAP v${pkg.version} installed.${reset}
+  ${magenta}${bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}
+  ${magenta}${bold}  CAP Pro v${pkg.version} ist installiert.${reset}
+  ${magenta}${bold}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}
 
-  ${green}Done!${reset} Open a directory in ${program} and run ${cyan}/cap:init${reset} to get started.
+  ${green}✓${reset}  Runtime: ${bold}${program}${reset}
 
-  ${bold}Quick start:${reset}
-    /cap:init          Initialize project + detect stack
-    /cap:brainstorm    Discover features interactively
-    /cap:prototype     Build annotated code from Feature Map
-    /cap:memory init   Bootstrap project memory from sessions + code
+  ${bold}Was ist CAP Pro?${reset}
+    ${dim}Code-First engineering framework. Du baust zuerst funktionierenden Code,
+    der Plan ergibt sich aus den Annotationen im Code — keine vorgelagerten
+    Dokumentations-Berge, volle Nachvollziehbarkeit.${reset}
 
-  ${dim}The first /cap:init will fetch library docs via Context7 (npx ctx7@latest).
-  Results are cached in .cap/stack-docs/.${reset}
+  ${bold}Erste Schritte${reset} ${dim}(in deinem Projekt-Verzeichnis):${reset}
 
-  ${cyan}Docs:${reset}  https://github.com/dwall-sys/code-as-plan
+    ${cyan}1.${reset}  ${bold}/cap:init${reset}             ${dim}— Projekt initialisieren, Stack erkennen${reset}
+    ${cyan}2.${reset}  ${bold}/cap:brainstorm${reset}       ${dim}— Features interaktiv herausarbeiten${reset}
+    ${cyan}3.${reset}  ${bold}/cap:prototype${reset}        ${dim}— Annotierten Code aus Feature Map bauen${reset}
+    ${cyan}4.${reset}  ${bold}/cap:test${reset}             ${dim}— RED-GREEN Tests gegen Acceptance Criteria${reset}
+    ${cyan}5.${reset}  ${bold}/cap:review${reset}           ${dim}— Zwei-Stufen-Review: AC + Codequalität${reset}
+
+  ${bold}Was ist neu in CAP Pro 1.0?${reset}
+    ${green}•${reset} Komplette Neuarchitektur — 9 fokussierte Agents (statt 18+)
+    ${green}•${reset} Multi-User-Workflow mit Handoff-Snapshots
+    ${green}•${reset} Sharded Feature Map (10–50× weniger Token bei großen Projekten)
+    ${green}•${reset} Project Memory v6 mit Per-Feature-Layout
+    ${green}•${reset} 8 Runtimes: Claude Code, OpenCode, Gemini, Codex, Copilot, Antigravity, Cursor, Windsurf
+
+  ${dim}Beim ersten /cap:init werden Bibliotheks-Docs via Context7 geladen
+  (npx ctx7@latest). Ergebnisse werden in .cap/stack-docs/ gecacht.${reset}
+
+  ${cyan}📖 Dokumentation:${reset}  https://dwall-sys.github.io/code-as-plan
+  ${cyan}🐛 Issues:${reset}         https://github.com/dwall-sys/code-as-plan/issues
+  ${cyan}⚙  Update:${reset}         npx cap-pro@latest
+  ${cyan}🗑  Entfernen:${reset}      npx cap-pro --uninstall
 `);
 }
 
@@ -5164,6 +5180,123 @@ ${gsdAgents.length > 0 ? `    ${cyan}${gsdAgents.length}${reset} GSD agent files
   });
 }
 
+/**
+ * Detect and clean up legacy `code-as-plan@7.x` (and earlier) artefacts that
+ * are not shipped any more in CAP Pro 1.0. This is the rebrand cleanup pass:
+ * removes retired commands, retired agents, and stale npm-cache references to
+ * the old `code-as-plan` package name. Project files (FEATURE-MAP.md, .cap/,
+ * tags) are NEVER touched — they are 100% format-compatible with CAP Pro.
+ *
+ * @param {string} targetDir - The runtime config directory to check
+ * @param {boolean} isInteractive - Whether we can prompt the user
+ * @param {Function} callback - Called when cleanup is done (or skipped)
+ */
+function detectAndCleanupLegacyCAP(targetDir, isInteractive, callback) {
+  if (skipLegacyCleanup) {
+    callback();
+    return;
+  }
+
+  // Files that existed in `code-as-plan@7.x` (and earlier) but were removed
+  // before CAP Pro 1.0. Listing them explicitly is safer than "delete anything
+  // not in the current package" — we never want to nuke a user's customisation.
+  const RETIRED_AGENTS = [
+    'cap-tester.md',       // → consolidated into cap-validator (MODE: TEST)
+    'cap-reviewer.md',     // → consolidated into cap-validator (MODE: REVIEW)
+  ];
+  const RETIRED_COMMANDS = [
+    'cluster.md',
+    'report.md',
+    'refresh-docs.md',
+    'switch-app.md',
+    'quick.md',
+    'finalize.md',
+    'doctor.md',
+    'update.md',
+    'upgrade.md',
+    'new-project.md',
+  ];
+
+  const found = { agents: [], commands: [] };
+
+  // Check agents/cap-* for retired files
+  const agentsDir = path.join(targetDir, 'agents');
+  if (fs.existsSync(agentsDir)) {
+    for (const name of RETIRED_AGENTS) {
+      if (fs.existsSync(path.join(agentsDir, name))) {
+        found.agents.push(name);
+      }
+    }
+  }
+
+  // Check commands/cap/* for retired files
+  const commandsCapDir = path.join(targetDir, 'commands', 'cap');
+  if (fs.existsSync(commandsCapDir)) {
+    for (const name of RETIRED_COMMANDS) {
+      if (fs.existsSync(path.join(commandsCapDir, name))) {
+        found.commands.push(name);
+      }
+    }
+  }
+
+  if (found.agents.length === 0 && found.commands.length === 0) {
+    callback();
+    return;
+  }
+
+  console.log(`
+  ${yellow}Legacy code-as-plan@7.x files detected${reset}
+
+  CAP Pro 1.0 is a rebrand+reset of the framework formerly published as
+  ${dim}code-as-plan${reset}. A few files from the old version are still in this
+  config directory and would conflict with CAP Pro:
+${found.agents.length > 0 ? `\n    Retired agents (${cyan}${found.agents.length}${reset}): ${found.agents.join(', ')}` : ''}${found.commands.length > 0 ? `\n    Retired commands (${cyan}${found.commands.length}${reset}): ${found.commands.join(', ')}` : ''}
+
+  ${dim}Your project files — FEATURE-MAP.md, .cap/, code tags, memory — are
+  100% format-compatible with CAP Pro and are NOT touched.${reset}
+`);
+
+  const doCleanup = () => {
+    let removed = 0;
+    for (const name of found.agents) {
+      try { fs.unlinkSync(path.join(agentsDir, name)); removed++; } catch (_e) {}
+    }
+    for (const name of found.commands) {
+      try { fs.unlinkSync(path.join(commandsCapDir, name)); removed++; } catch (_e) {}
+    }
+    console.log(`  ${green}✓${reset} Legacy CAP cleanup complete (${removed} files removed)\n`);
+    callback();
+  };
+
+  if (!isInteractive) {
+    // Non-interactive (CI, --all etc.): clean up automatically
+    doCleanup();
+    return;
+  }
+
+  console.log(`  ${cyan}1${reset}) Yes, remove retired files ${dim}(recommended)${reset}`);
+  console.log(`  ${cyan}2${reset}) No, keep them ${dim}(--skip-legacy-cleanup for next time)${reset}\n`);
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let answered = false;
+  rl.on('close', () => { if (!answered) { answered = true; callback(); } });
+
+  rl.question(`  Choice ${dim}[1]${reset}: `, (answer) => {
+    answered = true;
+    rl.close();
+    const choice = answer.trim() || '1';
+    if (choice === '1') {
+      doCleanup();
+    } else {
+      console.log(`  ${dim}Skipped legacy CAP cleanup. To remove later:${reset}`);
+      const agentsHint = found.agents.map(a => path.join(agentsDir, a)).join(' ');
+      const cmdsHint = found.commands.map(c => path.join(commandsCapDir, c)).join(' ');
+      console.log(`  ${dim}rm -f ${agentsHint} ${cmdsHint}${reset}\n`);
+      callback();
+    }
+  });
+}
+
 function installAllRuntimes(runtimes, isGlobal, isInteractive) {
   // Check first runtime's target dir for GSD leftovers
   const firstRuntime = runtimes[0] || 'claude';
@@ -5173,6 +5306,7 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
     : path.join(process.cwd(), dirName);
 
   detectAndCleanupGSD(checkDir, isInteractive, () => {
+   detectAndCleanupLegacyCAP(checkDir, isInteractive, () => {
     const results = [];
 
     for (const runtime of runtimes) {
@@ -5206,6 +5340,7 @@ function installAllRuntimes(runtimes, isGlobal, isInteractive) {
     } else {
       finalize(false);
     }
+   }); // end detectAndCleanupLegacyCAP callback
   }); // end detectAndCleanupGSD callback
 }
 

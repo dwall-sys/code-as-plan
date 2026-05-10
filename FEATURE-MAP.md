@@ -698,7 +698,7 @@
 | AC-3 | tested | /cap:status shall be extended with a Neural Memory section showing: active cluster count, dormant node count, highest-affinity thread pair, and last clustering timestamp |
 | AC-4 | tested | /cap:start shall passively check realtime affinity and surface urgent/notify threads relevant to the selected feature before session work begins |
 | AC-5 | tested | /cap:brainstorm shall passively check thread affinity at session start and present relevant prior threads (notify band and above) before beginning discovery questions |
-| AC-6 | tested | The /cap:cluster command markdown shall be added to commands/cap/ following existing command file conventions (YAML frontmatter, structured sections) |
+| AC-6 | tested | The /cap:cluster command markdown shall be added to commands/cap/ following existing command file conventions (YAML frontmatter, structured sections) [RETIRED in iteration/cap-pro-1: command /cap:cluster removed; cluster display moves under cap-curator MODE: CLUSTERS] |
 | AC-7 | tested | All cluster display output shall use the existing CAP status formatting conventions (markdown tables, consistent headers) for visual consistency |
 
 **Files:**

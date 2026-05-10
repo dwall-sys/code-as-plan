@@ -505,23 +505,10 @@ describe('F-040 AC-4/AC-5: formatRealtimeNotifications', () => {
 // AC-6: Command markdown exists
 // =========================================================================
 
-describe('F-040 AC-6: cluster.md command file', () => {
-
-  const commandPath = path.join(__dirname, '..', 'commands', 'cap', 'cluster.md');
-
-  // @cap-todo(ac:F-040/AC-6) commands/cap/cluster.md file exists
-  it('should have commands/cap/cluster.md file', () => {
-    assert.ok(fs.existsSync(commandPath), `File not found: ${commandPath}`);
-    assert.notStrictEqual(fs, undefined);
-  });
-
-  // @cap-todo(ac:F-040/AC-6) file contains YAML frontmatter with name: cap:cluster
-  it('should contain YAML frontmatter with name: cap:cluster', () => {
-    const content = fs.readFileSync(commandPath, 'utf8');
-    assert.ok(content.startsWith('---'), 'File should start with YAML frontmatter delimiter');
-    assert.ok(content.includes('name: cap:cluster'), 'Missing name: cap:cluster in frontmatter');
-  });
-});
+// F-040 AC-6 retired in iteration/cap-pro-1: the standalone /cap:cluster command was
+// removed; cluster display moves under `cap:memory status`. Display-logic ACs (AC-1..AC-5,
+// AC-7..) below still apply. Original tests preserved in git history at HEAD~1.
+describe.skip('F-040 AC-6: cluster.md command file (retired)', () => {});
 
 // =========================================================================
 // AC-7: Consistent formatting

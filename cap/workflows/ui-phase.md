@@ -4,10 +4,6 @@ Generate a UI design contract (UI-SPEC.md) for frontend phases. Orchestrates gsd
 UI-SPEC.md locks spacing, typography, color, copywriting, and design system decisions before the planner creates tasks. This prevents design debt caused by ad-hoc styling decisions during execution.
 </purpose>
 
-<required_reading>
-@~/.claude/cap/references/ui-brand.md
-</required_reading>
-
 <available_agent_types>
 Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
 - gsd-ui-researcher — Researches UI/UX approaches

@@ -192,10 +192,10 @@ describe('marketplace.json schema edges (AC-2)', () => {
     }
   });
 
-  it('cap plugin entry source "./" resolves to the directory that contains .claude-plugin/plugin.json', () => {
+  it('cap-pro plugin entry source "./" resolves to the directory that contains .claude-plugin/plugin.json', () => {
     const mp = JSON.parse(fs.readFileSync(MARKETPLACE_MANIFEST, 'utf8'));
-    const cap = mp.plugins.find(p => p.name === 'cap');
-    assert.ok(cap);
+    const cap = mp.plugins.find(p => p.name === 'cap-pro');
+    assert.ok(cap, 'marketplace must list cap-pro entry');
     // source is relative to the marketplace.json file. marketplace.json lives at .claude-plugin/marketplace.json,
     // so source "./" resolves to .claude-plugin/ — and plugin.json must live there.
     const resolved = path.resolve(path.dirname(MARKETPLACE_MANIFEST), cap.source);
@@ -433,16 +433,31 @@ describe('detectInstallMode — filesystem edges (AC-5)', () => {
     }
   });
 
-  it('local .claude-plugin/plugin.json with name "cap" IS a CAP footprint', () => {
+  it('local .claude-plugin/plugin.json with name "cap-pro" IS a CAP footprint', () => {
     const home = tmp('cap-local-rightname-');
     const cwd = tmp('cap-cwd-rn-');
     try {
       fs.mkdirSync(path.join(cwd, '.claude-plugin'), { recursive: true });
       fs.writeFileSync(path.join(cwd, '.claude-plugin', 'plugin.json'),
-        JSON.stringify({ name: 'cap', version: '1.0.0' }));
+        JSON.stringify({ name: 'cap-pro', version: '1.0.0' }));
       const r = detectInstallMode({ homeDir: home, cwd });
       assert.equal(r.plugin, true);
       assert.ok(r.pluginPaths.some(p => p.endsWith(path.join('.claude-plugin', 'plugin.json'))));
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('local .claude-plugin/plugin.json with legacy name "cap" is also a CAP footprint (backward compat)', () => {
+    const home = tmp('cap-local-legacy-');
+    const cwd = tmp('cap-cwd-legacy-');
+    try {
+      fs.mkdirSync(path.join(cwd, '.claude-plugin'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, '.claude-plugin', 'plugin.json'),
+        JSON.stringify({ name: 'cap', version: '7.0.0' }));
+      const r = detectInstallMode({ homeDir: home, cwd });
+      assert.equal(r.plugin, true, 'legacy plugin name "cap" still counts as a CAP footprint');
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
       fs.rmSync(cwd, { recursive: true, force: true });
@@ -700,16 +715,14 @@ describe('npx install path — deeper invariants (AC-4)', () => {
 // Cross-manifest consistency
 // ---------------------------------------------------------------------------
 describe('Cross-manifest consistency', () => {
-  it('plugin.json name, package.json name, and marketplace plugin entry name align', () => {
+  it('plugin.json name, package.json name, and marketplace plugin entry name align (CAP Pro 1.0)', () => {
     const plug = JSON.parse(fs.readFileSync(PLUGIN_MANIFEST, 'utf8'));
     const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
     const mp = JSON.parse(fs.readFileSync(MARKETPLACE_MANIFEST, 'utf8'));
 
-    // plugin.json name is short ("cap" for slash-command namespace)
-    assert.equal(plug.name, 'cap');
-    // package name is long form on npm
-    assert.equal(pkg.name, 'code-as-plan');
-    // marketplace name aligns with npm package name
+    // CAP Pro 1.0: all three names are unified to "cap-pro".
+    assert.equal(plug.name, 'cap-pro');
+    assert.equal(pkg.name, 'cap-pro');
     assert.equal(mp.name, pkg.name,
       'marketplace.name should equal the npm package name for a consistent published surface');
     // marketplace entry name aligns with plugin.json name

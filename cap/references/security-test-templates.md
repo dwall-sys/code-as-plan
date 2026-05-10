@@ -1,6 +1,6 @@
 # Security Test Templates
 
-Reference document for the cap-tester agent when generating security-focused tests. Use these templates as starting points, adapting table names, column names, and auth patterns to the target project.
+Reference document for the cap-validator agent (test mode) when generating security-focused tests. Use these templates as starting points, adapting table names, column names, and auth patterns to the target project.
 
 ---
 

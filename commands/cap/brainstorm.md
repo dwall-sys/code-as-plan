@@ -1,6 +1,6 @@
 ---
 name: cap:brainstorm
-description: Interactive feature discovery conversation that produces Feature Map entries with acceptance criteria, feature grouping, and dependency analysis. Spawns cap-brainstormer agent.
+description: Interactive feature discovery — produces FEATURE-MAP.md entries (acceptance criteria, dependencies, feature grouping) from a structured conversation. TRIGGER when the user wants to plan a new feature, says "let's add X / build Y / we need a feature for Z", describes a problem without concrete ACs yet, references a Feature ID that doesn't exist in FEATURE-MAP.md, or asks "what should we build next". DO NOT trigger for refining an existing feature (use cap:iterate) or bug fixes (use cap:debug). Spawns cap-brainstormer agent.
 argument-hint: "[--resume] [--multi]"
 allowed-tools:
   - Read

@@ -20,6 +20,7 @@ const {
   cmdWriteProfile: _cmdWriteProfile,
   cmdGenerateDevPreferences: _cmdGenerateDevPreferences,
   cmdGenerateClaudeMd: _cmdGenerateClaudeMd,
+  extractTemplateSection,
 } = require('../cap/bin/lib/profile-output.cjs');
 
 /**
@@ -64,6 +65,67 @@ function runCmd(fn) {
   }
   return { success: true, output: stdout.trim(), error: null };
 }
+
+// ─── extractTemplateSection (merged user-preferences.md parser) ──────────────
+
+describe('extractTemplateSection', () => {
+  test('extracts profile section from real merged template', () => {
+    const tplPath = path.join(__dirname, '..', 'cap', 'templates', 'user-preferences.md');
+    const merged = fs.readFileSync(tplPath, 'utf-8');
+    const profile = extractTemplateSection(merged, 'profile');
+    assert.ok(profile, 'profile section should exist');
+    assert.ok(profile.includes('{{generated_at}}'), 'profile should retain Mustache vars');
+    assert.ok(profile.includes('{{communication_style.rating}}'));
+    assert.ok(!profile.includes('## Section: setup'), 'should not bleed into next section');
+    assert.ok(!profile.includes('## Section: dev-preferences'));
+  });
+
+  test('extracts dev-preferences section from real merged template', () => {
+    const tplPath = path.join(__dirname, '..', 'cap', 'templates', 'user-preferences.md');
+    const merged = fs.readFileSync(tplPath, 'utf-8');
+    const dp = extractTemplateSection(merged, 'dev-preferences');
+    assert.ok(dp, 'dev-preferences section should exist');
+    assert.ok(dp.includes('{{behavioral_directives}}'));
+    assert.ok(dp.includes('{{stack_preferences}}'));
+    assert.ok(!dp.includes('## Section:'));
+  });
+
+  test('extracts setup section from real merged template', () => {
+    const tplPath = path.join(__dirname, '..', 'cap', 'templates', 'user-preferences.md');
+    const merged = fs.readFileSync(tplPath, 'utf-8');
+    const setup = extractTemplateSection(merged, 'setup');
+    assert.ok(setup, 'setup section should exist');
+    assert.ok(setup.includes('USER-SETUP.md'));
+    assert.ok(!setup.includes('## Section: dev-preferences'));
+  });
+
+  test('returns null for missing section name', () => {
+    const merged = '## Section: foo\nbody\n## Section: bar\nother\n';
+    assert.strictEqual(extractTemplateSection(merged, 'baz'), null);
+  });
+
+  test('preserves inner ## headings within a section', () => {
+    const merged = [
+      '## Section: profile',
+      '',
+      '## Communication Style',
+      'body line',
+      '',
+      '## Section: setup',
+      'setup body',
+    ].join('\n');
+    const profile = extractTemplateSection(merged, 'profile');
+    assert.ok(profile.includes('## Communication Style'));
+    assert.ok(profile.includes('body line'));
+    assert.ok(!profile.includes('setup body'));
+  });
+
+  test('handles last section (no trailing Section: anchor)', () => {
+    const merged = '## Section: only\nfinal body\n';
+    const result = extractTemplateSection(merged, 'only');
+    assert.ok(result.includes('final body'));
+  });
+});
 
 // ─── PROFILING_QUESTIONS data ─────────────────────────────────────────────────
 

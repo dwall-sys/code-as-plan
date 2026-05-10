@@ -8,6 +8,7 @@
 
 // @cap-feature(feature:F-003) Session State Management — .cap/SESSION.json for cross-conversation workflow state
 
+// @cap-history(sessions:2, edits:4, since:2026-05-08, learned:2026-05-08) Frequently modified — 2 sessions, 4 edits
 const fs = require('node:fs');
 const path = require('node:path');
 

@@ -152,60 +152,30 @@ const fs = require('fs');
 const path = require('path');
 const core = require('./lib/core.cjs');
 const { error, findProjectRoot, getActiveWorkstream } = core;
-const state = require('./lib/state.cjs');
-const phase = require('./lib/phase.cjs');
-const roadmap = require('./lib/roadmap.cjs');
-const verify = require('./lib/verify.cjs');
 const config = require('./lib/config.cjs');
-const template = require('./lib/template.cjs');
-const milestone = require('./lib/milestone.cjs');
 const commands = require('./lib/commands.cjs');
+const phase = require('./lib/phase.cjs');
 const init = require('./lib/init.cjs');
-const frontmatter = require('./lib/frontmatter.cjs');
 const profilePipeline = require('./lib/profile-pipeline.cjs');
 const profileOutput = require('./lib/profile-output.cjs');
-const workstream = require('./lib/workstream.cjs');
 const arcScanner = require('./lib/arc-scanner.cjs');
+const verify = require('./lib/verify.cjs');
+const state = require('./lib/state.cjs');
 
-// ─── Arg parsing helpers ──────────────────────────────────────────────────────
-
-/**
- * Extract named --flag <value> pairs from an args array.
- * Returns an object mapping flag names to their values (null if absent).
- * Flags listed in `booleanFlags` are treated as boolean (no value consumed).
- *
- * parseNamedArgs(args, 'phase', 'plan')        → { phase: '3', plan: '1' }
- * parseNamedArgs(args, [], ['amend', 'force'])  → { amend: true, force: false }
- */
-function parseNamedArgs(args, valueFlags = [], booleanFlags = []) {
-  const result = {};
-  for (const flag of valueFlags) {
-    const idx = args.indexOf(`--${flag}`);
-    result[flag] = idx !== -1 && args[idx + 1] !== undefined && !args[idx + 1].startsWith('--')
-      ? args[idx + 1]
-      : null;
-  }
-  for (const flag of booleanFlags) {
-    result[flag] = args.includes(`--${flag}`);
-  }
-  return result;
-}
-
-/**
- * Collect all tokens after --flag until the next --flag or end of args.
- * Handles multi-word values like --name Foo Bar Version 1.
- * Returns null if the flag is absent.
- */
-function parseMultiwordArg(args, flag) {
-  const idx = args.indexOf(`--${flag}`);
-  if (idx === -1) return null;
-  const tokens = [];
-  for (let i = idx + 1; i < args.length; i++) {
-    if (args[i].startsWith('--')) break;
-    tokens.push(args[i]);
-  }
-  return tokens.length > 0 ? tokens.join(' ') : null;
-}
+// Routers — extracted from the formerly-monolithic switch statement.
+// Each router exports a `dispatch(args, cwd, raw)` (or named variant) and
+// owns the sub-switch for its command group. Routers are pure delegation —
+// no business logic moved with them, only the wiring.
+const stateRouter = require('./lib/cli/state-router.cjs');
+const templateRouter = require('./lib/cli/template-router.cjs');
+const frontmatterRouter = require('./lib/cli/frontmatter-router.cjs');
+const verificationRouter = require('./lib/cli/verification-router.cjs');
+const validationRouter = require('./lib/cli/validation-router.cjs');
+const phaseRouter = require('./lib/cli/phase-router.cjs');
+const initRouter = require('./lib/cli/init-router.cjs');
+const workstreamRouter = require('./lib/cli/workstream-router.cjs');
+const uatRouter = require('./lib/cli/uat-router.cjs');
+const { parseNamedArgs, parseMultiwordArg } = require('./lib/cli/arg-helpers.cjs');
 
 // ─── CLI Router ───────────────────────────────────────────────────────────────
 
@@ -364,55 +334,9 @@ function extractField(obj, fieldPath) {
 
 async function runCommand(command, args, cwd, raw) {
   switch (command) {
-    case 'state': {
-      const subcommand = args[1];
-      if (subcommand === 'json') {
-        state.cmdStateJson(cwd, raw);
-      } else if (subcommand === 'update') {
-        state.cmdStateUpdate(cwd, args[2], args[3]);
-      } else if (subcommand === 'get') {
-        state.cmdStateGet(cwd, args[2], raw);
-      } else if (subcommand === 'patch') {
-        const patches = {};
-        for (let i = 2; i < args.length; i += 2) {
-          const key = args[i].replace(/^--/, '');
-          const value = args[i + 1];
-          if (key && value !== undefined) {
-            patches[key] = value;
-          }
-        }
-        state.cmdStatePatch(cwd, patches, raw);
-      } else if (subcommand === 'advance-plan') {
-        state.cmdStateAdvancePlan(cwd, raw);
-      } else if (subcommand === 'record-metric') {
-        const { phase: p, plan, duration, tasks, files } = parseNamedArgs(args, ['phase', 'plan', 'duration', 'tasks', 'files']);
-        state.cmdStateRecordMetric(cwd, { phase: p, plan, duration, tasks, files }, raw);
-      } else if (subcommand === 'update-progress') {
-        state.cmdStateUpdateProgress(cwd, raw);
-      } else if (subcommand === 'add-decision') {
-        const { phase: p, summary, 'summary-file': summary_file, rationale, 'rationale-file': rationale_file } = parseNamedArgs(args, ['phase', 'summary', 'summary-file', 'rationale', 'rationale-file']);
-        state.cmdStateAddDecision(cwd, { phase: p, summary, summary_file, rationale: rationale || '', rationale_file }, raw);
-      } else if (subcommand === 'add-blocker') {
-        const { text, 'text-file': text_file } = parseNamedArgs(args, ['text', 'text-file']);
-        state.cmdStateAddBlocker(cwd, { text, text_file }, raw);
-      } else if (subcommand === 'resolve-blocker') {
-        state.cmdStateResolveBlocker(cwd, parseNamedArgs(args, ['text']).text, raw);
-      } else if (subcommand === 'record-session') {
-        const { 'stopped-at': stopped_at, 'resume-file': resume_file } = parseNamedArgs(args, ['stopped-at', 'resume-file']);
-        state.cmdStateRecordSession(cwd, { stopped_at, resume_file: resume_file || 'None' }, raw);
-      } else if (subcommand === 'begin-phase') {
-        const { phase: p, name, plans } = parseNamedArgs(args, ['phase', 'name', 'plans']);
-        state.cmdStateBeginPhase(cwd, p, name, plans !== null ? parseInt(plans, 10) : null, raw);
-      } else if (subcommand === 'signal-waiting') {
-        const { type, question, options, phase: p } = parseNamedArgs(args, ['type', 'question', 'options', 'phase']);
-        state.cmdSignalWaiting(cwd, type, question, options, p, raw);
-      } else if (subcommand === 'signal-resume') {
-        state.cmdSignalResume(cwd, raw);
-      } else {
-        state.cmdStateLoad(cwd, raw);
-      }
+    case 'state':
+      stateRouter.dispatch(args, cwd, raw);
       break;
-    }
 
     case 'resolve-model': {
       commands.cmdResolveModel(cwd, args[1], raw);
@@ -455,68 +379,17 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
-    case 'template': {
-      const subcommand = args[1];
-      if (subcommand === 'select') {
-        template.cmdTemplateSelect(cwd, args[2], raw);
-      } else if (subcommand === 'fill') {
-        const templateType = args[2];
-        const { phase, plan, name, type, wave, fields: fieldsRaw } = parseNamedArgs(args, ['phase', 'plan', 'name', 'type', 'wave', 'fields']);
-        let fields = {};
-        if (fieldsRaw) {
-          const { safeJsonParse } = require('./lib/security.cjs');
-          const result = safeJsonParse(fieldsRaw, { label: '--fields' });
-          if (!result.ok) error(result.error);
-          fields = result.value;
-        }
-        template.cmdTemplateFill(cwd, templateType, {
-          phase, plan, name, fields,
-          type: type || 'execute',
-          wave: wave || '1',
-        }, raw);
-      } else {
-        error('Unknown template subcommand. Available: select, fill');
-      }
+    case 'template':
+      templateRouter.dispatch(args, cwd, raw);
       break;
-    }
 
-    case 'frontmatter': {
-      const subcommand = args[1];
-      const file = args[2];
-      if (subcommand === 'get') {
-        frontmatter.cmdFrontmatterGet(cwd, file, parseNamedArgs(args, ['field']).field, raw);
-      } else if (subcommand === 'set') {
-        const { field, value } = parseNamedArgs(args, ['field', 'value']);
-        frontmatter.cmdFrontmatterSet(cwd, file, field, value !== null ? value : undefined, raw);
-      } else if (subcommand === 'merge') {
-        frontmatter.cmdFrontmatterMerge(cwd, file, parseNamedArgs(args, ['data']).data, raw);
-      } else if (subcommand === 'validate') {
-        frontmatter.cmdFrontmatterValidate(cwd, file, parseNamedArgs(args, ['schema']).schema, raw);
-      } else {
-        error('Unknown frontmatter subcommand. Available: get, set, merge, validate');
-      }
+    case 'frontmatter':
+      frontmatterRouter.dispatch(args, cwd, raw);
       break;
-    }
 
-    case 'verify': {
-      const subcommand = args[1];
-      if (subcommand === 'plan-structure') {
-        verify.cmdVerifyPlanStructure(cwd, args[2], raw);
-      } else if (subcommand === 'phase-completeness') {
-        verify.cmdVerifyPhaseCompleteness(cwd, args[2], raw);
-      } else if (subcommand === 'references') {
-        verify.cmdVerifyReferences(cwd, args[2], raw);
-      } else if (subcommand === 'commits') {
-        verify.cmdVerifyCommits(cwd, args.slice(2), raw);
-      } else if (subcommand === 'artifacts') {
-        verify.cmdVerifyArtifacts(cwd, args[2], raw);
-      } else if (subcommand === 'key-links') {
-        verify.cmdVerifyKeyLinks(cwd, args[2], raw);
-      } else {
-        error('Unknown verify subcommand. Available: plan-structure, phase-completeness, references, commits, artifacts, key-links');
-      }
+    case 'verify':
+      verificationRouter.dispatch(args, cwd, raw);
       break;
-    }
 
     case 'generate-slug': {
       commands.cmdGenerateSlug(args[1], raw);
@@ -573,103 +446,29 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
-    case 'phases': {
-      const subcommand = args[1];
-      if (subcommand === 'list') {
-        const typeIndex = args.indexOf('--type');
-        const phaseIndex = args.indexOf('--phase');
-        const options = {
-          type: typeIndex !== -1 ? args[typeIndex + 1] : null,
-          phase: phaseIndex !== -1 ? args[phaseIndex + 1] : null,
-          includeArchived: args.includes('--include-archived'),
-        };
-        phase.cmdPhasesList(cwd, options, raw);
-      } else {
-        error('Unknown phases subcommand. Available: list');
-      }
+    case 'phases':
+      phaseRouter.dispatchPhases(args, cwd, raw);
       break;
-    }
 
-    case 'roadmap': {
-      const subcommand = args[1];
-      if (subcommand === 'get-phase') {
-        roadmap.cmdRoadmapGetPhase(cwd, args[2], raw);
-      } else if (subcommand === 'analyze') {
-        roadmap.cmdRoadmapAnalyze(cwd, raw);
-      } else if (subcommand === 'update-plan-progress') {
-        roadmap.cmdRoadmapUpdatePlanProgress(cwd, args[2], raw);
-      } else {
-        error('Unknown roadmap subcommand. Available: get-phase, analyze, update-plan-progress');
-      }
+    case 'roadmap':
+      phaseRouter.dispatchRoadmap(args, cwd, raw);
       break;
-    }
 
-    case 'requirements': {
-      const subcommand = args[1];
-      if (subcommand === 'mark-complete') {
-        milestone.cmdRequirementsMarkComplete(cwd, args.slice(2), raw);
-      } else {
-        error('Unknown requirements subcommand. Available: mark-complete');
-      }
+    case 'requirements':
+      phaseRouter.dispatchRequirements(args, cwd, raw);
       break;
-    }
 
-    case 'phase': {
-      const subcommand = args[1];
-      if (subcommand === 'next-decimal') {
-        phase.cmdPhaseNextDecimal(cwd, args[2], raw);
-      } else if (subcommand === 'add') {
-        const idIdx = args.indexOf('--id');
-        let customId = null;
-        const descArgs = [];
-        for (let i = 2; i < args.length; i++) {
-          if (args[i] === '--id' && i + 1 < args.length) {
-            customId = args[i + 1];
-            i++; // skip value
-          } else {
-            descArgs.push(args[i]);
-          }
-        }
-        phase.cmdPhaseAdd(cwd, descArgs.join(' '), raw, customId);
-      } else if (subcommand === 'insert') {
-        phase.cmdPhaseInsert(cwd, args[2], args.slice(3).join(' '), raw);
-      } else if (subcommand === 'remove') {
-        const forceFlag = args.includes('--force');
-        phase.cmdPhaseRemove(cwd, args[2], { force: forceFlag }, raw);
-      } else if (subcommand === 'complete') {
-        phase.cmdPhaseComplete(cwd, args[2], raw);
-      } else {
-        error('Unknown phase subcommand. Available: next-decimal, add, insert, remove, complete');
-      }
+    case 'phase':
+      phaseRouter.dispatchPhase(args, cwd, raw);
       break;
-    }
 
-    case 'milestone': {
-      const subcommand = args[1];
-      if (subcommand === 'complete') {
-        const milestoneName = parseMultiwordArg(args, 'name');
-        const archivePhases = args.includes('--archive-phases');
-        milestone.cmdMilestoneComplete(cwd, args[2], { name: milestoneName, archivePhases }, raw);
-      } else {
-        error('Unknown milestone subcommand. Available: complete');
-      }
+    case 'milestone':
+      phaseRouter.dispatchMilestone(args, cwd, raw);
       break;
-    }
 
-    case 'validate': {
-      const subcommand = args[1];
-      if (subcommand === 'consistency') {
-        verify.cmdValidateConsistency(cwd, raw);
-      } else if (subcommand === 'health') {
-        const repairFlag = args.includes('--repair');
-        verify.cmdValidateHealth(cwd, { repair: repairFlag }, raw);
-      } else if (subcommand === 'agents') {
-        verify.cmdValidateAgents(cwd, raw);
-      } else {
-        error('Unknown validate subcommand. Available: consistency, health, agents');
-      }
+    case 'validate':
+      validationRouter.dispatch(args, cwd, raw);
       break;
-    }
 
     case 'progress': {
       const subcommand = args[1] || 'json';
@@ -677,23 +476,13 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
-    case 'audit-uat': {
-      const uat = require('./lib/uat.cjs');
-      uat.cmdAuditUat(cwd, raw);
+    case 'audit-uat':
+      uatRouter.dispatchAuditUat(args, cwd, raw);
       break;
-    }
 
-    case 'uat': {
-      const subcommand = args[1];
-      const uat = require('./lib/uat.cjs');
-      if (subcommand === 'render-checkpoint') {
-        const options = parseNamedArgs(args, ['file']);
-        uat.cmdRenderCheckpoint(cwd, options, raw);
-      } else {
-        error('Unknown uat subcommand. Available: render-checkpoint');
-      }
+    case 'uat':
+      uatRouter.dispatchUat(args, cwd, raw);
       break;
-    }
 
     case 'stats': {
       const subcommand = args[1] || 'json';
@@ -723,62 +512,9 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
-    case 'init': {
-      const workflow = args[1];
-      switch (workflow) {
-        case 'execute-phase':
-          init.cmdInitExecutePhase(cwd, args[2], raw);
-          break;
-        case 'plan-phase':
-          init.cmdInitPlanPhase(cwd, args[2], raw);
-          break;
-        case 'new-project':
-          init.cmdInitNewProject(cwd, raw);
-          break;
-        case 'new-milestone':
-          init.cmdInitNewMilestone(cwd, raw);
-          break;
-        case 'quick':
-          init.cmdInitQuick(cwd, args.slice(2).join(' '), raw);
-          break;
-        case 'resume':
-          init.cmdInitResume(cwd, raw);
-          break;
-        case 'verify-work':
-          init.cmdInitVerifyWork(cwd, args[2], raw);
-          break;
-        case 'phase-op':
-          init.cmdInitPhaseOp(cwd, args[2], raw);
-          break;
-        case 'todos':
-          init.cmdInitTodos(cwd, args[2], raw);
-          break;
-        case 'milestone-op':
-          init.cmdInitMilestoneOp(cwd, raw);
-          break;
-        case 'map-codebase':
-          init.cmdInitMapCodebase(cwd, raw);
-          break;
-        case 'progress':
-          init.cmdInitProgress(cwd, raw);
-          break;
-        case 'manager':
-          init.cmdInitManager(cwd, raw);
-          break;
-        case 'new-workspace':
-          init.cmdInitNewWorkspace(cwd, raw);
-          break;
-        case 'list-workspaces':
-          init.cmdInitListWorkspaces(cwd, raw);
-          break;
-        case 'remove-workspace':
-          init.cmdInitRemoveWorkspace(cwd, args[2], raw);
-          break;
-        default:
-          error(`Unknown init workflow: ${workflow}\nAvailable: execute-phase, plan-phase, new-project, new-milestone, quick, resume, verify-work, phase-op, todos, milestone-op, map-codebase, progress, manager, new-workspace, list-workspaces, remove-workspace`);
-      }
+    case 'init':
+      initRouter.dispatch(args, cwd, raw);
       break;
-    }
 
     case 'phase-plan-index': {
       phase.cmdPhasePlanIndex(cwd, args[1], raw);
@@ -897,32 +633,9 @@ async function runCommand(command, args, cwd, raw) {
       break;
     }
 
-    case 'workstream': {
-      const subcommand = args[1];
-      if (subcommand === 'create') {
-        const migrateNameIdx = args.indexOf('--migrate-name');
-        const noMigrate = args.includes('--no-migrate');
-        workstream.cmdWorkstreamCreate(cwd, args[2], {
-          migrate: !noMigrate,
-          migrateName: migrateNameIdx !== -1 ? args[migrateNameIdx + 1] : null,
-        }, raw);
-      } else if (subcommand === 'list') {
-        workstream.cmdWorkstreamList(cwd, raw);
-      } else if (subcommand === 'status') {
-        workstream.cmdWorkstreamStatus(cwd, args[2], raw);
-      } else if (subcommand === 'complete') {
-        workstream.cmdWorkstreamComplete(cwd, args[2], {}, raw);
-      } else if (subcommand === 'set') {
-        workstream.cmdWorkstreamSet(cwd, args[2], raw);
-      } else if (subcommand === 'get') {
-        workstream.cmdWorkstreamGet(cwd, raw);
-      } else if (subcommand === 'progress') {
-        workstream.cmdWorkstreamProgress(cwd, raw);
-      } else {
-        error('Unknown workstream subcommand. Available: create, list, status, complete, set, get, progress');
-      }
+    case 'workstream':
+      workstreamRouter.dispatch(args, cwd, raw);
       break;
-    }
 
     case 'extract-tags': {
       const allArgs = args.slice(1);

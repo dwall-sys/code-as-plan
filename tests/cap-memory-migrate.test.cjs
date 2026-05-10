@@ -2,6 +2,7 @@
 
 // @cap-feature(feature:F-077) Tests for V6 Memory Migration Tool — covers AC-1..AC-7 plus adversarial edges.
 
+// @cap-history(sessions:2, edits:6, since:2026-05-06, learned:2026-05-08) Frequently modified — 2 sessions, 6 edits
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

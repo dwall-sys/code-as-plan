@@ -1,4 +1,5 @@
 // @cap-context CAP V6 Memory Migration Tool — one-shot conversion of V5 monolith memory files
+// @cap-history(sessions:2, edits:14, since:2026-05-06, learned:2026-05-08) Frequently modified — 2 sessions, 14 edits
 // (decisions.md, pitfalls.md, patterns.md, hotspots.md, graph.json) to the V6 per-feature layout
 // defined by F-076 (cap-memory-schema.cjs). Designed to handle production scale: 1219+ entries,
 // 38+ orphan snapshots without breakage. Hard-cutover: no V5/V6 coexistence at runtime; the user

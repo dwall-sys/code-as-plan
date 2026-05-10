@@ -4,7 +4,7 @@
 <!-- @gsd-decision Exactly 5 agents -- no more, no fewer. This is a hard constraint to prevent agent proliferation. New capabilities go into existing agents as modes. -->
 <!-- @gsd-decision Communication via shared artifacts only -- agents never invoke each other directly. This eliminates coupling and makes each agent independently testable. -->
 
-<!-- @gsd-todo(ref:AC-67) The system shall have exactly 5 agents: cap-brainstormer, cap-prototyper, cap-tester, cap-reviewer, cap-debugger -->
+<!-- @gsd-todo(ref:AC-67) The system shall have a small fixed micro-workflow agent set: cap-brainstormer, cap-prototyper, cap-validator, cap-debugger. (Updated cap-pro-4: cap-tester + cap-reviewer were consolidated into cap-validator.) -->
 <!-- @gsd-todo(ref:AC-68) Each agent defined as Markdown file with Claude Code agent frontmatter (YAML) -->
 <!-- @gsd-todo(ref:AC-69) Agents shall not depend on each other's internals -- communication via shared artifacts only -->
 <!-- @gsd-todo(ref:AC-70) Agents placed in agents/ directory with cap- prefix naming -->
@@ -17,8 +17,7 @@
 |-------|------|---------|------------|
 | cap-brainstormer | `agents/cap-brainstormer.md` | Feature discovery via conversation | `/cap:brainstorm` |
 | cap-prototyper | `agents/cap-prototyper.md` | Code generation in 4 modes: prototype, iterate, architecture, annotate | `/cap:prototype`, `/cap:iterate`, `/cap:annotate` |
-| cap-tester | `agents/cap-tester.md` | RED-GREEN test writing against Feature Map ACs | `/cap:test` |
-| cap-reviewer | `agents/cap-reviewer.md` | Two-stage review: spec compliance then code quality | `/cap:review` |
+| cap-validator | `agents/cap-validator.md` | 3 modes: test (RED-GREEN), review (Stage 1+2), audit (F-048 completeness) | `/cap:test`, `/cap:review`, `/cap:completeness` |
 | cap-debugger | `agents/cap-debugger.md` | Scientific method debugging with persistent state | `/cap:debug` |
 
 **Hard constraint:** No additional agents shall be created. If a new capability is needed, it must be added as a mode to an existing agent (preferably cap-prototyper).
@@ -59,11 +58,11 @@ Agents communicate ONLY through shared artifacts. No agent may:
 
 | Artifact | Location | Purpose | Read By | Written By |
 |----------|----------|---------|---------|------------|
-| FEATURE-MAP.md | Project root | Feature identity, state, ACs | All agents | brainstormer, prototyper, tester, reviewer |
+| FEATURE-MAP.md | Project root | Feature identity, state, ACs | All agents | brainstormer, prototyper, validator |
 | SESSION.json | `.cap/SESSION.json` | Ephemeral workflow state | All agents | Commands only |
 | Source code with @cap-* tags | Project tree | Implementation state | All agents | prototyper |
 | Stack docs | `.cap/stack-docs/` | Library documentation | All agents | `/cap:init`, `/cap:refresh-docs` |
-| REVIEW.md | `.cap/REVIEW.md` | Review findings | prototyper (to address) | reviewer |
+| REVIEW.md | `.cap/REVIEW.md` | Review findings | prototyper (to address) | validator (review mode) |
 | Debug sessions | `.cap/debug/` | Debug state | debugger | debugger |
 
 ### Information Flow
@@ -75,10 +74,10 @@ brainstormer -> FEATURE-MAP.md -> prototyper -> code with @cap-* tags
                                /cap:scan -> FEATURE-MAP.md (enriched)
                                       |
                                       v
-                                  tester -> test files -> reviewer
-                                                            |
-                                                            v
-                                                     REVIEW.md -> prototyper (iterate)
+                          validator (test mode) -> test files
+                                      |
+                                      v
+                          validator (review mode) -> REVIEW.md -> prototyper (iterate)
 ```
 
 ---
@@ -95,7 +94,7 @@ brainstormer -> FEATURE-MAP.md -> prototyper -> code with @cap-* tags
 
 ## Anti-Patterns
 
-1. **Do NOT create a 6th agent.** If you need new behavior, add a mode to cap-prototyper.
+1. **Do NOT proliferate agents.** If you need new behavior, add a mode to cap-prototyper or cap-validator.
 2. **Do NOT have agents call Task() to spawn other agents.** Only commands orchestrate agents.
 3. **Do NOT have agents read SESSION.json to determine what another agent did.** Each agent reads FEATURE-MAP.md and code for state.
 4. **Do NOT have agents write to .planning/ directory.** CAP artifacts go in project root (FEATURE-MAP.md) or .cap/ directory.
