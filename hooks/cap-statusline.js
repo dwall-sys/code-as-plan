@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// @cap-feature(feature:F-009) Hooks System — statusline display (Notification hook)
+// @cap-feature(feature:F-009) Hooks System — statusline display (registered under top-level statusLine, not hooks.Notification)
 // cap-hook-version: {{CAP_VERSION}}
+// cap-hook-lifecycle: statusLine
 // Claude Code Statusline - CAP Edition
 // Shows: model | current task | directory | context usage
 

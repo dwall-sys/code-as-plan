@@ -1979,7 +1979,7 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 - Index 37.7 KB (vs. 661 KB V5-Monolith, +5 KB gegenüber F-093 wegen Cross-App-Sektion — vertretbar für saving 192 Duplikate)
 - Cross-cutting korrekt erkannt: F-MIGRATION, F-AUTH, F-HUB-ROLES, F-HUB-SCHEMA (letzte zwei haben Source-Tags außerhalb apps/hub/, daher legitim cross-cutting)
 
-### F-097: cap-doctor verifies hook registration [planned]
+### F-097: cap-doctor verifies hook registration [tested]
 
 **Motivation:** Heute (2026-05-09) entdeckt: 7 CAP-Hooks installiert in `~/.claude/hooks/`, aber nur 3 in `~/.claude/settings.json` registriert. Cap-learning-hook (F-070), cap-tag-observer (F-054), cap-learn-review-hook (F-073), cap-version-check, cap-workflow-guard waren tot installiert — Code da, aber nie aufgerufen. Konsequenz: Self-Learning-Pipeline hat 0 Signals gesammelt obwohl Hub 31 Sessions mit Edit/Write-Ratio 3.79 (= sehr viel Rework, idealer Pattern-Input). `cap doctor` checkt aktuell nur Existenz der Lib-Files, nicht ob die Hooks aktiv im hook-Lifecycle eingehängt sind.
 
@@ -1987,17 +1987,18 @@ Symptom-Folge: Memory-Pipeline produziert qualitativ entwertete Einträge. F-091
 
 | AC | Status | Description |
 |----|--------|-------------|
-| AC-1 | planned | `cap doctor` parst `~/.claude/settings.json` und mappt jeden installierten CAP-Hook (cap-*.js in `~/.claude/hooks/`) auf seinen erwarteten Lifecycle (PostToolUse, Stop, UserPromptSubmit, SessionStart, PreToolUse). Erwartung steht im Hook-File-Header (z.B. `// PostToolUse hook:` Marker). |
-| AC-2 | planned | Ausgabe in 3 Buckets: ✓ "registered + reachable", ⚠ "installed but not registered" (mit Empfehlung was zu tun), ✗ "registered to non-existent file" (broken pointer). |
-| AC-3 | planned | Optional `--fix` Flag: bietet die fehlenden Hook-Registrations als JSON-patch an, schreibt mit Backup `settings.json.bak-pre-fix-<date>`. Strikt opt-in, kein Auto-Fix. |
-| AC-4 | planned | Tests: alle 7 erwarteten Hooks erkannt, Drift-Erkennung (Hook fehlt in settings), Broken-Pointer-Erkennung (settings → fehlende Datei), Lifecycle-Mismatch (PostToolUse-Hook in Stop-Block). |
+| AC-1 | tested | `cap doctor` parst `~/.claude/settings.json` und mappt jeden installierten CAP-Hook (cap-*.js in `~/.claude/hooks/`) auf seinen erwarteten Lifecycle. Resolution: explicit `// cap-hook-lifecycle: <Name>` marker first, header-heuristic `(SessionStart\|Stop\|PostToolUse\|PreToolUse\|UserPromptSubmit\|Notification\|statusLine) hook` second. Smoke-tested live: erkennt cap-version-check + cap-workflow-guard als unregistered. |
+| AC-2 | tested | Ausgabe in 3 Buckets: ✓ "registered + reachable" (`registered`), ⚠ "installed but not registered" (`unregistered`, mit Lifecycle-Empfehlung), ✗ "registered to non-existent file" (`brokenPointers`). Lifecycle-Mismatch ist 4. virtuelle Bucket via `mismatched` flag auf registered-entries. |
+| AC-3 | tested | `--fix`: `applyRegistrationFix({apply:true})` schreibt `settings.json.bak-pre-fix-<ISO-stamp>` und appended JSON-patches für alle unregistered hooks mit known lifecycle. Idempotent. Skipt unknown-lifecycle hooks (kein silent default). statusLine wird auf top-level `/statusLine` geroutet, nicht in `/hooks/*`. |
+| AC-4 | tested | 18 Tests in `tests/cap-doctor-hooks.test.cjs`: explicit-marker-precedence, heuristic-fallback, unknown-lifecycle, statusLine-as-special-surface, malformed-settings, missing-settings, mismatched-lifecycle, broken-pointer, F-097-motivating-case (3 hooks unregistered → recommendation), `--fix` apply-vs-preview, idempotent re-run, non-cap-files-ignored, formatHookSection presentation. |
 
 **Depends on:** F-040 (cap doctor), F-070 (cap-learning-hook), F-054 (cap-tag-observer), F-073 (cap-learn-review-hook)
 
-**Files (geplant):**
-- `cap/bin/lib/cap-doctor.cjs` — neue Funktion `verifyHookRegistration(homeDir)` + Output-Formatter
-- `tests/cap-doctor-hooks.test.cjs` (neu, ≥6 Tests)
-- `commands/cap/doctor.md` — Output-Doku erweitern
+**Files:**
+- `cap/bin/lib/cap-doctor.cjs` — `verifyHookRegistration` + `expectedHookLifecycle` + `computeRegistrationPatch` + `applyRegistrationFix` + `formatHookSection`; `runDoctor` wires die Section ins Report; `formatReport` rendered "Hook Registration:" + Hooks-Summary-Zeile + DEGRADED-Banner.
+- `tests/cap-doctor-hooks.test.cjs` (neu, 18 Tests).
+- `commands/cap/doctor.md` — `--fix` Pfad dokumentiert.
+- `hooks/cap-memory.js`, `hooks/cap-statusline.js` — explizite `// cap-hook-lifecycle:` Marker (Sonderfälle wo Header-Text vom registrierten Lifecycle abwich).
 
 ### F-098: Implicit Quick-Mode (supersedes F-092) [planned]
 
