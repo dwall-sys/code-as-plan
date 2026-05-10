@@ -1,6 +1,6 @@
 ---
 name: cap:prototype
-description: Build code for a FEATURE-MAP.md entry, with @cap-feature/@cap-todo annotations inline (Code-First — code IS the plan). TRIGGER when the user asks to implement, build, scaffold, or start coding a feature that has a FEATURE-MAP.md entry in state `planned`, says "build F-XXX / implement this feature / let's start coding X", or after `/cap:brainstorm` when ACs are written and ready to build. Use --architecture for structure-only scaffold, --annotate for retroactive tagging. DO NOT trigger for one-line edits, refactors, or features already in state `prototyped` (use cap:iterate).
+description: Build code for a FEATURE-MAP.md entry, with @cap-feature/@cap-todo annotations inline (Code-First — code IS the plan). TRIGGER when the user asks to implement, build, scaffold, or start coding a feature that has a FEATURE-MAP.md entry in state `planned`, says "build F-XXX / implement this feature / let's start coding X", or after `/cap:brainstorm` when ACs are written and ready to build. Use --architecture for structure-only scaffold, --annotate for retroactive tagging. DO NOT trigger for one-line edits, refactors, features already in state `prototyped` (use cap:iterate), or **Frontend Sprint** visual tweaks (padding/color/spacing/layout on .tsx/.jsx/.css — edit directly, run cap:annotate at sprint end).
 argument-hint: "[path] [--features NAME] [--architecture] [--annotate] [--interactive] [--non-interactive] [--no-branch] [--research] [--skip-docs]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: cap:iterate
-description: Refine an already-prototyped feature to close remaining `@cap-todo` tags or address feedback. TRIGGER when after a feature has been prototyped there are still pending @cap-todo tags in code, when the user says "iterate on X / this isn't quite right / refine F-XXX / let's keep going", or after a `/cap:scan` reveals open gaps for the active feature. Auto-loops scan→build→rescan until ACs satisfied (--max N for safety, --auto to skip per-iteration approval). DO NOT trigger when the feature has no prototype yet (use cap:prototype) or when only minor edits are needed (just edit directly).
+description: Refine an already-prototyped feature to close remaining `@cap-todo` tags or address feedback. TRIGGER when after a feature has been prototyped there are still pending @cap-todo tags in code, when the user says "iterate on X / this isn't quite right / refine F-XXX / let's keep going", or after a `/cap:scan` reveals open gaps for the active feature. Auto-loops scan→build→rescan until ACs satisfied (--max N for safety, --auto to skip per-iteration approval). DO NOT trigger when the feature has no prototype yet (use cap:prototype), when only minor edits are needed (just edit directly), or when the user is in a **Frontend Sprint** loop on UI files (visual tweaks on .tsx/.jsx/.css — handle directly, run cap:annotate + cap:test only at sprint end).
 argument-hint: "[--features NAME] [--max N] [--auto]"
 allowed-tools:
   - Read

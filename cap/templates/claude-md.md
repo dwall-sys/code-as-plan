@@ -89,6 +89,19 @@ Code-First: build first, extract structure from `@cap-feature` and `@cap-todo` t
 - The change is a one-line edit, typo, or trivial refactor — just edit
 - The user explicitly says "skip cap / just do it"
 - The work is exploratory chat, not yet a feature
+- The user is in a Frontend Sprint (see below)
+
+### Frontend Sprint Pattern (Phase-1 / Phase-2)
+
+UI work has a different shape: fast tweaks where agent ceremony costs more than the edit. Two-phase pattern, no slash command needed.
+
+**Phase 1 — Free Edit Sprint** (stay out of the way):
+Triggers — file is `*.tsx/*.jsx/*.css/*.scss`, OR user asks for visual changes (padding, color, spacing, hover, animation, layout), OR rapid back-and-forth (3+ edits same file), OR user says "schnell / quick / probieren".
+→ Edit directly. No Skill invocation. No tag pressure. No research gate.
+
+**Phase 2 — Catch-up** (auto-invoke at sprint end):
+Triggers — user says "fertig / passt / aufräumen / commit ready", OR shifts topic away from visual.
+→ Invoke `cap:annotate` (retroactive tags) + `cap:test` sequentially. Optionally suggest `/cap:save`.
 
 **Macro-agents (`cap-historian`, `cap-curator`, `cap-architect`, `cap-migrator`) are spawned via Task() when the user wants a step back** — architecture review, snapshot/fork, stakeholder report, or migration. They are not slash commands.
 

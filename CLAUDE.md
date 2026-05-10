@@ -44,6 +44,40 @@ CAP's per-feature commands (`brainstorm`, `prototype`, `iterate`, `test`, `revie
 - The user explicitly says "don't use cap" or "just write it directly"
 - The work is exploratory and not yet ready for FEATURE-MAP.md (decide first whether brainstorm is warranted)
 - Inside another agent's context (subagents shouldn't recursively spawn each other)
+- **The user is in a UI/design iteration sprint** — see "Frontend Sprint Pattern" below
+
+### Frontend Sprint Pattern (Phase-1 / Phase-2)
+
+UI work has a different shape than backend work: dozens of fast tweaks (padding, color, spacing, copy) where the agent ceremony costs more than the edit itself. The replacement for the retired `/cap:quick + /cap:finalize` is an auto-recognized two-phase pattern — no slash command needed.
+
+**Phase 1 — Free Edit Sprint** (recognize and stay out of the way):
+
+Trigger signals (ANY of):
+- File path is `*.tsx`, `*.jsx`, `*.css`, `*.scss`, Storybook story, or component-only changes
+- User asks for visual changes: "padding größer / Farbe ändern / spacing / hover-state / Animation / das Design / das Layout"
+- User is doing rapid back-and-forth on the same file (3+ edits in a row)
+- User explicitly says "schnell mal / quick / lass mich erstmal probieren"
+
+In Phase 1:
+- **Do NOT invoke `cap:prototype`** — just edit directly
+- **Do NOT invoke `cap:iterate`** — just edit directly
+- **Do NOT block on tag discipline** — tags can be batched at the end
+- **No research gate, no AC confirmation, no agent spawn**
+- The session-state stays in whatever phase it was (`prototyped` or earlier)
+
+**Phase 2 — Catch-up** (auto-invoke when sprint ends):
+
+Trigger signals:
+- User says "ok das passt jetzt / fertig / lass uns das aufräumen / commit ready"
+- User shifts topic away from visual to logic/data/tests
+- A natural pause (e.g. starting a new feature)
+
+In Phase 2:
+1. Invoke `cap:annotate` Skill — retroactively add `@cap-feature` and `@cap-todo` tags to the changed files
+2. Invoke `cap:test` Skill — write tests against the now-stable form
+3. Optionally suggest `/cap:save` to snapshot the sprint result
+
+This keeps tag discipline and AC traceability intact without slowing down the actual visual work.
 
 **Macro-workflow agents (project-wide)** are spawned via `Task()` when you need a step back, never by the user typing slash commands. Auto-invoke when:
 
