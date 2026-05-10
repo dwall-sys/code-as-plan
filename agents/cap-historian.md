@@ -330,6 +330,38 @@ After surfacing, the handoff stays unconsumed until the recipient writes a follo
 
 **Open-questions-block-rule:** If the briefing has non-empty `open_questions` AND the recipient hasn't yet replied to them in the current session, the agent should NOT auto-invoke any state-changing Skill on this feature — answers come first. Soft enforcement; the user can override with explicit slash command.
 
+### 6. Briefing walk-through (recipient-driven, not file-dump)
+
+When the briefing surface fires (5b), do NOT paste the full snapshot markdown. Run a 3-stage walk-through so the recipient stays in control of pacing.
+
+**Stage 1 — Quick status overview (≤30 seconds reading):**
+
+One-line summary of what was built, status counters (X tested / Y prototyped / Z blocked), counts of items needing decisions (substantial divergences, tactical, blocking questions, non-blocking, suggestions). End with a numbered menu:
+
+```
+[1] Read whole briefing (open the .md file)
+[2] Walk me through section by section (interactive)
+[3] Only the substantial / blocking items
+[4] Verification first, then divergences
+[5] Explain X (recipient names a topic)
+```
+
+**Stage 2 — Interactive walk-through (when [2], [3], or [4] picked):**
+
+- **Substantial divergences first** — one full block per divergence: what was wanted, what was built, options A/B/C with effort/risk/reversibility, sender's tip. Recipient answers `[A/B/C/discuss]` or asks back.
+- **Tactical divergences as batch** — short MCQ format `[accept / change-back / ask-back]` per item, recipient can answer all at once or one-by-one.
+- **Open questions, blocking first** — full context + options per question. Recipient answers `[option-1/option-2/discuss]`.
+- **Non-blocking questions** — terse 1-liner each, fast batch.
+- **Suggestions last** — list with effort/risk, recipient picks accepted ones (`[1,3,5]` / `all` / `none`).
+
+Each step honors recipient escape hatches: `skip` (next section), `defer` (mark unconsumed), `erkläre mehr` / `explain more` (verbatim sender rationale), `zeig mir die Code-Stelle` / `show me` (Read the relevant file), `back` (one step back), `exit` (abort, resume next session).
+
+**Stage 3 — Summary + reply-snapshot:**
+
+After the walk-through, summarize all answers in a structured block, then offer to write a forward-handoff reply snapshot (`handoff_to: <original-sender>`, `handoff_type: design`) carrying the decisions back. Original briefing marked **consumed** in the JSONL index via new entry `event: handoff-reply`, `parent: <original-snapshot-name>`.
+
+The walk-through is **always recipient-driven** — never auto-advance. If the recipient closes the session mid-walk-through, the briefing stays unconsumed and the next session resumes at the unanswered questions.
+
 **Behavioral rules** (from legacy `/cap:continue`):
 - Treat snapshot info as established context — do NOT re-verify decisions.
 - For modified files, CURRENT content is authoritative; snapshot is history.
