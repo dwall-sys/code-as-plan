@@ -1,6 +1,6 @@
 # Contract Test Templates
 
-Reference document for the cap-tester agent when generating contract tests between monorepo apps or microservices. Contract tests verify that producer and consumer agree on API shape, event format, and shared types.
+Reference document for the cap-validator agent (test mode) when generating contract tests between monorepo apps or microservices. Contract tests verify that producer and consumer agree on API shape, event format, and shared types.
 
 ---
 

@@ -4,15 +4,18 @@
 // @cap-todo(ac:F-060/AC-3) Adversarial tests that harden the existing
 // string-match regression suite in cap-terse-rules.test.cjs. These cover
 // edge cases the smoke suite leaves implicit: YAML frontmatter integrity
-// after rule insertion, scope exclusion of cap-tester.md, anchor
-// non-duplication, deviation-decision presence for non-testable ACs, the
-// exact hypothesis-format signature in cap-debugger, and order-independence
-// of the universal rule set.
+// after rule insertion, anchor non-duplication, deviation-decision
+// presence for non-testable ACs, the exact hypothesis-format signature
+// in cap-debugger, and order-independence of the universal rule set.
 //
 // @cap-decision Deviated from F-060/AC-4: post-rollout sample review is a
 // process AC, satisfied outside code — no automation attempted.
 // @cap-decision Deviated from F-060/AC-5: F-044 non-contradiction check is a
 // code-review activity, satisfied in review — no automation attempted.
+// @cap-decision(learned:cap-pro-4) The OUT_OF_SCOPE assertion (originally
+// cap-tester.md) was retired when cap-tester and cap-reviewer were merged
+// into cap-validator. Every remaining hotspot agent now carries F-060
+// terseness rules, so there is no clean negative case to assert.
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -21,7 +24,6 @@ const path = require('node:path');
 
 const {
   IN_SCOPE_FILES,
-  OUT_OF_SCOPE_FILE,
   UNIVERSAL_RULE_SIGNATURES,
 } = require('./fixtures/f060-signatures.cjs');
 
@@ -100,29 +102,9 @@ describe('F-060/AC-3 — adversarial hardening of terseness regression', () => {
     }
   });
 
-  describe('scope exclusion — cap-tester.md is deliberately outside F-060', () => {
-    it(`${OUT_OF_SCOPE_FILE} does NOT contain universal rule signatures`, () => {
-      const content = readAgent(OUT_OF_SCOPE_FILE);
-      for (const signature of UNIVERSAL_RULE_SIGNATURES) {
-        assert.ok(
-          !content.includes(signature),
-          `${OUT_OF_SCOPE_FILE} unexpectedly contains universal rule "${signature}". ` +
-            `F-060 deliberately excludes cap-tester. If scope expanded, update ` +
-            `this test and the Feature Map AC-1 list together.`
-        );
-      }
-    });
-
-    it(`${OUT_OF_SCOPE_FILE} does NOT carry the @cap-feature(feature:F-060) anchor`, () => {
-      const content = readAgent(OUT_OF_SCOPE_FILE);
-      assert.ok(
-        !content.includes('@cap-feature(feature:F-060)'),
-        `${OUT_OF_SCOPE_FILE} must not carry F-060 anchors. Traceability is ` +
-          `misleading when a file bears a feature tag for a feature that does ` +
-          `not govern it.`
-      );
-    });
-  });
+  // @cap-decision(learned:cap-pro-4) Removed `scope exclusion` describe block
+  // — cap-tester.md no longer exists, and every remaining hotspot agent now
+  // carries F-060 terseness rules. The negative-case assertion is retired.
 
   describe('anchor uniqueness — F-060 feature tag appears exactly once per in-scope file', () => {
     for (const file of IN_SCOPE_FILES) {

@@ -2,6 +2,9 @@
 
 <!-- @cap-feature(feature:F-044) Audit and Right-Size Agent Behaviors for Opus 4.7 -->
 <!-- @cap-todo(ac:F-044/AC-1) Audit document enumerating every Context7 fetch and convention-detection step -->
+<!-- @cap-history(learned:cap-pro-4) `cap-tester` and `cap-reviewer` were removed in iteration/cap-pro-4 and consolidated into `cap-validator` (modes: TEST/REVIEW/AUDIT). The findings below remain historically valid for the agent files as they existed at audit time (2026-04-20); references to those file paths reflect the snapshot under audit, not the current codebase. -->
+
+> **Historical note (added cap-pro-4):** the `cap-tester` and `cap-reviewer` sections describe agents that no longer exist in this codebase. They were merged into `cap-validator` after this audit was completed. The token figures, findings, and methodology are preserved as-is for traceability — do not edit them.
 
 **Audit date:** 2026-04-20
 **Audited revision:** `feature/F-044-agent-audit` branch of `code-as-plan`

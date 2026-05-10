@@ -165,7 +165,7 @@ Green tests mean verified. No separate verification document.
 |  git tag v1.0    ->  Milestone complete                           |
 +-------------------------------------------------------------------+
 |                          Agents                                   |
-|  cap-brainstormer | cap-prototyper | cap-tester | cap-reviewer    |
+|  cap-brainstormer | cap-prototyper | cap-validator                |
 |                          cap-debugger                             |
 +-------------------------------------------------------------------+
 |                        Infrastructure                             |
@@ -315,14 +315,13 @@ Each app gets its own `FEATURE-MAP.md`. Shared packages are scanned and included
 
 ## Agents
 
-CAP ships five specialized agents. You do not invoke them directly -- commands spawn them as needed.
+CAP ships four core micro-workflow agents (plus optional macro-workflow agents introduced in `iteration/cap-pro-1`). You do not invoke them directly -- commands spawn them as needed.
 
 | Agent | Spawned by | Purpose |
 |-------|-----------|---------|
 | `cap-brainstormer` | `/cap:brainstorm` | Guides feature discovery conversation, produces Feature Map entries |
 | `cap-prototyper` | `/cap:prototype`, `/cap:iterate`, `/cap:annotate` | Builds annotated code. Four modes: PROTOTYPE, ITERATE, ARCHITECTURE, ANNOTATE |
-| `cap-tester` | `/cap:test` | Writes tests against Feature Map acceptance criteria using RED-GREEN discipline |
-| `cap-reviewer` | `/cap:review` | Two-stage review: spec compliance (Stage 1), code quality (Stage 2) |
+| `cap-validator` | `/cap:test`, `/cap:review`, `/cap:completeness` | Three modes: TEST (RED-GREEN), REVIEW (Stage 1+2), AUDIT (F-048 completeness) |
 | `cap-debugger` | `/cap:debug` | Systematic debugging with persistent state across context window resets |
 
 ---
@@ -333,7 +332,7 @@ CAP goes beyond "tests are green" with a 6-level trust model:
 
 ### /cap:test -- AI-generated tests
 
-The `cap-tester` agent writes tests with an adversarial mindset ("how do I break this?") and includes specialized templates for:
+The `cap-validator` agent (test mode) writes tests with an adversarial mindset ("how do I break this?") and includes specialized templates for:
 
 - **Security tests** -- RLS policies, auth bypass, input sanitization, data leakage
 - **Contract tests** -- API schema validation between monorepo services

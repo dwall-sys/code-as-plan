@@ -130,7 +130,7 @@ The hook is non-blocking and emits at most one advisory per session when the ins
 
 ## 4. Two-phase quick/finalize workflow (deprecated as a slash command)
 
-The previous `/cap:quick` and `/cap:finalize` commands implemented a two-phase visual-iteration workflow (Phase 1 = freeform editing, Phase 2 = catch-up annotate + iterate + test). The flag in `SESSION.json` and the `cap-prototyper` iterate-mode + `cap-tester` agents still exist; the orchestration is now expected to run via `/loop` or by composing `/cap:annotate`, `/cap:iterate`, and `/cap:test` manually on the changed file set.
+The previous `/cap:quick` and `/cap:finalize` commands implemented a two-phase visual-iteration workflow (Phase 1 = freeform editing, Phase 2 = catch-up annotate + iterate + test). The flag in `SESSION.json` and the `cap-prototyper` iterate-mode + `cap-validator` (test mode) agents still exist; the orchestration is now expected to run via `/loop` or by composing `/cap:annotate`, `/cap:iterate`, and `/cap:test` manually on the changed file set. (Note: prior to `iteration/cap-pro-4` this paragraph referenced `cap-tester`, which has since been folded into `cap-validator`.)
 
 If you need the old behavior, the helper still lives in `cap/bin/lib/cap-session.cjs` (`startQuickMode`, `endQuickMode`, `getChangedFilesSinceQuickStart`).
 

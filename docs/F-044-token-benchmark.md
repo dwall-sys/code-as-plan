@@ -2,6 +2,9 @@
 
 <!-- @cap-feature(feature:F-044) Audit and Right-Size Agent Behaviors for Opus 4.7 -->
 <!-- @cap-todo(ac:F-044/AC-4) Measurable benchmark comparing token usage before and after right-sizing across 5 representative tasks -->
+<!-- @cap-history(learned:cap-pro-4) The `agents/cap-tester.md` and `agents/cap-reviewer.md` rows describe files that no longer exist — they were merged into `agents/cap-validator.md` in iteration/cap-pro-4. The benchmark numbers are preserved unchanged for historical comparison. -->
+
+> **Historical note (added cap-pro-4):** the `cap-tester` and `cap-reviewer` rows in the table below describe agent files that were removed. Their behaviors now live in `cap-validator` (modes: TEST/REVIEW/AUDIT). The original token figures are preserved for traceability with the audit document.
 
 **Date:** 2026-04-20
 **Companion:** `docs/F-044-agent-audit.md`

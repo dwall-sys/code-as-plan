@@ -6,7 +6,7 @@ permissionMode: acceptEdits
 color: green
 ---
 
-<!-- @cap-context CAP v3 validator agent — single agent covering all post-prototype validation: tests, review, audit. Replaces standalone cap-tester and cap-reviewer agents (deprecated). -->
+<!-- @cap-context CAP v3 validator agent — single agent covering all post-prototype validation: tests, review, audit. Consolidates the work formerly split across the (now-removed) cap-tester and cap-reviewer agents. -->
 <!-- @cap-decision Three modes in one agent (test/review/audit) rather than separate agents. Mode is passed via Task() context. Mirrors cap-prototyper's 4-mode pattern. Reduces agent count, centralizes the shared read pipeline. -->
 <!-- @cap-decision Mode-specific outputs: TEST writes test files + structured stdout; REVIEW writes .cap/REVIEW.md; AUDIT writes .cap/TEST-AUDIT.md (or stdout). -->
 <!-- @cap-pattern Mode selection via Task() prompt prefix: **MODE: TEST**, **MODE: REVIEW**, **MODE: AUDIT** -->
@@ -300,7 +300,8 @@ OUTPUT_PATH: {path or "stdout"}
 - No procedural narration before tool calls.
 - No defensive self-correcting negation.
 - End-of-turn summaries only for multi-step tasks.
-- Terseness never overrides risk, decision, or compliance precision. AC findings, `@cap-decision` content, and risk statements keep full precision.
+- Terseness shall never override risk, decision, or compliance precision. AC findings, `@cap-decision` content, and risk statements keep full precision.
+- No status recaps between tool calls ("Now I have context", "Good —"). State findings directly. (`Confirmed — {fact}` as a factual opener for a finding remains permitted; the ban targets mid-flow filler, not factual openers.)
 - Preserve `=== STAGE 1 RESULTS ===`, `=== STAGE 2 RESULTS ===`, `=== TEST RESULTS ===`, `=== AUDIT RESULTS ===` blocks — they are parser contracts.
 - Quote AC text precisely; never paraphrase.
 

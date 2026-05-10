@@ -188,15 +188,16 @@ color: yellow
     assert.ok(result.includes('sandbox_mode = "workspace-write"'), 'has workspace-write');
   });
 
-  test('sets read-only for reviewer', () => {
+  test('defaults read-only for unmapped agent (e.g. cap-architect)', () => {
     const checker = `---
-name: cap-reviewer
-description: Reviews code
+name: cap-architect
+description: Reviews architecture
 tools: Read, Grep, Glob
 ---
 
-<role>You review code.</role>`;
-    const result = generateCodexAgentToml('cap-reviewer', checker);
+<role>You review architecture.</role>`;
+    // cap-architect is not in CAP_AGENT_SANDBOX → defaults to read-only.
+    const result = generateCodexAgentToml('cap-architect', checker);
     assert.ok(result.includes('sandbox_mode = "read-only"'), 'has read-only');
   });
 
@@ -229,24 +230,27 @@ tools: Read, Grep, Glob
 // ─── CAP_AGENT_SANDBOX mapping ────────────────────────────────────────────────
 
 describe('CAP_AGENT_SANDBOX', () => {
-  test('has all 5 CAP agents mapped', () => {
+  test('has 4 explicitly mapped CAP agents', () => {
+    // cap-pro-4: cap-tester + cap-reviewer removed; cap-validator covers both.
     const agentNames = Object.keys(CAP_AGENT_SANDBOX);
-    assert.strictEqual(agentNames.length, 5, 'has 5 agents');
+    assert.strictEqual(agentNames.length, 4, 'has 4 agents');
   });
 
   test('workspace-write agents have write tools', () => {
     const writeAgents = [
-      'cap-prototyper', 'cap-brainstormer', 'cap-tester', 'cap-debugger',
+      'cap-prototyper', 'cap-brainstormer', 'cap-validator', 'cap-debugger',
     ];
     for (const name of writeAgents) {
       assert.strictEqual(CAP_AGENT_SANDBOX[name], 'workspace-write', `${name} is workspace-write`);
     }
   });
 
-  test('read-only agents have no write tools', () => {
-    const readOnlyAgents = ['cap-reviewer'];
-    for (const name of readOnlyAgents) {
-      assert.strictEqual(CAP_AGENT_SANDBOX[name], 'read-only', `${name} is read-only`);
+  test('unmapped agents default to read-only via getter logic', () => {
+    // cap-architect, cap-curator, cap-historian, cap-migrator, cap-designer
+    // are not in the explicit map; the install-time fallback resolves them
+    // to read-only. We assert the absence rather than a positive value.
+    for (const name of ['cap-architect', 'cap-curator', 'cap-historian', 'cap-migrator', 'cap-designer']) {
+      assert.strictEqual(CAP_AGENT_SANDBOX[name], undefined, `${name} not in explicit map`);
     }
   });
 });
@@ -670,16 +674,16 @@ describe('installCodexConfig (integration)', () => {
     // Verify per-agent .toml files
     const agentsDir = path.join(tmpTarget, 'agents');
     assert.ok(fs.existsSync(path.join(agentsDir, 'cap-prototyper.toml')), 'prototyper .toml exists');
-    assert.ok(fs.existsSync(path.join(agentsDir, 'cap-reviewer.toml')), 'reviewer .toml exists');
+    assert.ok(fs.existsSync(path.join(agentsDir, 'cap-validator.toml')), 'validator .toml exists');
 
     const prototyperToml = fs.readFileSync(path.join(agentsDir, 'cap-prototyper.toml'), 'utf8');
     assert.ok(prototyperToml.includes('name = "cap-prototyper"'), 'prototyper has name');
     assert.ok(prototyperToml.includes('sandbox_mode = "workspace-write"'), 'prototyper is workspace-write');
     assert.ok(prototyperToml.includes('developer_instructions'), 'has developer_instructions');
 
-    const reviewerToml = fs.readFileSync(path.join(agentsDir, 'cap-reviewer.toml'), 'utf8');
-    assert.ok(reviewerToml.includes('name = "cap-reviewer"'), 'reviewer has name');
-    assert.ok(reviewerToml.includes('sandbox_mode = "read-only"'), 'reviewer is read-only');
+    const validatorToml = fs.readFileSync(path.join(agentsDir, 'cap-validator.toml'), 'utf8');
+    assert.ok(validatorToml.includes('name = "cap-validator"'), 'validator has name');
+    assert.ok(validatorToml.includes('sandbox_mode = "workspace-write"'), 'validator is workspace-write');
   });
 });
 

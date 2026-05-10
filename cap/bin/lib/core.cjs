@@ -956,9 +956,13 @@ function getAgentsDir() {
  */
 function checkAgentsInstalled() {
   const agentsDir = getAgentsDir();
-  // Expected CAP agents (the 5 core agents)
+  // Expected CAP agents (post cap-pro-4: cap-tester + cap-reviewer were
+  // consolidated into cap-validator). Only the per-feature micro-workflow
+  // agents are checked here; the macro-workflow agents (cap-historian,
+  // cap-curator, cap-architect, cap-migrator, cap-designer) are optional
+  // for an install to be considered "agents installed".
   const expectedAgents = [
-    'cap-brainstormer', 'cap-prototyper', 'cap-tester', 'cap-reviewer', 'cap-debugger',
+    'cap-brainstormer', 'cap-prototyper', 'cap-validator', 'cap-debugger',
   ];
   const installed = [];
   const missing = [];

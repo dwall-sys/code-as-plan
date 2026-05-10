@@ -34,8 +34,7 @@ const CAP_COPILOT_INSTRUCTIONS_CLOSE_MARKER = '<!-- /CAP Configuration -->';
 const CAP_AGENT_SANDBOX = {
   'cap-prototyper': 'workspace-write',
   'cap-brainstormer': 'workspace-write',
-  'cap-tester': 'workspace-write',
-  'cap-reviewer': 'read-only',
+  'cap-validator': 'workspace-write',
   'cap-debugger': 'workspace-write',
 };
 

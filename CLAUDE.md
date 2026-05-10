@@ -57,7 +57,7 @@ brainstorm → prototype → iterate → test → review
 - `cap-architect` — 3 read-only modes: audit (system review), refactor (per-module proposals), boundaries (feature-group API contracts). No auto-apply
 - `cap-migrator` — 4 modes (gsd / tags / feature-map / memory) behind a unified plan → diff → apply → verify pipeline with atomic backup + rollback under `.cap/migrations/<id>/`
 
-> `cap-tester` and `cap-reviewer` are **deprecated** as of `iteration/cap-pro-1` — both have been consolidated into `cap-validator` (use `mode: test` and `mode: review`). The legacy files remain temporarily for reference and will be removed in a later iteration. New invocations should target `cap-validator`.
+> The legacy `cap-tester` and `cap-reviewer` agents were removed in `iteration/cap-pro-4` — both responsibilities are consolidated into `cap-validator` (use `MODE: TEST` and `MODE: REVIEW`).
 
 ### Tag System
 
